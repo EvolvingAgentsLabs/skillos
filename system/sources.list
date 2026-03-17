@@ -1,0 +1,46 @@
+# SkillOS Package Sources
+# ========================================
+# Defines where to find installable Skills (agents and tools).
+# Inspired by /etc/apt/sources.list in Linux.
+#
+# Format:
+#   <type>  <uri>  <branch/tag>  [component-path]
+#
+# Types:
+#   github  - GitHub repository (fetched via git/gh CLI)
+#   url     - Direct URL to a single .md skill file
+#   local   - Local filesystem path containing .md skill files
+#   service - Web-based skill registry (browsed via WebFetch)
+#
+# component-path: subdirectory within the repo containing skills (default: root)
+# Lines starting with # are comments.
+#
+# NOTE: When `skill search` finds 0 results in configured sources, it
+# automatically falls back to a GitHub-wide search using:
+#   gh search repos "<query>" --limit 10
+# This discovers skills hosted in ANY public GitHub repo, not just the
+# ones listed here. Results from GitHub-wide search are marked as
+# source: "github-search:<owner>/<repo>" and can be installed directly.
+# ========================================
+
+# --- Official Skill Repositories ---
+# These are real public repos with Claude Code / AI agent skills
+github  anthropics/skills       main  skills/
+github  huggingface/skills      main  skills/
+github  openai/skills           main  .curated/
+
+# --- Community Skill Repositories ---
+# github  openclaw/skills          main  skills/    # Disabled: not yet a real repo
+# github  EvolvingAgentsLabs/skillos-community-skills  main  skills/
+
+# --- Personal / Private Repositories ---
+# github  myuser/my-skills  main  agents/
+
+# --- Skill Registry Services ---
+# service  https://agentskill.sh  claude-code  /@{owner}/{skill}
+
+# --- Direct URL Sources ---
+# url  https://example.com/skills/my-custom-agent.md
+
+# --- Local Sources ---
+# local  /path/to/local/skills/

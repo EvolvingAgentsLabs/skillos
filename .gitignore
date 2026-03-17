@@ -1,0 +1,43 @@
+# Environment files
+.env
+.claude/settings.local.json
+.claude/history/
+.claude/todos/
+.qwen/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+env/
+
+# Workspace artifacts (runtime state, gitignored by design)
+workspace/
+projects/*/workspace/
+
+# OS files
+**/.DS_Store
+Thumbs.db
+
+# Editor / IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# SkillOS package cache
+.skillos-cache/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Node (for skill packages with JS templates)
+node_modules/

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synaptic Bloom — Generative Art</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --anthropic-dark: #141413;
+            --anthropic-light: #faf9f5;
+            --anthropic-mid-gray: #b0aea5;
+            --anthropic-light-gray: #e8e6dc;
+            --anthropic-orange: #d97757;
+            --anthropic-blue: #6a9bcc;
+            --anthropic-green: #788c5d;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, var(--anthropic-light) 0%, #f5f3ee 100%);
+            min-height: 100vh;
+            color: var(--anthropic-dark);
+        }
+        .container { display: flex; min-height: 100vh; padding: 20px; gap: 20px; }
+        .sidebar {
+            width: 320px; flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px; border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(20, 20, 19, 0.1);
+            overflow-y: auto; overflow-x: hidden;
+        }
+        .sidebar h1 { font-family: 'Lora', serif; font-size: 24px; font-weight: 500; color: var(--anthropic-dark); margin-bottom: 8px; }
+        .sidebar .subtitle { color: var(--anthropic-mid-gray); font-size: 14px; margin-bottom: 32px; line-height: 1.4; }
+        .control-section { margin-bottom: 32px; }
+        .control-section h3 { font-size: 16px; font-weight: 600; color: var(--anthropic-dark); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .control-section h3::before { content: '\2022'; color: var(--anthropic-orange); font-weight: bold; }
+        .seed-input { width: 100%; background: var(--anthropic-light); padding: 12px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 14px; margin-bottom: 12px; border: 1px solid var(--anthropic-light-gray); text-align: center; }
+        .seed-input:focus { outline: none; border-color: var(--anthropic-orange); box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1); background: white; }
+        .seed-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .control-group { margin-bottom: 20px; }
+        .control-group label { display: block; font-size: 14px; font-weight: 500; color: var(--anthropic-dark); margin-bottom: 8px; }
+        .slider-container { display: flex; align-items: center; gap: 12px; }
+        .slider-container input[type="range"] { flex: 1; height: 4px; background: var(--anthropic-light-gray); border-radius: 2px; outline: none; -webkit-appearance: none; }
+        .slider-container input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--anthropic-orange); border-radius: 50%; cursor: pointer; }
+        .slider-container input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; background: var(--anthropic-orange); border-radius: 50%; border: none; cursor: pointer; }
+        .value-display { font-family: 'Courier New', monospace; font-size: 12px; color: var(--anthropic-mid-gray); min-width: 60px; text-align: right; }
+        .color-group { margin-bottom: 16px; }
+        .color-group label { display: block; font-size: 12px; color: var(--anthropic-mid-gray); margin-bottom: 4px; }
+        .color-picker-container { display: flex; align-items: center; gap: 8px; }
+        .color-picker-container input[type="color"] { width: 32px; height: 32px; border: none; border-radius: 6px; cursor: pointer; background: none; padding: 0; }
+        .color-value { font-family: 'Courier New', monospace; font-size: 12px; color: var(--anthropic-mid-gray); }
+        .button { background: var(--anthropic-orange); color: white; border: none; padding: 10px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; width: 100%; }
+        .button:hover { background: #c86641; transform: translateY(-1px); }
+        .button:active { transform: translateY(0); }
+        .button.secondary { background: var(--anthropic-blue); }
+        .button.secondary:hover { background: #5a8bb8; }
+        .button.tertiary { background: var(--anthropic-green); }
+        .button.tertiary:hover { background: #6b7b52; }
+        .button-row { display: flex; gap: 8px; }
+        .button-row .button { flex: 1; }
+        .canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; min-width: 0; }
+        #canvas-container { width: 100%; max-width: 1000px; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(20, 20, 19, 0.1); background: #0d0d12; }
+        #canvas-container canvas { display: block; width: 100% !important; height: auto !important; }
+        .loading { display: flex; align-items: center; justify-content: center; padding: 40px; font-size: 18px; color: var(--anthropic-mid-gray); }
+        .progress-bar { width: 100%; height: 6px; background: var(--anthropic-light-gray); border-radius: 3px; margin-top: 12px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--anthropic-orange); border-radius: 3px; transition: width 0.3s ease; width: 0%; }
+        @media (max-width: 600px) { .container { flex-direction: column; } .sidebar { width: 100%; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>Synaptic Bloom</h1>
+            <div class="subtitle">Dendritic branches grow from seed points, seeking connection. Where filaments meet, synapses fire and flood warmth through the network.</div>
+
+            <div class="control-section">
+                <h3>Seed</h3>
+                <input type="number" id="seed-input" class="seed-input" value="12345" onchange="updateSeed()">
+                <div class="seed-controls">
+                    <button class="button secondary" onclick="previousSeed()">Prev</button>
+                    <button class="button secondary" onclick="nextSeed()">Next</button>
+                </div>
+                <button class="button tertiary" onclick="randomSeedAndUpdate()">Random</button>
+            </div>
+
+            <div class="control-section">
+                <h3>Parameters</h3>
+                <div class="control-group">
+                    <label>Seed Points</label>
+                    <div class="slider-container">
+                        <input type="range" id="seedPoints" min="3" max="20" step="1" value="8" oninput="updateParam('seedPoints', this.value)">
+                        <span class="value-display" id="seedPoints-value">8</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Branch Energy</label>
+                    <div class="slider-container">
+                        <input type="range" id="branchEnergy" min="30" max="200" step="5" value="100" oninput="updateParam('branchEnergy', this.value)">
+                        <span class="value-display" id="branchEnergy-value">100</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Bifurcation Rate</label>
+                    <div class="slider-container">
+                        <input type="range" id="bifurcationRate" min="0.01" max="0.12" step="0.005" value="0.045" oninput="updateParam('bifurcationRate', this.value)">
+                        <span class="value-display" id="bifurcationRate-value">0.045</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Wander Strength</label>
+                    <div class="slider-container">
+                        <input type="range" id="wanderStrength" min="0.1" max="1.5" step="0.05" value="0.55" oninput="updateParam('wanderStrength', this.value)">
+                        <span class="value-display" id="wanderStrength-value">0.55</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Synapse Radius</label>
+                    <div class="slider-container">
+                        <input type="range" id="synapseRadius" min="10" max="80" step="5" value="35" oninput="updateParam('synapseRadius', this.value)">
+                        <span class="value-display" id="synapseRadius-value">35</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Max Generations</label>
+                    <div class="slider-container">
+                        <input type="range" id="maxGenerations" min="3" max="10" step="1" value="6" oninput="updateParam('maxGenerations', this.value)">
+                        <span class="value-display" id="maxGenerations-value">6</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Colors</h3>
+                <div class="color-group">
+                    <label>Dormant Branch</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color1" value="#8a7fad" onchange="updateColor('color1', this.value)">
+                        <span class="color-value" id="color1-value">#8a7fad</span>
+                    </div>
+                </div>
+                <div class="color-group">
+                    <label>Synapse Warm</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color2" value="#e8a87c" onchange="updateColor('color2', this.value)">
+                        <span class="color-value" id="color2-value">#e8a87c</span>
+                    </div>
+                </div>
+                <div class="color-group">
+                    <label>Signal Rose</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color3" value="#d4728c" onchange="updateColor('color3', this.value)">
+                        <span class="color-value" id="color3-value">#d4728c</span>
+                    </div>
+                </div>
+                <div class="color-group">
+                    <label>Deep Substrate</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color4" value="#0d0d12" onchange="updateColor('color4', this.value)">
+                        <span class="color-value" id="color4-value">#0d0d12</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-section" id="progress-section" style="display:none;">
+                <h3>Growth Progress</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Actions</h3>
+                <div class="button-row" style="margin-bottom:8px;">
+                    <button class="button" onclick="resetParameters()">Reset</button>
+                    <button class="button secondary" onclick="downloadArt()">Download PNG</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-area">
+            <div id="canvas-container">
+                <div class="loading">Growing neural network...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var params = {
+            seed: 12345,
+            seedPoints: 8,
+            branchEnergy: 100,
+            bifurcationRate: 0.045,
+            wanderStrength: 0.55,
+            synapseRadius: 35,
+            maxGenerations: 6,
+            colorPalette: ['#8a7fad', '#e8a87c', '#d4728c', '#0d0d12']
+        };
+
+        var defaultParams = JSON.parse(JSON.stringify(params));
+        var activeTips = [];
+        var synapseList = [];
+        var allPoints = [];
+        var pg;
+        var growthStep = 0;
+        var maxGrowthSteps = 0;
+        var isGenerating = false;
+
+        function setup() {
+            var canvas = createCanvas(1200, 1200);
+            canvas.parent('canvas-container');
+            pg = createGraphics(1200, 1200);
+            var el = document.querySelector('.loading');
+            if (el) el.style.display = 'none';
+            initializeSystem();
+        }
+
+        function initializeSystem() {
+            randomSeed(params.seed);
+            noiseSeed(params.seed);
+
+            var bg = hexToRgb(params.colorPalette[3]);
+            pg.background(bg.r, bg.g, bg.b);
+
+            activeTips = [];
+            synapseList = [];
+            allPoints = [];
+            growthStep = 0;
+
+            var seeds = poissonDisk(width, height, 120, params.seedPoints);
+            for (var i = 0; i < seeds.length; i++) {
+                activeTips.push({
+                    x: seeds[i].x,
+                    y: seeds[i].y,
+                    angle: random(TWO_PI),
+                    energy: params.branchEnergy * random(0.6, 1.4),
+                    generation: 0,
+                    thickness: random(3.5, 5.5),
+                    warmth: 0,
+                    noiseOffset: random(10000)
+                });
+            }
+
+            maxGrowthSteps = params.branchEnergy * 3;
+            isGenerating = true;
+            document.getElementById('progress-section').style.display = 'block';
+            loop();
+        }
+
+        function draw() {
+            if (!isGenerating) { noLoop(); return; }
+
+            for (var s = 0; s < 8; s++) {
+                if (activeTips.length === 0 || growthStep >= maxGrowthSteps) {
+                    isGenerating = false;
+                    finalize();
+                    break;
+                }
+                growOnce();
+                growthStep++;
+            }
+
+            document.getElementById('progress-fill').style.width =
+                Math.min((growthStep / maxGrowthSteps) * 100, 100) + '%';
+            image(pg, 0, 0);
+        }
+
+        function growOnce() {
+            var newTips = [];
+            var dormant = hexToRgb(params.colorPalette[0]);
+            var warm = hexToRgb(params.colorPalette[1]);
+            var rose = hexToRgb(params.colorPalette[2]);
+
+            for (var i = activeTips.length - 1; i >= 0; i--) {
+                var tip = activeTips[i];
+
+                var nv = noise(tip.x * 0.003, tip.y * 0.003, tip.noiseOffset + growthStep * 0.01);
+                tip.angle += (nv - 0.5) * params.wanderStrength;
+
+                var speed = map(tip.generation, 0, params.maxGenerations, 3.5, 1.5);
+                var nx = tip.x + cos(tip.angle) * speed;
+                var ny = tip.y + sin(tip.angle) * speed;
+
+                // Synapse detection
+                var fired = false;
+                for (var j = 0; j < allPoints.length; j++) {
+                    var pt = allPoints[j];
+                    var d = dist(nx, ny, pt.x, pt.y);
+                    if (d < params.synapseRadius && d > 5) {
+                        synapseList.push({
+                            x: (nx + pt.x) / 2,
+                            y: (ny + pt.y) / 2,
+                            radius: d
+                        });
+                        tip.warmth = min(tip.warmth + 0.4, 1.0);
+                        fired = true;
+                        break;
+                    }
+                }
+
+                // Color from warmth
+                var w = tip.warmth;
+                var cr, cg, cb;
+                if (w < 0.5) {
+                    var t1 = w / 0.5;
+                    cr = lerp(dormant.r, warm.r, t1);
+                    cg = lerp(dormant.g, warm.g, t1);
+                    cb = lerp(dormant.b, warm.b, t1);
+                } else {
+                    var t2 = (w - 0.5) / 0.5;
+                    cr = lerp(warm.r, rose.r, t2);
+                    cg = lerp(warm.g, rose.g, t2);
+                    cb = lerp(warm.b, rose.b, t2);
+                }
+
+                var thick = tip.thickness * map(tip.generation, 0, params.maxGenerations, 1.0, 0.25);
+                var alpha = map(tip.energy, 0, params.branchEnergy, 30, 180);
+
+                pg.stroke(cr, cg, cb, alpha);
+                pg.strokeWeight(thick);
+                pg.line(tip.x, tip.y, nx, ny);
+
+                // Glow on warm branches
+                if (w > 0.2) {
+                    pg.stroke(cr, cg, cb, alpha * 0.15 * w);
+                    pg.strokeWeight(thick * 3);
+                    pg.line(tip.x, tip.y, nx, ny);
+                }
+
+                allPoints.push({ x: nx, y: ny });
+                tip.x = nx;
+                tip.y = ny;
+                tip.energy -= 1;
+                tip.warmth *= 0.97;
+
+                if (tip.x < -20 || tip.x > width + 20 || tip.y < -20 || tip.y > height + 20) {
+                    tip.energy = 0;
+                }
+
+                // Bifurcation
+                var bifChance = params.bifurcationRate * (1 + tip.generation * 0.3);
+                if (fired) bifChance *= 2.5;
+                if (random() < bifChance && tip.generation < params.maxGenerations && tip.energy > 15) {
+                    var splitAngle = random(PI * 0.15, PI * 0.45);
+                    var childEnergy = tip.energy * random(0.35, 0.55);
+                    tip.energy -= childEnergy * 0.5;
+                    newTips.push({
+                        x: tip.x, y: tip.y,
+                        angle: tip.angle + splitAngle * (random() < 0.5 ? 1 : -1),
+                        energy: childEnergy,
+                        generation: tip.generation + 1,
+                        thickness: tip.thickness * 0.72,
+                        warmth: tip.warmth * 0.5,
+                        noiseOffset: random(10000)
+                    });
+                }
+
+                if (tip.energy <= 0) activeTips.splice(i, 1);
+            }
+
+            for (var k = 0; k < newTips.length; k++) activeTips.push(newTips[k]);
+        }
+
+        function finalize() {
+            var warm = hexToRgb(params.colorPalette[1]);
+            var rose = hexToRgb(params.colorPalette[2]);
+
+            // Draw synapse glows
+            pg.noStroke();
+            for (var i = 0; i < synapseList.length; i++) {
+                var syn = synapseList[i];
+                for (var r = 3; r >= 0; r--) {
+                    var rad = syn.radius * (0.5 + r * 0.4);
+                    var a = 8 * (4 - r);
+                    var t = r / 3;
+                    pg.fill(lerp(rose.r, warm.r, t), lerp(rose.g, warm.g, t), lerp(rose.b, warm.b, t), a);
+                    pg.ellipse(syn.x, syn.y, rad, rad);
+                }
+                pg.fill(255, 240, 230, 60);
+                pg.ellipse(syn.x, syn.y, 3, 3);
+            }
+
+            // Vignette
+            pg.loadPixels();
+            var cx = pg.width / 2, cy = pg.height / 2;
+            var maxD = dist(0, 0, cx, cy);
+            for (var y = 0; y < pg.height; y++) {
+                for (var x = 0; x < pg.width; x++) {
+                    var d = dist(x, y, cx, cy) / maxD;
+                    var v = 1.0 - pow(d, 2.0) * 0.4;
+                    var idx = (y * pg.width + x) * 4;
+                    pg.pixels[idx] = constrain(pg.pixels[idx] * v, 0, 255);
+                    pg.pixels[idx + 1] = constrain(pg.pixels[idx + 1] * v, 0, 255);
+                    pg.pixels[idx + 2] = constrain(pg.pixels[idx + 2] * v, 0, 255);
+                }
+            }
+            pg.updatePixels();
+            image(pg, 0, 0);
+
+            document.getElementById('progress-section').style.display = 'none';
+            noLoop();
+        }
+
+        function poissonDisk(w, h, minDist, maxPts) {
+            var pts = [], margin = 100, attempts = 0;
+            while (pts.length < maxPts && attempts < maxPts * 30) {
+                var px = random(margin, w - margin);
+                var py = random(margin, h - margin);
+                var ok = true;
+                for (var j = 0; j < pts.length; j++) {
+                    if (dist(px, py, pts[j].x, pts[j].y) < minDist) { ok = false; break; }
+                }
+                if (ok) pts.push({ x: px, y: py });
+                attempts++;
+            }
+            return pts;
+        }
+
+        function hexToRgb(hex) {
+            var r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return r ? { r: parseInt(r[1], 16), g: parseInt(r[2], 16), b: parseInt(r[3], 16) } : { r: 0, g: 0, b: 0 };
+        }
+
+        function updateParam(name, value) {
+            params[name] = parseFloat(value);
+            document.getElementById(name + '-value').textContent = value;
+            initializeSystem();
+        }
+
+        function updateColor(id, value) {
+            var idx = parseInt(id.replace('color', '')) - 1;
+            params.colorPalette[idx] = value;
+            document.getElementById(id + '-value').textContent = value;
+            initializeSystem();
+        }
+
+        function downloadArt() { saveCanvas('synaptic-bloom-seed-' + params.seed, 'png'); }
+
+        function updateSeedDisplay() { document.getElementById('seed-input').value = params.seed; }
+
+        function updateSeed() {
+            var v = parseInt(document.getElementById('seed-input').value);
+            if (v && v > 0) { params.seed = v; initializeSystem(); }
+            else updateSeedDisplay();
+        }
+
+        function previousSeed() { params.seed = Math.max(1, params.seed - 1); updateSeedDisplay(); initializeSystem(); }
+        function nextSeed() { params.seed++; updateSeedDisplay(); initializeSystem(); }
+        function randomSeedAndUpdate() { params.seed = Math.floor(Math.random() * 999999) + 1; updateSeedDisplay(); initializeSystem(); }
+
+        function resetParameters() {
+            params = JSON.parse(JSON.stringify(defaultParams));
+            var sp = ['seedPoints', 'branchEnergy', 'bifurcationRate', 'wanderStrength', 'synapseRadius', 'maxGenerations'];
+            for (var i = 0; i < sp.length; i++) {
+                document.getElementById(sp[i]).value = params[sp[i]];
+                document.getElementById(sp[i] + '-value').textContent = params[sp[i]];
+            }
+            for (var j = 0; j < params.colorPalette.length; j++) {
+                document.getElementById('color' + (j + 1)).value = params.colorPalette[j];
+                document.getElementById('color' + (j + 1) + '-value').textContent = params.colorPalette[j];
+            }
+            updateSeedDisplay();
+            initializeSystem();
+        }
+
+        window.addEventListener('load', function() { updateSeedDisplay(); });
+    </script>
+</body>
+</html>
