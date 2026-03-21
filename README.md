@@ -1,4 +1,4 @@
-# SkillOS: Pure Markdown Operating System
+# SkillOS: Pure Markdown Operating System [POC]
 
 > **Transform any LLM into an intelligent operating system using pure markdown**
 
