@@ -25,8 +25,32 @@ powershell -ExecutionPolicy Bypass -File .\setup_agents.ps1  # Windows
 
 ## 🎯 Choose Your Runtime
 
-### Option 1: Claude Code (Recommended)
-**Best for:** Production use, complex projects
+### Option 1: SkillOS Terminal (Recommended)
+**Best for:** Interactive use, the full Unix-like experience
+- Classic terminal REPL with `skillos$` prompt
+- Markdown output rendered beautifully in terminal
+- Auto-boots SkillOS, hides Claude Code internals
+- Built-in commands: `help`, `status`, `projects`, `agents`, `history`
+
+```bash
+# Launch the SkillOS terminal
+./skillos.sh
+# Or directly with Python
+python3 skillos.py
+```
+
+Once inside the terminal:
+```
+skillos$ Create a tutorial on chaos theory
+skillos$ Monitor tech news and generate a briefing
+skillos$ help
+skillos$ status
+```
+
+> **Requirements:** Python 3.11+, `rich` (auto-installed on first run), Claude Code CLI
+
+### Option 2: Claude Code (Direct)
+**Best for:** Scripting, CI/CD, single-command execution
 - Powered by Claude (model determined by your Claude Code installation)
 - Full tool integration
 - Advanced capabilities
@@ -39,7 +63,7 @@ claude --dangerously-skip-permissions "boot skillos"
 claude --dangerously-skip-permissions "skillos execute: 'Your goal here'"
 ```
 
-### Option 2: Qwen Runtime (Lightweight)
+### Option 3: Qwen Runtime (Lightweight)
 **Best for:** Learning, development, resource-constrained environments
 - Uses Qwen 3 4B model (free tier)
 - Minimal resource requirements
@@ -113,10 +137,12 @@ SkillOS can handle any task by combining its agent ecosystem:
 
 ```
 skillos/
-├── system/                 # Core framework
+├── skillos.sh             # Terminal launcher (bash wrapper)
+├── skillos.py             # Terminal REPL with markdown rendering
+├── system/                # Core framework
 │   ├── agents/            # System-level agents
 │   └── tools/             # Framework tools
-├── projects/              # Your projects
+├── projects/              # Your projects (working directory)
 │   └── [project_name]/    # Project-specific agents
 ├── workspace/             # Execution outputs
 └── qwen_runtime.py        # Lightweight runtime
@@ -148,9 +174,15 @@ You are an expert in [domain]...
 ### Interactive Mode
 Explore SkillOS capabilities interactively:
 ```bash
+# Full terminal experience (Claude Code)
+./skillos.sh
+skillos$ help                    # Show commands
+skillos$ status                  # Check workspace
+skillos$ Create a calculator     # Execute any goal
+
+# Lightweight interactive mode (Qwen)
 python qwen_runtime.py interactive
 > help                    # Show commands
-> status                  # Check workspace
 > Create a calculator     # Execute any goal
 ```
 
