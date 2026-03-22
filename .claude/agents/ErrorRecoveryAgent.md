@@ -71,7 +71,7 @@ Truncate to 75% → 50% → switch to cheaper tool → escalate if budget < $0.0
 
 ```yaml
 circuit_breaker:
-  threshold: 5          # weighted failures before opening
+  threshold: 3          # weighted failures before opening (matches SystemAgent)
   window_minutes: 15    # lookback window
   weights:
     critical: 3

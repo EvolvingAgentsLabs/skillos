@@ -18,6 +18,11 @@
 | MemoryTraceManager | Tool | System | Read, Write, Grep, Bash | 95% |
 | ProjectScaffoldTool | Tool | System | Bash, Write, Read | 94% |
 | SkillPackageManagerTool | Tool | System | Bash, Read, Write, Grep, Glob, WebFetch | 88% |
+| RoClawNavigationAgent | Agent | RoClaw | roclaw-navigation-agent | 88% |
+| RoClawDreamAgent | Agent | RoClaw | roclaw-dream-agent | 85% |
+| RoClawSceneAnalysisAgent | Agent | RoClaw | roclaw-scene-analysis-agent | 90% |
+| RoClawTool | Tool | RoClaw | Bash, Read, Write | 88% |
+| EvolvingMemoryTool | Tool | RoClaw | Bash, WebFetch, Read, Write | 92% |
 
 ## Dependency Graph
 
@@ -44,6 +49,26 @@ ProjectScaffoldTool
 
 SkillPackageManagerTool
 └── depends on: sources.list, packages.lock, SmartLibrary (registration)
+
+RoClawNavigationAgent
+├── depends on: RoClawTool, EvolvingMemoryTool, RoClawSceneAnalysisAgent
+└── uses: Bash (curl to bridge :8430 and memory :8420)
+
+RoClawDreamAgent
+├── depends on: EvolvingMemoryTool, MemoryTraceManager
+└── uses: Bash (curl to memory :8420), Write (strategies, constraints)
+
+RoClawSceneAnalysisAgent
+├── depends on: RoClawTool
+└── uses: Bash (curl to bridge :8430)
+
+RoClawTool
+├── depends on: roclaw_bridge.py (HTTP :8430)
+└── bridges to: OpenClaw Gateway → RoClaw CortexNode
+
+EvolvingMemoryTool
+├── depends on: evolving-memory server (HTTP :8420)
+└── bridges to: Trace store, Dream engine, Strategy graph
 ```
 
 ---
@@ -171,6 +196,73 @@ SkillPackageManagerTool
 - **Use Cases**: Installing skills from remote repos, updating skills, searching for capabilities, package management
 - **Cost**: Low-Medium (git clone + file operations)
 - **Reliability**: 88%
+
+## RoClaw Agents (Cognitive Trinity — Physical Robot Integration)
+
+### RoClawNavigationAgent
+- **Type**: Agent
+- **Status**: [REAL] - Production Ready
+- **Version**: v1.0
+- **File**: system/agents/RoClawNavigationAgent.md
+- **Claude Agent Name**: roclaw-navigation-agent
+- **Capabilities**: Hierarchical route planning, obstacle recovery, dynamic strategy creation, trace logging
+- **Tools**: Read, Write, Bash, Grep, Task
+- **Depends On**: RoClawTool, EvolvingMemoryTool, RoClawSceneAnalysisAgent
+- **Use Cases**: Physical navigation, fetch tasks, multi-room traversal, exploration
+- **Cost**: Medium (VLM inference via RoClaw + bridge calls)
+- **Reliability**: 88%
+
+### RoClawDreamAgent
+- **Type**: Agent
+- **Status**: [REAL] - Production Ready
+- **Version**: v1.0
+- **File**: system/agents/RoClawDreamAgent.md
+- **Claude Agent Name**: roclaw-dream-agent
+- **Capabilities**: Bio-inspired dream consolidation, Negative Constraint extraction, strategy evolution, cross-system memory sync
+- **Tools**: Read, Write, Bash, Grep, Task
+- **Depends On**: EvolvingMemoryTool, MemoryTraceManager
+- **Use Cases**: Nightly learning consolidation, post-failure analysis, strategy refinement
+- **Cost**: Low-Medium (evolving-memory API calls + LLM consolidation)
+- **Reliability**: 85%
+
+### RoClawSceneAnalysisAgent
+- **Type**: Agent
+- **Status**: [REAL] - Production Ready
+- **Version**: v1.0
+- **File**: system/agents/RoClawSceneAnalysisAgent.md
+- **Claude Agent Name**: roclaw-scene-analysis-agent
+- **Capabilities**: VLM scene interpretation, object detection, environment classification, semantic map building, obstacle assessment
+- **Tools**: Read, Write, Bash, Grep
+- **Depends On**: RoClawTool
+- **Use Cases**: Scene understanding, location verification, object search, obstacle analysis
+- **Cost**: Low (robot VLM inference)
+- **Reliability**: 90%
+
+## RoClaw Tools
+
+### RoClawTool
+- **Type**: Tool
+- **Status**: [REAL] - Production Ready
+- **Version**: v1.0
+- **File**: system/tools/RoClawTool.md
+- **Claude Tool Mapping**: Bash, Read, Write
+- **Depends On**: roclaw_bridge.py (HTTP :8430)
+- **Capabilities**: 9 robot tool invocations (go_to, explore, stop, status, describe_scene, analyze_scene, read_memory, record_observation, get_map)
+- **Use Cases**: Physical robot control, navigation execution, scene capture
+- **Cost**: Variable (free for status/stop, medium for navigation)
+- **Reliability**: 88%
+
+### EvolvingMemoryTool
+- **Type**: Tool
+- **Status**: [REAL] - Production Ready
+- **Version**: v1.0
+- **File**: system/tools/EvolvingMemoryTool.md
+- **Claude Tool Mapping**: Bash, WebFetch, Read, Write
+- **Depends On**: evolving-memory server (HTTP :8420)
+- **Capabilities**: Trace ingestion, strategy queries, dream consolidation, knowledge graph navigation, memory statistics
+- **Use Cases**: Experience logging, strategy retrieval, dream triggering, cross-system learning
+- **Cost**: Low (HTTP API calls)
+- **Reliability**: 92%
 
 ## Component Directories (for discovery)
 
