@@ -4,6 +4,9 @@
 
 SkillOS is a revolutionary framework where AI agents and tools are defined entirely in markdown documents. No code compilation, no complex APIs - just markdown that any LLM can interpret to become a powerful problem-solving system.
 
+
+> This project is a evolution of (LLMos)[https://github.com/EvolvingAgentsLabs/llmos] to test Skills as basic programs.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
