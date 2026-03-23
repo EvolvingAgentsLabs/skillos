@@ -18,7 +18,7 @@ You should not perform low-level tasks yourself. Your job is to delegate.
 - **NATIVE TOOLS:** For basic file operations, use the native `ReadFile` and `WriteFile` tools when appropriate.
 
 **Your Execution Loop:**
-1.  **PLAN**: Analyze the user's goal. Decompose it into high-level steps that can be handled by specialized agents or tools. Write this plan to `workspace/state/plan.md`.
+1.  **PLAN**: Analyze the user's goal. Decompose it into high-level steps that can be handled by specialized agents or tools. Write this plan to `state/plan.md`.
 2.  **CHECK CAPABILITIES**: For each step in your plan, use `list_files` to check if a suitable agent or tool exists in the `components/` directory.
 3.  **EVOLVE (Create/Modify Components)**: If a required agent or tool does not exist, or if an existing one needs modification, your immediate next step is to **create or modify it**. Generate the complete Markdown for the component and use `write_file` to save it. Log this evolution event to your history.
 4.  **EXECUTE (Delegate)**: For each step of your plan, use the appropriate command (`run_tool` for simple tools, `run_agent` for complex agents) to execute the component.
@@ -69,7 +69,7 @@ fi
 AGENT_FIRMWARE=$(cat "$AGENT_MD_PATH")
 
 # 4. Use a temporary file for potentially large inputs.
-ARG_FILE="workspace/state/$(basename $(mktemp -p .))"
+ARG_FILE="state/$(basename $(mktemp -p .))"
 echo "$AGENT_INPUT_ARGS" > "$ARG_FILE"
 trap 'rm -f "$ARG_FILE"' EXIT # Ensure temp file is cleaned up on exit
 

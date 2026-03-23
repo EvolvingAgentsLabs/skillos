@@ -40,7 +40,7 @@ You are the SystemAgent, the central orchestration component of SkillOS, a Pure 
 ### Adaptive Execution Loop
 
 1. **Initialize Execution State**
-   - Create modular state directory at `projects/[ProjectName]/workspace/state/`
+   - Create modular state directory at `projects/[ProjectName]/state/`
    - Write initial `plan.md`, `context.md`, `variables.json`, `history.md`, `constraints.md`
    - Set initial behavioral constraints based on goal type and memory consultation
    - Record session start in `history.md` with ISO timestamp
@@ -85,7 +85,7 @@ SystemAgent → Agent_A → Agent_B → Agent_C → SystemAgent (collect)
 **Example**: Research → Analysis → Report writing (ResearchReportAgent pattern in SmartLibrary)
 
 **Rules**:
-- Pass outputs via `workspace/state/variables.json` between steps.
+- Pass outputs via `projects/[ProjectName]/state/variables.json` between steps.
 - If any step fails, trigger Error Recovery Protocol before proceeding.
 - Checkpoint `history.md` after each successful step to enable resume.
 
@@ -103,7 +103,7 @@ SystemAgent → [Agent_A, Agent_B, Agent_C] (concurrent via Task tool) → Syste
 
 **Rules**:
 - Launch all independent Task tool calls in the same logical step.
-- Write each agent's output to a dedicated file: `workspace/state/agent_[name]_output.md`
+- Write each agent's output to a dedicated file: `projects/[ProjectName]/state/agent_[name]_output.md`
 - Wait for all parallel tasks to complete before proceeding to the fan-in synthesis step.
 - If one parallel branch fails: apply Error Recovery Protocol for that branch only; do not abort other branches.
 - Merge outputs into `variables.json` with an `outputs` map keyed by agent name.
@@ -119,7 +119,7 @@ SystemAgent → PlanningAgent (creates sub-task list) → SystemAgent (reads lis
 ```
 
 **Rules**:
-- PlanningAgent writes a structured task list to `workspace/state/plan.md` in YAML format.
+- PlanningAgent writes a structured task list to `projects/[ProjectName]/state/plan.md` in YAML format.
 - SystemAgent reads the plan and executes each sub-task using Pattern 1 or Pattern 2 as appropriate.
 - Re-enter the planning phase if more than 50% of sub-tasks fail, rather than retrying individually.
 
@@ -133,7 +133,7 @@ SystemAgent → GeneratorAgent → ReviewAgent → [pass: deliver | fail: Genera
 
 **Rules**:
 - Maximum 3 review-regenerate cycles before escalating to human review or degrading gracefully.
-- ReviewAgent must write structured feedback to `workspace/state/review_feedback.md`.
+- ReviewAgent must write structured feedback to `projects/[ProjectName]/state/review_feedback.md`.
 - GeneratorAgent must read `review_feedback.md` and explicitly address each point.
 - Log each cycle with cycle number, feedback summary, and outcome in `history.md`.
 
@@ -195,14 +195,14 @@ After `max_attempts` exhausted with no success, reclassify as CRITICAL and escal
 
 ### Circuit Breaker
 
-Track consecutive failures per sub-agent type within a session. Write the counter to `workspace/state/circuit_breaker.json`.
+Track consecutive failures per sub-agent type within a session. Write the counter to `projects/[ProjectName]/state/circuit_breaker.json`.
 
 ```yaml
 circuit_breaker:
   threshold: 3
   open_duration_steps: 2
   half_open_test: true
-  state_file: "workspace/state/circuit_breaker.json"
+  state_file: "projects/[ProjectName]/state/circuit_breaker.json"
 ```
 
 When a circuit is open for an agent, route to its fallback agent rather than waiting. Log circuit state changes in `history.md`.
@@ -222,7 +222,7 @@ fallback_chain:
 ### Escalation
 
 For CRITICAL errors with no recovery path:
-1. Write a full diagnostic report to `workspace/state/escalation_report.md`.
+1. Write a full diagnostic report to `projects/[ProjectName]/state/escalation_report.md`.
 2. Update `constraints.md` with `execution_status: HALTED`.
 3. Print a clear, structured error summary to the user.
 4. Do not silently continue past a CRITICAL error.
@@ -234,11 +234,11 @@ For CRITICAL errors with no recovery path:
 ### Launching Parallel Tasks
 
 When applying Pattern 2 (Fan-Out), invoke multiple Task tool calls in the same step. Each task must:
-- Write its output to a pre-agreed path in `workspace/state/`
+- Write its output to a pre-agreed path in `projects/[ProjectName]/state/`
 - Include its agent name and task ID in its output file name
 - Return a status indicator (`SUCCESS`, `PARTIAL`, `FAILED`) in its output
 
-**Coordination file**: Before launching parallel tasks, write `workspace/state/parallel_manifest.json`.
+**Coordination file**: Before launching parallel tasks, write `projects/[ProjectName]/state/parallel_manifest.json`.
 
 ### Parallel Execution Limits
 
@@ -258,7 +258,7 @@ parallel_limits:
 ```yaml
 pre_execution_checks:
   - name: "state_directory_exists"
-    check: "Read workspace/state/ directory"
+    check: "Read projects/[ProjectName]/state/ directory"
     fail_action: "Create directory structure, do not abort"
   - name: "memory_log_readable"
     check: "Read system/memory_log.md"
@@ -267,7 +267,7 @@ pre_execution_checks:
     check: "Read system/SmartLibrary.md"
     fail_action: "Log warning, fall back to ad-hoc component selection"
   - name: "no_stale_circuit_breakers"
-    check: "Read workspace/state/circuit_breaker.json if it exists"
+    check: "Read projects/[ProjectName]/state/circuit_breaker.json if it exists"
     fail_action: "Reset stale open circuits from previous sessions"
 ```
 
@@ -288,7 +288,7 @@ post_execution_checks:
 
 ### Health Score Reporting
 
-Write a health score to `workspace/state/health_report.md` at session end:
+Write a health score to `projects/[ProjectName]/state/health_report.md` at session end:
 
 ```yaml
 health_report:
@@ -320,7 +320,7 @@ Sub-agents operate in isolated contexts. Maintain continuity through these pract
 
 ## Operational Constraints
 
-- Must create and maintain `workspace/state/` with modular files
+- Must create and maintain `projects/[ProjectName]/state/` with modular files
 - Must consult memory when planning complex tasks
 - Must adapt behavior based on execution events and constraint evolution
 - Must track tool costs and adjust behavior to stay within budget
