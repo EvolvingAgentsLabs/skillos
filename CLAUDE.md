@@ -364,13 +364,18 @@ skillos/
 │   │   ├── MemoryAnalysisAgent.md     # Cross-project learning and pattern recognition
 │   │   ├── MemoryConsolidationAgent.md # Memory log maintenance and consolidation
 │   │   ├── ErrorRecoveryAgent.md      # Fault tolerance and error recovery
-│   │   └── ValidationAgent.md         # System health checks and validation
+│   │   ├── ValidationAgent.md         # System health checks and validation
+│   │   ├── RoClawNavigationAgent.md  # Physical robot navigation planning
+│   │   ├── RoClawDreamAgent.md       # Bio-inspired dream consolidation
+│   │   └── RoClawSceneAnalysisAgent.md # VLM scene analysis and mapping
 │   ├── tools/                         # Framework-level tools
 │   │   ├── ClaudeCodeToolMap.md      # Integration with Claude Code's native tools
 │   │   ├── QueryMemoryTool.md        # Framework-level memory consultation
 │   │   ├── MemoryTraceManager.md     # Execution trace capture and logging
 │   │   ├── ProjectScaffoldTool.md    # Project directory bootstrapping
-│   │   └── SkillPackageManagerTool.md # apt-like skill package management
+│   │   ├── SkillPackageManagerTool.md # apt-like skill package management
+│   │   ├── RoClawTool.md            # HTTP bridge to RoClaw robot tools
+│   │   └── EvolvingMemoryTool.md    # REST bridge to evolving-memory API
 │   ├── SmartLibrary.md               # Component registry with metadata and capabilities
 │   ├── SmartMemory.md                # Structured, queryable experience database (single source of truth)
 │   ├── memory_log.md                 # Redirect to SmartMemory.md (deprecated)
@@ -397,6 +402,7 @@ skillos/
 ├── setup_agents.sh                       # Unix/Mac agent setup script
 ├── setup_agents.ps1                      # Windows agent setup script
 ├── qwen_runtime.py                       # Qwen LLM runtime engine
+├── roclaw_bridge.py                      # RoClaw HTTP↔WebSocket bridge server
 └── CLAUDE.md                            # This configuration file
 ```
 
@@ -470,6 +476,74 @@ How would you like to refine this goal?
 - Workspace state is maintained between commands within a conversation session
 - Full execution history and context available throughout session
 - Boot persists throughout the conversation — no need to re-boot
+
+## RoClaw Physical Robot Integration (Cognitive Trinity)
+
+SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, replacing LLMOS as the high-level brain. The architecture forms a **Cognitive Trinity**:
+
+| Component | Role | Connection |
+|---|---|---|
+| **SkillOS** | Prefrontal Cortex — planning, reasoning, dynamic agent creation | HTTP to bridge + memory |
+| **RoClaw** | Cerebellum — reactive motor control, VLM navigation | WebSocket via OpenClaw Gateway |
+| **evolving-memory** | Hippocampus — shared memory, dream consolidation | REST API on :8420 |
+
+### RoClaw Components
+
+**Agents** (in `system/agents/`):
+- `RoClawNavigationAgent.md` — Route planning, obstacle recovery, multi-room navigation
+- `RoClawDreamAgent.md` — Bio-inspired dream consolidation, Negative Constraint generation
+- `RoClawSceneAnalysisAgent.md` — VLM scene interpretation, semantic mapping
+
+**Tools** (in `system/tools/`):
+- `RoClawTool.md` — HTTP bridge to RoClaw's 9 robot tools (go_to, explore, stop, etc.)
+- `EvolvingMemoryTool.md` — REST bridge to evolving-memory API (traces, dreams, queries)
+
+**Bridge** (root):
+- `roclaw_bridge.py` — Python HTTP server that translates REST calls to WebSocket tool invocations
+
+### Running RoClaw Tasks
+
+```bash
+# Start prerequisites
+python -m evolving_memory.server --port 8420          # Hippocampus
+python roclaw_bridge.py --port 8430 --simulate        # Bridge (sim mode)
+
+# Navigate
+skillos execute: "Navigate to the kitchen and describe what you see"
+
+# Explore
+skillos execute: "Explore the house and build a semantic map"
+
+# Dream
+skillos execute: "Trigger dream consolidation for today's navigation"
+```
+
+### RoClaw Scenario
+
+A full end-to-end demo is available at `scenarios/RoClaw_Integration.md`:
+```
+skillos execute: "Run the RoClaw Integration scenario"
+```
+
+### Dynamic Agent Creation for Robotics
+
+The key advantage of SkillOS over LLMOS for robotics is **dynamic agent creation**. When the robot encounters a novel obstacle:
+
+1. `RoClawNavigationAgent` detects the failure
+2. Analyzes the scene via `RoClawSceneAnalysisAgent`
+3. Creates a new recovery tool as markdown (e.g., `RugRecoveryTool.md`)
+4. Executes the recovery strategy
+5. Logs the experience for dream consolidation
+
+This means the robot **evolves its capabilities at runtime** — no pre-programming required.
+
+### Trace Fidelity
+
+All robot actions are tagged with source fidelity for dream weighting:
+- `REAL_WORLD` (1.0) — actual hardware
+- `SIM_3D` (0.8) — MuJoCo physics
+- `SIM_2D` (0.5) — virtual_roclaw kinematics
+- `DREAM_TEXT` (0.3) — text-only dream scenarios
 
 ## Development
 
