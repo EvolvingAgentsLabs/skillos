@@ -716,19 +716,22 @@ def run_claude(prompt: str) -> str:
 
 
 def show_banner():
-    """Display the SkillOS banner."""
+    """Display the SkillOS banner, sourced from Boot.md."""
+    boot_md = SKILLOS_DIR / "Boot.md"
     console.print()
-    banner = (
-        "   _____ __   _ ____             ____  _____\n"
-        "  / ___// /__(_) / /            / __ \\/ ___/\n"
-        "  \\__ \\/ //_/ / / /   ______   / / / /\\__ \\\n"
-        " ___/ / ,< / / / /   /_____/  / /_/ /___/ /\n"
-        "/____/_/|_/_/_/_/              \\____//____/"
-    )
-    console.print(banner, style="bold cyan")
-    console.print()
-    console.print("  [dim]Pure Markdown Operating System v1.0[/dim]")
-    console.print("  [dim]Powered by Claude Code Runtime[/dim]")
+    if boot_md.exists():
+        content = boot_md.read_text(encoding="utf-8")
+        # Extract the banner code block (between first ``` fence pair after ## Banner)
+        banner_match = re.search(r"## Banner\s*```\s*(.*?)```", content, re.DOTALL)
+        if banner_match:
+            banner_text = banner_match.group(1).rstrip()
+            lines = banner_text.splitlines()
+            # First line is the ASCII art (bold cyan), rest are subtitle lines (dim)
+            art_lines = [l for l in lines if l.strip()]
+            if art_lines:
+                console.print("\n".join(art_lines[:-2]), style="bold cyan")
+                for sub in art_lines[-2:]:
+                    console.print(f"  [dim]{sub.strip()}[/dim]")
     console.print()
     console.print(f"  [green]System Status:[/green]  READY")
     console.print(f"  [green]Working Dir:[/green]   ./projects/")
