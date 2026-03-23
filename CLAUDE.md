@@ -95,8 +95,7 @@ projects/[ProjectName]/
 ├── memory/              # Project memory for learning
 │   ├── short_term/      # Agent interactions, messages, context
 │   └── long_term/       # Consolidated insights and learnings
-└── workspace/           # Temporary execution state
-    └── state/           # Execution state (plan, context, variables, etc.)
+└── state/               # Execution state (plan, context, variables, etc.)
 ```
 
 **Execution Pattern:**
@@ -297,6 +296,8 @@ skillos execute: "Run the Project Aorta scenario from projects/Project_aorta/"
 
 skillos execute: "Create a tutorial on chaos theory with Python examples"
 
+skillos execute: "Run autoresearch on input/train.py for 50 cycles using program.md — 5-minute training windows, commit every improvement to git"
+
 skillos simulate: "Research task workflow for fine-tuning dataset"
 ```
 
@@ -316,7 +317,7 @@ skillos simulate: "Research task workflow for fine-tuning dataset"
    - Use EXECUTION MODE for real tool calls
 
 2. **Expected behavior:**
-   - Claude creates modular `workspace/state/` directory with specialized files
+   - Claude creates modular `state/` directory with specialized files
    - Initializes `constraints.md` with behavioral modifiers based on task context
    - Uses QueryMemoryTool for intelligent memory consultation during planning
    - Adapts execution style based on user sentiment and historical patterns
@@ -392,21 +393,11 @@ skillos/
 │       ├── memory/                  # Project memory for learning
 │       │   ├── short_term/          # Agent interactions and session logs
 │       │   └── long_term/           # Consolidated insights and learnings
-│       └── workspace/               # Project workspace during execution
-│           └── state/               # Execution state files
+│       └── state/                   # Execution state files
 ├── scenarios/                             # Reusable task scenario definitions
 │   ├── RealWorld_Research_Task.md     # Live web research demo
 │   ├── CodeAnalysis_Task.md           # Code analysis pipeline
-│   ├── ProjectAortaScenario.md        # Quantum signal processing demo
-│   └── RoClaw_Integration.md         # Physical robot integration demo
-├── workspace/                            # Global execution environment (gitignored)
-│   └── state/                        # Modular execution state
-│       ├── plan.md                  # Execution steps and metadata
-│       ├── context.md               # Knowledge accumulation
-│       ├── variables.json           # Structured data passing
-│       ├── history.md               # Execution log
-│       ├── constraints.md           # Behavioral modifiers (sentient state)
-│       └── boot_report.md           # Boot status report
+│   └── ProjectAortaScenario.md        # Quantum signal processing demo
 ├── .claude/agents/                       # Auto-populated agent definitions for Claude Code discovery
 ├── setup_agents.sh                       # Unix/Mac agent setup script
 ├── setup_agents.ps1                      # Windows agent setup script
@@ -569,7 +560,7 @@ All robot actions are tagged with source fidelity for dream weighting:
 ## Advanced Features
 
 ### Sentient State Management:
-- **Modular State Architecture**: Specialized files in `workspace/state/` for focused updates
+- **Modular State Architecture**: Specialized files in `state/` for focused updates
 - **Behavioral Constraints**: `constraints.md` enables dynamic adaptation based on user sentiment and context
 - **Memory-Driven Initialization**: Past experiences inform initial constraint settings
 - **Real-time Adaptation**: Constraints evolve during execution based on user feedback and events
@@ -662,7 +653,7 @@ SystemAgent can automatically install skills when a capability gap is detected d
 ## Clean Restart
 
 To reset SkillOS:
-1. Clear `workspace/` directory including `workspace/state/` (preserves execution artifacts)
+1. Clear `projects/[ProjectName]/state/` directories (preserves execution artifacts)
 2. Reset `system/SmartMemory.md` experience entries (clears learning history and behavioral patterns)
 3. Archive any valuable execution traces and behavioral learning data for training
 4. Ready for fresh scenario execution with clean sentient state

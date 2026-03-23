@@ -71,7 +71,7 @@ mkdir -p \
   projects/[ProjectName]/output \
   projects/[ProjectName]/memory/short_term \
   projects/[ProjectName]/memory/long_term \
-  projects/[ProjectName]/workspace/state
+  projects/[ProjectName]/state
 ```
 
 ### Phase 3: State File Generation

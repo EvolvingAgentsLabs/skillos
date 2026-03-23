@@ -138,7 +138,7 @@ Parameters:
 
 The pure markdown nature is maintained through filesystem operations:
 
-1. **State Directory**: `workspace/state/` contains modular files (plan.md, context.md, variables.json, etc.)
+1. **State Directory**: `state/` contains modular files (plan.md, context.md, variables.json, etc.)
 2. **Atomic Updates**: Each file is updated independently to maintain clean state transitions
 3. **Memory Persistence**: `system/memory_log.md` stores structured experiences for future reference
 

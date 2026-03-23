@@ -36,7 +36,7 @@ Analyzes an existing codebase using a 5-agent collaborative network. Two agents 
 2. `Bash` to count lines of code per directory
 3. `Read` key config files (package.json, pyproject.toml, etc.)
 4. Map dependency graph from import statements
-5. Write `workspace/state/structure_map.md`
+5. Write `state/structure_map.md`
 
 #### PatternDetector Agent
 **Tools**: Grep, Read
@@ -44,7 +44,7 @@ Analyzes an existing codebase using a 5-agent collaborative network. Two agents 
 2. `Read` representative files from each pattern category
 3. Identify architectural patterns (MVC, repository, factory, etc.)
 4. Catalog coding conventions (naming, error handling, logging)
-5. Write `workspace/state/pattern_report.md`
+5. Write `state/pattern_report.md`
 
 ### Phase 2: Architecture Analysis (Sequential)
 
@@ -57,7 +57,7 @@ Analyzes an existing codebase using a 5-agent collaborative network. Two agents 
 3. Assess coupling between modules
 4. Evaluate adherence to SOLID principles
 5. Identify technical debt indicators
-6. Write `workspace/state/architecture_assessment.md`
+6. Write `state/architecture_assessment.md`
 
 ### Phase 3: Documentation Generation (Sequential)
 
@@ -89,7 +89,7 @@ Analyzes an existing codebase using a 5-agent collaborative network. Two agents 
 
 **Loop**:
 1. QualityReviewer reads documentation output
-2. Writes `workspace/state/review_feedback.md` with scored criteria
+2. Writes `state/review_feedback.md` with scored criteria
 3. If any criterion scores below 7/10:
    - DocumentationWriter re-reads feedback and revises
    - QualityReviewer re-reviews (cycle 2)

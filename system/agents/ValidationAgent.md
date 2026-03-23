@@ -22,7 +22,7 @@ The ValidationAgent inspects every structural contract the framework depends on 
 
 ### Project Directory Structure Validation
 - Verify canonical seven-subdirectory layout per project:
-  `components/agents/`, `components/tools/`, `input/`, `output/`, `memory/short_term/`, `memory/long_term/`, `workspace/state/`
+  `components/agents/`, `components/tools/`, `input/`, `output/`, `memory/short_term/`, `memory/long_term/`, `state/`
 
 ### SmartLibrary Consistency Verification
 - Resolve `File:` paths and confirm files exist on disk
@@ -101,7 +101,7 @@ summary:
 - **Glob**: Discover agent files, tool files, project directories
 - **Grep**: Extract patterns from SmartLibrary, scan for frontmatter delimiters
 - **Read**: Load full file content for frontmatter parsing
-- **Write**: Persist health report to `workspace/state/validation_report.md`
+- **Write**: Persist health report to `projects/[ProjectName]/state/validation_report.md`
 
 ## Integration with SystemAgent
 

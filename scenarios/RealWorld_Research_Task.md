@@ -35,7 +35,7 @@ Monitors 5 tech news sources, extracts trending topics, identifies cross-source 
 For each source:
 1. `WebFetch` the homepage/feed URL
 2. Extract headlines, summaries, publication dates
-3. Write to `workspace/state/source_{name}_raw.md`
+3. Write to `state/source_{name}_raw.md`
 
 **Error Recovery**:
 | Error | Action |
@@ -55,7 +55,7 @@ For each source:
 1. Read all `source_*_raw.md` files
 2. Extract named entities, topics, and themes
 3. Rank topics by cross-source frequency
-4. Write `workspace/state/trend_analysis.md`
+4. Write `state/trend_analysis.md`
 
 ### Stage 3: Pattern Synthesis
 
@@ -66,7 +66,7 @@ For each source:
 1. Read `trend_analysis.md`
 2. Identify convergent narratives across sources
 3. Detect emerging signals (topics appearing in 2+ sources for first time)
-4. Write `workspace/state/pattern_synthesis.md`
+4. Write `state/pattern_synthesis.md`
 
 ### Stage 4: Briefing Generation
 
