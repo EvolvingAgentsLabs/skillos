@@ -296,6 +296,8 @@ skillos execute: "Run the Project Aorta scenario from projects/Project_aorta/"
 
 skillos execute: "Create a tutorial on chaos theory with Python examples"
 
+skillos execute: "Run autoresearch on input/train.py for 50 cycles using program.md — 5-minute training windows, commit every improvement to git"
+
 skillos simulate: "Research task workflow for fine-tuning dataset"
 ```
 
