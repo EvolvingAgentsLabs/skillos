@@ -726,8 +726,6 @@ def show_banner():
     """Display the SkillOS banner, sourced from Boot.md."""
   
     console.print("  [dim]─────────────────Loading system───────────────────────[/dim]")
-    
-
 
 def boot_skillos():
     """Show banner, then boot SkillOS with a spinner."""
