@@ -672,7 +672,7 @@ def show_history():
 
 
 def run_claude(prompt: str) -> str:
-    """Run claude, showing a spinner until output begins, then stream lines."""
+    """Run claude with a spinner, then render the full response as Markdown."""
     cmd = ["claude", "-p", "--output-format", "text"]
 
     if session_booted:
@@ -688,7 +688,7 @@ def run_claude(prompt: str) -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
-            bufsize=1,          # line-buffered for responsive streaming
+            bufsize=1,
             cwd=str(SKILLOS_DIR),
         )
     except FileNotFoundError:
@@ -697,59 +697,36 @@ def run_claude(prompt: str) -> str:
         return ""
 
     output_lines: list[str] = []
-    spinner = Live(
+
+    with Live(
         Spinner("dots", text="[yellow]Thinking...[/yellow]"),
         console=console,
         transient=True,
-    )
-    spinner.start()
-
-    try:
-        for line in process.stdout:
-            # First output: stop spinner and switch to streaming display
-            if spinner.is_started:
-                spinner.stop()
-            output_lines.append(line)
-            console.print(line, end="", highlight=False)
-    except KeyboardInterrupt:
-        spinner.stop()
-        process.terminate()
-        console.print("\n[warning]Interrupted.[/warning]")
-        console.print()
-        return "".join(output_lines)
-    finally:
-        spinner.stop()
+    ):
+        try:
+            for line in process.stdout:
+                output_lines.append(line)
+        except KeyboardInterrupt:
+            process.terminate()
+            console.print("\n[warning]Interrupted.[/warning]")
+            console.print()
+            return "".join(output_lines)
 
     process.wait()
+    output = "".join(output_lines)
+
+    if output.strip():
+        console.print(Markdown(output))
+
     console.print()
-    return "".join(output_lines)
+    return output
 
 
 def show_banner():
     """Display the SkillOS banner, sourced from Boot.md."""
-    boot_md = SKILLOS_DIR / "Boot.md"
-    console.print()
-    if boot_md.exists():
-        content = boot_md.read_text(encoding="utf-8")
-        # Extract the banner code block (between first ``` fence pair after ## Banner)
-        banner_match = re.search(r"## Banner\s*```\s*(.*?)```", content, re.DOTALL)
-        if banner_match:
-            banner_text = banner_match.group(1).rstrip()
-            lines = banner_text.splitlines()
-            # First line is the ASCII art (bold cyan), rest are subtitle lines (dim)
-            art_lines = [l for l in lines if l.strip()]
-            if art_lines:
-                console.print("\n".join(art_lines[:-2]), style="bold cyan")
-                for sub in art_lines[-2:]:
-                    console.print(f"  [dim]{sub.strip()}[/dim]")
-    console.print()
-    console.print(f"  [green]System Status:[/green]  READY")
-    console.print(f"  [green]Working Dir:[/green]   ./projects/")
-    console.print(f"  [green]Session:[/green]       {PID}")
-    console.print()
-    console.print("  [dim]Type [white]help[/white] for commands, or enter a goal to execute.[/dim]")
-    console.print("  [dim]─────────────────────────────────────────────────[/dim]")
-    console.print()
+  
+    console.print("  [dim]─────────────────Loading system───────────────────────[/dim]")
+    
 
 
 def boot_skillos():

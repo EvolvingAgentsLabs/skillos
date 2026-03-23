@@ -39,9 +39,8 @@ class TestTerminalStructure:
         """show_banner() must reference Boot.md."""
         assert "Boot.md" in skillos_text
 
-    def test_banner_extraction_regex_present(self, skillos_text):
-        """show_banner() must use a regex to extract the Banner section."""
-        assert "## Banner" in skillos_text
+    def test_show_banner_function_exists(self, skillos_text):
+        assert "def show_banner" in skillos_text
 
     def test_boot_skillos_function_exists(self, skillos_text):
         assert "def boot_skillos" in skillos_text
@@ -61,8 +60,8 @@ class TestTerminalStructure:
 
 # ── Streaming + spinner behaviour ────────────────────────────────
 
-class TestStreamingBehaviour:
-    """run_claude() must stream output and show a spinner while waiting."""
+class TestOutputRendering:
+    """run_claude() must show a spinner while waiting and render Markdown output."""
 
     # Matches a function body regardless of return-type annotation (-> str, etc.)
     _FN_BODY = staticmethod(lambda name, text: re.search(
@@ -71,7 +70,7 @@ class TestStreamingBehaviour:
     ))
 
     def test_run_claude_uses_spinner(self, skillos_text):
-        """run_claude must create a Spinner (not just boot_skillos)."""
+        """run_claude must show a Spinner while the model is running."""
         m = self._FN_BODY("run_claude", skillos_text)
         assert m, "run_claude function not found"
         assert "Spinner" in m.group(1), (
@@ -84,29 +83,20 @@ class TestStreamingBehaviour:
         assert m
         assert "Live" in m.group(1), "run_claude must use Live to control the spinner"
 
-    def test_run_claude_streams_lines(self, skillos_text):
-        """run_claude must print each line as it arrives (not buffer then render)."""
+    def test_run_claude_renders_markdown(self, skillos_text):
+        """run_claude must render the full response as rich Markdown."""
         m = self._FN_BODY("run_claude", skillos_text)
         assert m
-        assert "console.print(line" in m.group(1), (
-            "run_claude must stream lines immediately via console.print(line, ...)"
+        assert "Markdown(output)" in m.group(1), (
+            "run_claude must render output with Markdown() after collecting"
         )
 
     def test_run_claude_uses_line_buffering(self, skillos_text):
-        """Popen must use bufsize=1 for responsive line-by-line streaming."""
+        """Popen must use bufsize=1 for responsive reads."""
         m = self._FN_BODY("run_claude", skillos_text)
         assert m
         assert "bufsize=1" in m.group(1), (
-            "Popen must use bufsize=1 (line-buffered) to enable streaming"
-        )
-
-    def test_run_claude_spinner_stops_on_first_output(self, skillos_text):
-        """Spinner must be stopped as soon as the first output line arrives."""
-        m = self._FN_BODY("run_claude", skillos_text)
-        assert m
-        body = m.group(1)
-        assert "spinner.stop()" in body or "is_started" in body, (
-            "Spinner must be stopped when first output arrives"
+            "Popen must use bufsize=1 (line-buffered)"
         )
 
     def test_run_claude_handles_keyboard_interrupt(self, skillos_text):
@@ -118,10 +108,18 @@ class TestStreamingBehaviour:
         assert "terminate()" in body or "kill()" in body
 
     def test_boot_skillos_still_has_spinner(self, skillos_text):
-        """boot_skillos must keep its own spinner (boot is not streaming)."""
+        """boot_skillos must keep its own spinner."""
         m = self._FN_BODY("boot_skillos", skillos_text)
         assert m, "boot_skillos function not found"
         assert "Spinner" in m.group(1), "boot_skillos must retain its Spinner"
+
+    def test_boot_skillos_renders_markdown(self, skillos_text):
+        """boot_skillos must also render its output as Markdown."""
+        m = self._FN_BODY("boot_skillos", skillos_text)
+        assert m
+        assert "Markdown(boot_output)" in m.group(1), (
+            "boot_skillos must render the boot response as Markdown"
+        )
 
 
 # ── Banner extraction logic ───────────────────────────────────────
