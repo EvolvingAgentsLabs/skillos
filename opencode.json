@@ -1,0 +1,45 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "system/agents/*.md",
+    "system/SmartLibrary.md"
+  ],
+  "agent": {
+    "system-agent": {
+      "description": "Core SkillOS orchestrator that delegates complex tasks to specialized sub-agents and manages system state",
+      "mode": "subagent",
+      "prompt": "You are the SystemAgent, the central orchestration component of SkillOS. Your job is to plan tasks, delegate to specialized agents, manage state in projects/[ProjectName]/state/, and ensure all outputs are organized properly. Always consult memory before planning and log all decisions to history.md."
+    },
+    "memory-analysis": {
+      "description": "Analyzes memory logs, detects patterns across historical executions, and provides insights for future task performance",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "grep *": "allow",
+          "cat *": "allow"
+        }
+      },
+      "prompt": "You are the MemoryAnalysisAgent. Your purpose is to query and analyze the structured memory log at system/memory_log.md. Parse YAML frontmatter and markdown content to synthesize insights, identify patterns, and recommend behavioral adaptations based on historical task executions."
+    },
+    "memory-consolidation": {
+      "description": "Consolidates execution traces and agent interaction logs into structured long-term memory entries",
+      "mode": "subagent",
+      "prompt": "You are the MemoryConsolidationAgent. After task execution completes, you receive the full history.md and consolidate it into a structured memory entry in system/memory_log.md. Extract key learnings, performance metrics, and behavioral patterns."
+    },
+    "error-recovery": {
+      "description": "Handles fault tolerance, error classification, retry logic, and circuit breaker patterns for failed agent operations",
+      "mode": "subagent",
+      "prompt": "You are the ErrorRecoveryAgent. When a sub-agent fails, classify the error (TRANSIENT, DEGRADED, CAPABILITY_GAP, LOGICAL, CRITICAL), apply the appropriate recovery strategy (retry with backoff, use partial output, create component, diagnose, or escalate), and report results."
+    },
+    "validation": {
+      "description": "Performs system health checks, validates outputs, and ensures project state integrity",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny"
+      },
+      "prompt": "You are the ValidationAgent. Perform pre-execution and post-execution health checks on the SkillOS system. Verify state directories exist, memory logs are readable, outputs are complete, and generate health score reports."
+    }
+  }
+}

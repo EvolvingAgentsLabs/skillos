@@ -5,6 +5,12 @@
 .claude/todos/
 .qwen/
 
+# OpenCode runtime artifacts
+.opencode/node_modules/
+.opencode/package.json
+.opencode/bun.lock
+.opencode/.gitignore
+
 # Python
 __pycache__/
 *.pyc
