@@ -672,7 +672,7 @@ def show_history():
 
 
 def run_claude(prompt: str) -> str:
-    """Run claude in print mode, capture output, render as markdown."""
+    """Run claude, showing a spinner until output begins, then stream lines."""
     cmd = ["claude", "-p", "--output-format", "text"]
 
     if session_booted:
@@ -688,31 +688,41 @@ def run_claude(prompt: str) -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
+            bufsize=1,          # line-buffered for responsive streaming
             cwd=str(SKILLOS_DIR),
         )
-
-        output_lines = []
-        for line in process.stdout:
-            output_lines.append(line)
-
-        process.wait()
-        output = "".join(output_lines)
-
-        # Render the full output as markdown
-        if output.strip():
-            console.print(Markdown(output))
-
-        console.print()
-        return output
-
     except FileNotFoundError:
         console.print("[error]Error: 'claude' command not found. Is Claude Code installed?[/error]")
         console.print()
         return ""
+
+    output_lines: list[str] = []
+    spinner = Live(
+        Spinner("dots", text="[yellow]Thinking...[/yellow]"),
+        console=console,
+        transient=True,
+    )
+    spinner.start()
+
+    try:
+        for line in process.stdout:
+            # First output: stop spinner and switch to streaming display
+            if spinner.is_started:
+                spinner.stop()
+            output_lines.append(line)
+            console.print(line, end="", highlight=False)
     except KeyboardInterrupt:
+        spinner.stop()
+        process.terminate()
         console.print("\n[warning]Interrupted.[/warning]")
         console.print()
-        return ""
+        return "".join(output_lines)
+    finally:
+        spinner.stop()
+
+    process.wait()
+    console.print()
+    return "".join(output_lines)
 
 
 def show_banner():

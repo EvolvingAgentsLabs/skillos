@@ -59,6 +59,71 @@ class TestTerminalStructure:
         assert "def process_input" in skillos_text
 
 
+# ── Streaming + spinner behaviour ────────────────────────────────
+
+class TestStreamingBehaviour:
+    """run_claude() must stream output and show a spinner while waiting."""
+
+    # Matches a function body regardless of return-type annotation (-> str, etc.)
+    _FN_BODY = staticmethod(lambda name, text: re.search(
+        rf"def {name}\([^)]*\)(?:\s*->[^:]+)?:(.*?)(?=\ndef |\Z)",
+        text, re.DOTALL,
+    ))
+
+    def test_run_claude_uses_spinner(self, skillos_text):
+        """run_claude must create a Spinner (not just boot_skillos)."""
+        m = self._FN_BODY("run_claude", skillos_text)
+        assert m, "run_claude function not found"
+        assert "Spinner" in m.group(1), (
+            "run_claude must create a Spinner for the wait period"
+        )
+
+    def test_run_claude_uses_live(self, skillos_text):
+        """run_claude must use Live to manage the spinner lifecycle."""
+        m = self._FN_BODY("run_claude", skillos_text)
+        assert m
+        assert "Live" in m.group(1), "run_claude must use Live to control the spinner"
+
+    def test_run_claude_streams_lines(self, skillos_text):
+        """run_claude must print each line as it arrives (not buffer then render)."""
+        m = self._FN_BODY("run_claude", skillos_text)
+        assert m
+        assert "console.print(line" in m.group(1), (
+            "run_claude must stream lines immediately via console.print(line, ...)"
+        )
+
+    def test_run_claude_uses_line_buffering(self, skillos_text):
+        """Popen must use bufsize=1 for responsive line-by-line streaming."""
+        m = self._FN_BODY("run_claude", skillos_text)
+        assert m
+        assert "bufsize=1" in m.group(1), (
+            "Popen must use bufsize=1 (line-buffered) to enable streaming"
+        )
+
+    def test_run_claude_spinner_stops_on_first_output(self, skillos_text):
+        """Spinner must be stopped as soon as the first output line arrives."""
+        m = self._FN_BODY("run_claude", skillos_text)
+        assert m
+        body = m.group(1)
+        assert "spinner.stop()" in body or "is_started" in body, (
+            "Spinner must be stopped when first output arrives"
+        )
+
+    def test_run_claude_handles_keyboard_interrupt(self, skillos_text):
+        """run_claude must catch KeyboardInterrupt and terminate the subprocess."""
+        m = self._FN_BODY("run_claude", skillos_text)
+        assert m
+        body = m.group(1)
+        assert "KeyboardInterrupt" in body
+        assert "terminate()" in body or "kill()" in body
+
+    def test_boot_skillos_still_has_spinner(self, skillos_text):
+        """boot_skillos must keep its own spinner (boot is not streaming)."""
+        m = self._FN_BODY("boot_skillos", skillos_text)
+        assert m, "boot_skillos function not found"
+        assert "Spinner" in m.group(1), "boot_skillos must retain its Spinner"
+
+
 # ── Banner extraction logic ───────────────────────────────────────
 
 class TestBannerExtraction:
