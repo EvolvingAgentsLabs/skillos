@@ -2,11 +2,14 @@
 """
 RoClaw Bridge Server — HTTP bridge between SkillOS and RoClaw.
 
-Translates REST API calls into WebSocket tool invocations sent to the
-OpenClaw Gateway, which routes them to the RoClaw CortexNode.
+Translates REST API calls into tool invocations sent to a backend:
+  - WebSocket → OpenClaw Gateway (real hardware)
+  - HTTP → run_sim3d.ts --serve tool server (MuJoCo simulation)
+  - Simulation → mock responses (no hardware)
 
 Usage:
     python roclaw_bridge.py --port 8430 --gateway ws://localhost:8080
+    python roclaw_bridge.py --port 8430 --tool-server http://localhost:8440
     python roclaw_bridge.py --port 8430 --simulate   # No real hardware
 """
 
@@ -14,6 +17,8 @@ import argparse
 import asyncio
 import json
 import logging
+import urllib.request
+import urllib.error
 import uuid
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
@@ -193,6 +198,58 @@ class SimulationClient:
 
 
 # ---------------------------------------------------------------------------
+# HTTP Tool Server Client (run_sim3d.ts --serve)
+# ---------------------------------------------------------------------------
+
+class HttpToolClient:
+    """HTTP client that forwards tool invocations to a run_sim3d.ts --serve tool server."""
+
+    def __init__(self, tool_server_url: str):
+        self.tool_server_url = tool_server_url.rstrip("/")
+        log.info("HTTP tool client targeting %s", self.tool_server_url)
+
+    async def connect(self):
+        """Verify the tool server is reachable."""
+        url = f"{self.tool_server_url}/health"
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+                log.info("Tool server healthy: %s", data)
+        except Exception as e:
+            raise RuntimeError(f"Cannot reach tool server at {url}: {e}") from e
+
+    async def invoke_tool(self, tool: str, args: dict[str, Any], timeout: float = 300) -> dict:
+        url = f"{self.tool_server_url}/invoke"
+        payload = json.dumps({"tool": tool, "args": args}).encode()
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            body = e.read().decode() if e.fp else ""
+            try:
+                return json.loads(body)
+            except Exception:
+                return {"success": False, "message": f"HTTP {e.code}: {body}"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    async def close(self):
+        """Send shutdown to the tool server (best-effort)."""
+        url = f"{self.tool_server_url}/shutdown"
+        try:
+            req = urllib.request.Request(url, data=b"", method="POST")
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
 # HTTP Request Handler
 # ---------------------------------------------------------------------------
 
@@ -288,6 +345,8 @@ def main():
     parser = argparse.ArgumentParser(description="RoClaw Bridge — HTTP ↔ WebSocket bridge for SkillOS")
     parser.add_argument("--port", type=int, default=8430, help="HTTP port (default: 8430)")
     parser.add_argument("--gateway", type=str, default="ws://localhost:8080", help="OpenClaw Gateway URL")
+    parser.add_argument("--tool-server", type=str, default=None,
+                        help="HTTP tool server URL (e.g. http://localhost:8440) — connects to run_sim3d.ts --serve")
     parser.add_argument("--simulate", action="store_true", help="Use simulated robot (no hardware)")
     args = parser.parse_args()
 
@@ -299,16 +358,26 @@ def main():
     # Initialize client
     if args.simulate:
         _client = SimulationClient()
+    elif args.tool_server:
+        _client = HttpToolClient(args.tool_server)
     else:
         _client = GatewayClient(args.gateway)
 
     # Connect client
     asyncio.run_coroutine_threadsafe(_client.connect(), _loop).result(timeout=10)
 
+    # Determine mode label
+    if args.simulate:
+        mode_label = "SIMULATION"
+    elif args.tool_server:
+        mode_label = f"TOOL SERVER → {args.tool_server}"
+    else:
+        mode_label = f"GATEWAY → {args.gateway}"
+
     # Start HTTP server
     server = HTTPServer(("0.0.0.0", args.port), BridgeHandler)
     log.info("RoClaw Bridge listening on http://0.0.0.0:%d", args.port)
-    log.info("Mode: %s", "SIMULATION" if args.simulate else f"GATEWAY → {args.gateway}")
+    log.info("Mode: %s", mode_label)
     log.info("Available tools: %s", ", ".join(ROCLAW_TOOLS))
 
     try:

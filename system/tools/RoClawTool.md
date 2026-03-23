@@ -30,14 +30,16 @@ This tool realizes the **Cognitive Trinity** architecture:
 
 ## Architecture
 
+SkillOS agents always talk to the bridge at `:8430`. The bridge forwards tool invocations to one of three backends:
+
 ```
 SkillOS Agent (e.g., RoClawNavigationAgent)
   ↓ (Bash curl to :8430)
 roclaw_bridge.py (HTTP :8430)
-  ↓ (WebSocket to OpenClaw Gateway :8080)
-RoClaw CortexNode
-  ↓ (tool invocation)
-VisionLoop + BytecodeCompiler + UDP → ESP32-S3
+  ↓ one of:
+  ├─ --gateway     → WebSocket to OpenClaw Gateway :8080 → CortexNode → ESP32-S3
+  ├─ --tool-server → HTTP POST to run_sim3d.ts --serve :8440 → handleTool() → MuJoCo
+  └─ --simulate    → SimulationClient (mock responses, no hardware)
 ```
 
 ## Prerequisites
@@ -45,11 +47,19 @@ VisionLoop + BytecodeCompiler + UDP → ESP32-S3
 Start the RoClaw Bridge before using this tool:
 
 ```bash
-# Start the bridge server (connects to OpenClaw Gateway)
+# Real hardware (connects to OpenClaw Gateway)
 python roclaw_bridge.py --port 8430 --gateway ws://localhost:8080
 
-# Or with simulation mode (uses virtual_roclaw instead of real hardware)
+# MuJoCo 3D simulation (connects to run_sim3d.ts --serve tool server)
+python roclaw_bridge.py --port 8430 --tool-server http://localhost:8440
+
+# Mock responses (no hardware, no simulation)
 python roclaw_bridge.py --port 8430 --simulate
+```
+
+For the `--tool-server` mode, also start the tool server in RoClaw:
+```bash
+cd RoClaw && npx tsx scripts/run_sim3d.ts --serve --gemini
 ```
 
 ## Robot Tool Definitions
@@ -319,19 +329,31 @@ Command: curl -s -X POST http://localhost:8420/dream/run \
 Observation: [Dream consolidation results with new strategies]
 ```
 
-## Simulation Mode
+## Simulation Modes
 
-For testing without hardware, use the `--simulate` flag on the bridge:
+### Mock mode (no hardware, no simulation)
 
 ```bash
 python roclaw_bridge.py --port 8430 --simulate
 ```
 
-This uses `virtual_roclaw.ts` internally, providing:
-- Virtual ESP32-S3 (kinematic simulation)
-- Virtual ESP32-CAM (minimal MJPEG stream)
-- Full tool compatibility with simulated responses
-- Trace logging to evolving-memory (with source=SIM_2D)
+Returns canned responses for all 9 tools. Good for testing skillos agent logic in isolation.
+
+### MuJoCo 3D simulation (physics + VLM)
+
+```bash
+# Terminal 1: mjswan scene + bridge (already running)
+cd RoClaw/sim && python build_scene.py   # serves :8000
+cd RoClaw && npm run sim:3d              # :9090 WS, :4210 UDP, :8081 MJPEG
+
+# Terminal 2: Tool server — initializes VisionLoop, compiler, transmitter once
+cd RoClaw && npx tsx scripts/run_sim3d.ts --serve --gemini   # :8440
+
+# Terminal 3: Bridge in HTTP client mode
+python roclaw_bridge.py --port 8430 --tool-server http://localhost:8440
+```
+
+This runs the full cognitive stack: VLM sees rendered MuJoCo frames, reasons about the scene, outputs bytecodes that drive the simulated robot. Traces are tagged `SIM_3D` (fidelity 0.8).
 
 ## Trace Fidelity
 
