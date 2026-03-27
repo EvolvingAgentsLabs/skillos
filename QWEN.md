@@ -488,6 +488,112 @@ def delegate_to_agent(agent_name: str, task_description: str, input_data: dict =
 </python_code>
 </tool>
 
+<tool name="query_memory_graph">
+<description>Query the evolving-memory knowledge graph for learned strategies and patterns. Returns the best matching strategy with steps and constraints. Requires evolving-memory server on :8420.</description>
+<python_code>
+import json
+
+def query_memory_graph(query: str, domain: str = "robotics", limit: int = 5) -> str:
+    try:
+        import urllib.request
+        import urllib.parse
+        params = urllib.parse.urlencode({"q": query, "domain": domain, "limit": limit})
+        url = f"http://localhost:8420/query?{params}"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            return json.dumps(data, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e), "hint": "Is evolving-memory server running on :8420?"})
+</python_code>
+</tool>
+
+<tool name="log_trace">
+<description>Log an execution trace to evolving-memory for dream consolidation. Records what happened (goal, actions, outcome) so the dream engine can learn from it.</description>
+<python_code>
+import json
+
+def log_trace(goal: str, outcome: str, actions: list, confidence: float = 0.8, source: str = "DREAM_TEXT", domain: str = "general", hierarchy_level: int = 1, tags: list = None) -> str:
+    try:
+        import urllib.request
+        trace = {
+            "goal": goal,
+            "hierarchyLevel": hierarchy_level,
+            "outcome": outcome.upper(),
+            "confidence": confidence,
+            "source": source.upper(),
+            "actions": actions,
+            "tags": tags or [],
+            "domain": domain,
+        }
+        data = json.dumps(trace).encode()
+        req = urllib.request.Request(
+            "http://localhost:8420/traces",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.dumps(json.loads(resp.read()), indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e), "hint": "Is evolving-memory server running on :8420?"})
+</python_code>
+</tool>
+
+<tool name="trigger_dream">
+<description>Trigger a bio-inspired dream consolidation cycle on evolving-memory. Processes unconsolidated traces through SWS (curation), REM (chunking), and Consolidation (wiring). Returns dream journal with nodes created and constraints extracted.</description>
+<python_code>
+import json
+
+def trigger_dream(domain: str = "robotics") -> str:
+    try:
+        import urllib.request
+        data = json.dumps({"domain": domain}).encode()
+        req = urllib.request.Request(
+            "http://localhost:8420/dream/run",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return json.dumps(json.loads(resp.read()), indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e), "hint": "Is evolving-memory server running on :8420?"})
+</python_code>
+</tool>
+
+<tool name="get_memory_stats">
+<description>Get statistics from the evolving-memory knowledge graph: total nodes, traces, edges, constraints, and ISA version.</description>
+<python_code>
+import json
+
+def get_memory_stats() -> str:
+    try:
+        import urllib.request
+        req = urllib.request.Request("http://localhost:8420/stats")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.dumps(json.loads(resp.read()), indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e), "hint": "Is evolving-memory server running on :8420?"})
+</python_code>
+</tool>
+
+<tool name="robot_telemetry">
+<description>Get real-time telemetry from the RoClaw robot: pose (x, y, heading), wheel velocities, and stall status. Requires roclaw_bridge.py on :8430.</description>
+<python_code>
+import json
+
+def robot_telemetry() -> str:
+    try:
+        import urllib.request
+        req = urllib.request.Request("http://localhost:8430/tool/robot.telemetry")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.dumps(json.loads(resp.read()), indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e), "hint": "Is roclaw_bridge.py running on :8430?"})
+</python_code>
+</tool>
+
 <tool name="create_enhanced_agent">
 <description>Creates an enhanced version of an existing agent with additional capabilities.</description>
 <python_code>
