@@ -47,6 +47,7 @@ ROCLAW_TOOLS = [
     "robot.record_observation",
     "robot.analyze_scene",
     "robot.get_map",
+    "robot.telemetry",
 ]
 
 # ---------------------------------------------------------------------------
@@ -191,6 +192,13 @@ class SimulationClient:
                 "semantic_graph": {"nodes": [], "edges": []},
             }}
 
+        if tool == "robot.telemetry":
+            import time
+            return {"id": call_id, "success": True, "data": {
+                "pose": self._pose, "vel": {"left": 0.0, "right": 0.0},
+                "stall": False, "ts": int(time.time() * 1000),
+            }}
+
         return {"id": call_id, "success": False, "message": f"Unknown tool: {tool}"}
 
     async def close(self):
@@ -220,6 +228,16 @@ class HttpToolClient:
             raise RuntimeError(f"Cannot reach tool server at {url}: {e}") from e
 
     async def invoke_tool(self, tool: str, args: dict[str, Any], timeout: float = 300) -> dict:
+        # robot.telemetry uses GET /telemetry on the tool server (not POST /invoke)
+        if tool == "robot.telemetry":
+            url = f"{self.tool_server_url}/telemetry"
+            try:
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    return json.loads(resp.read())
+            except Exception as e:
+                return {"success": False, "message": str(e)}
+
         url = f"{self.tool_server_url}/invoke"
         payload = json.dumps({"tool": tool, "args": args}).encode()
         req = urllib.request.Request(
@@ -290,6 +308,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
             tool_name = "robot.read_memory"
         elif path == "/tool/robot.get_map":
             tool_name = "robot.get_map"
+        elif path == "/tool/robot.telemetry":
+            tool_name = "robot.telemetry"
 
         if tool_name:
             result = asyncio.run_coroutine_threadsafe(
