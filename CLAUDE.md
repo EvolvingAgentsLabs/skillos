@@ -359,24 +359,47 @@ skillos simulate: "Research task workflow for fine-tuning dataset"
 ```
 skillos/
 ├── system/                                # Core SkillOS framework components
-│   ├── agents/                        # System-wide orchestration agents
-│   │   ├── SystemAgent.md            # Core orchestration and workflow management
-│   │   ├── MemoryAnalysisAgent.md     # Cross-project learning and pattern recognition
-│   │   ├── MemoryConsolidationAgent.md # Memory log maintenance and consolidation
-│   │   ├── ErrorRecoveryAgent.md      # Fault tolerance and error recovery
-│   │   ├── ValidationAgent.md         # System health checks and validation
-│   │   ├── RoClawNavigationAgent.md  # Physical robot navigation planning
-│   │   ├── RoClawDreamAgent.md       # Bio-inspired dream consolidation
-│   │   └── RoClawSceneAnalysisAgent.md # VLM scene analysis and mapping
-│   ├── tools/                         # Framework-level tools
-│   │   ├── ClaudeCodeToolMap.md      # Integration with Claude Code's native tools
-│   │   ├── QueryMemoryTool.md        # Framework-level memory consultation
-│   │   ├── MemoryTraceManager.md     # Execution trace capture and logging
-│   │   ├── ProjectScaffoldTool.md    # Project directory bootstrapping
-│   │   ├── SkillPackageManagerTool.md # apt-like skill package management
-│   │   ├── RoClawTool.md            # HTTP bridge to RoClaw robot tools
-│   │   └── EvolvingMemoryTool.md    # REST bridge to evolving-memory API
-│   ├── SmartLibrary.md               # Component registry with metadata and capabilities
+│   ├── skills/                        # *** HIERARCHICAL SKILL TREE (primary) ***
+│   │   ├── SkillIndex.md             # Top-level routing index (~50 lines) — replaces SmartLibrary
+│   │   ├── orchestration/            # Domain: goal execution, workflow
+│   │   │   ├── base.md              # Shared orchestration behaviors (inherited by all)
+│   │   │   ├── index.md             # Domain index (~30 lines)
+│   │   │   └── core/
+│   │   │       ├── system-agent.manifest.md      # 15-line routing manifest
+│   │   │       ├── system-agent.md               # Full spec (moved from agents/)
+│   │   │       └── claude-code-tool-map.md        # Tool mapping reference
+│   │   ├── memory/                   # Domain: learning, history, traces
+│   │   │   ├── base.md              # Shared memory behaviors
+│   │   │   ├── index.md             # Domain index
+│   │   │   ├── analysis/            # memory-analysis-agent
+│   │   │   ├── consolidation/       # memory-consolidation-agent
+│   │   │   ├── query/               # query-memory-tool
+│   │   │   └── trace/               # memory-trace-manager
+│   │   ├── robot/                    # Domain: physical robot control
+│   │   │   ├── base.md              # Shared robot behaviors (Cognitive Trinity)
+│   │   │   ├── index.md             # Domain index
+│   │   │   ├── navigation/          # roclaw-navigation-agent
+│   │   │   ├── scene/               # roclaw-scene-analysis-agent
+│   │   │   ├── dream/               # roclaw-dream-agent
+│   │   │   └── tools/               # roclaw-tool, evolving-memory-tool
+│   │   ├── validation/              # Domain: health checks, spec integrity
+│   │   │   ├── base.md
+│   │   │   ├── index.md
+│   │   │   └── system/              # validation-agent
+│   │   ├── recovery/                # Domain: error handling, circuit breaker
+│   │   │   ├── base.md
+│   │   │   ├── index.md
+│   │   │   └── error/               # error-recovery-agent
+│   │   └── project/                 # Domain: scaffolding, packages
+│   │       ├── base.md
+│   │       ├── index.md
+│   │       ├── scaffold/            # project-scaffold-tool
+│   │       └── packages/            # skill-package-manager-tool
+│   ├── agents/                        # Backward-compat redirect stubs only
+│   │   └── *.md                      # → redirect to system/skills/{domain}/{family}/*.md
+│   ├── tools/                         # Backward-compat redirect stubs only
+│   │   └── *.md                      # → redirect to system/skills/{domain}/{family}/*.md
+│   ├── SmartLibrary.md               # DEPRECATED redirect stub → system/skills/SkillIndex.md
 │   ├── SmartMemory.md                # Structured, queryable experience database (single source of truth)
 │   ├── memory_log.md                 # Redirect to SmartMemory.md (deprecated)
 │   ├── sources.list                  # Package sources for skill installation
@@ -399,7 +422,7 @@ skillos/
 │   ├── CodeAnalysis_Task.md           # Code analysis pipeline
 │   └── ProjectAortaScenario.md        # Quantum signal processing demo
 ├── .claude/agents/                       # Auto-populated agent definitions for Claude Code discovery
-├── setup_agents.sh                       # Unix/Mac agent setup script
+├── setup_agents.sh                       # Unix/Mac agent setup script (v3.0 — skill tree aware)
 ├── setup_agents.ps1                      # Windows agent setup script
 ├── qwen_runtime.py                       # Qwen LLM runtime engine
 ├── roclaw_bridge.py                      # RoClaw HTTP↔WebSocket bridge server
@@ -408,21 +431,40 @@ skillos/
 
 ### Component Management and Discovery
 
-**Static Components**: Pre-defined agents and tools in project directories
-- **System Components**: Framework-level agents/tools in `system/`
+**Hierarchical Skill System** (v3.0): Skills are organized in a 3-level taxonomy:
+```
+Domain → Family → Skill
+(e.g., memory → analysis → memory-analysis-agent)
+```
+
+**Lazy Loading Protocol** (4-step — ~61% token reduction in routing phase):
+1. Identify domain from goal keywords (no file reads)
+2. Load `system/skills/SkillIndex.md` (~50 lines) → get domain index path
+3. Load domain `index.md` (~30–60 lines) → select skill + manifest path
+4. Load `skill.manifest.md` (~15 lines) → confirm fit, get full_spec path
+5. Load full spec ONLY when ready to invoke (~250–330 lines)
+
+**Skill Inheritance**: Each domain has a `base.md` with shared behaviors.
+Child skills declare `extends: {domain}/base` in YAML frontmatter; LLM merges at runtime.
+
+**Static Components**: Pre-defined skills in `system/skills/` hierarchy
+- **System Skills**: Framework-level agents/tools in `system/skills/{domain}/{family}/`
 - **Project Components**: Domain-specific agents/tools in `projects/[project]/components/`
 
 **Dynamic Component Creation**: New agents created during execution
-1. **Gap Analysis**: SystemAgent identifies missing capabilities for task completion
-2. **Agent Generation**: Creates new markdown agent definitions with proper YAML frontmatter
-3. **Project-Specific Storage**: Saves new agents to appropriate `projects/[project]/components/agents/`
-4. **Runtime Integration**: Auto-copies to `.claude/agents/` with project prefix for immediate discovery
-5. **Task Delegation**: Uses new agents via Claude Code's Task tool
+1. **Gap Analysis**: SystemAgent identifies missing capabilities via domain indexes
+2. **Agent Generation**: Creates new markdown agent definitions with proper YAML frontmatter including `extends: {domain}/base`
+3. **Manifest Creation**: Creates companion `.manifest.md` file for the new agent
+4. **Project-Specific Storage**: Saves new agents to `projects/[project]/components/agents/`
+5. **Index Registration**: Adds entry to the relevant domain `index.md`
+6. **Runtime Integration**: Auto-copies to `.claude/agents/` with project prefix for immediate discovery
+7. **Task Delegation**: Uses new agents via Claude Code's Task tool
 
 **Agent Discovery Process**:
 - **Initial Setup**: Run `setup_agents.sh/ps1` to populate `.claude/agents/` directory
-- **System Agents**: Copied directly (e.g., `SystemAgent.md`)
-- **Project Agents**: Copied with project prefix (e.g., `Project_aorta_VisionaryAgent.md`)
+- **Tier 1**: Skill tree agents from `system/skills/` (via manifest `full_spec:` paths)
+- **Tier 2**: Legacy backward-compat stubs in `system/agents/` (skipped if already in Tier 1)
+- **Tier 3**: Project agents from `projects/*/components/agents/` (with project prefix)
 - **Namespace Isolation**: Project prefixes prevent naming conflicts between projects
 - **Auto-Discovery**: Claude Code automatically discovers agents in `.claude/agents/`
 
