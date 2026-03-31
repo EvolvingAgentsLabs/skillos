@@ -66,21 +66,30 @@ claude --dangerously-skip-permissions "boot skillos"
 claude --dangerously-skip-permissions "skillos execute: 'Your goal here'"
 ```
 
-### Option 3: Qwen Runtime (Lightweight)
+### Option 3: Agent Runtime (Lightweight, Multi-Provider)
 **Best for:** Learning, development, resource-constrained environments
-- Uses Qwen 3 4B model (free tier)
+- Provider-agnostic: supports **Qwen** (OpenRouter, free tier) and **Gemini** (Google AI)
 - Minimal resource requirements
-- Self-hosted option available
+- LLM-powered context compaction for long sessions
 
 ```bash
 # Install dependencies
 pip install openai python-dotenv
 
-# Run any goal
+# Run with Qwen (default, free tier)
 python qwen_runtime.py "Your goal here"
+
+# Run with Gemini
+GEMINI_API_KEY=... python qwen_runtime.py --provider gemini "Your goal here"
+
+# Custom manifest + provider
+python qwen_runtime.py --provider gemini --manifest CUSTOM.md "Your goal"
 
 # Interactive mode
 python qwen_runtime.py interactive
+
+# Test mode
+python qwen_runtime.py --provider gemini test
 ```
 
 ## 💡 Core Concept
@@ -148,9 +157,9 @@ skillos/
 ├── projects/              # Your projects (working directory)
 │   └── [project_name]/    # Project-specific agents
 ├── workspace/             # Execution outputs
-├── qwen_runtime.py        # Lightweight runtime
+├── qwen_runtime.py        # AgentRuntime (multi-provider: Qwen, Gemini)
 ├── permission_policy.py   # Tool permission policy (ALLOW/DENY/PROMPT)
-└── compactor.py           # Context window compaction
+└── compactor.py           # Context compaction (sync + async LLM-powered)
 ```
 
 ## 🤖 Cognitive Trinity — RoClaw Physical Robot Integration
@@ -262,8 +271,11 @@ SystemAgent → Breaks down the problem
 ### Environment Variables
 Create a `.env` file:
 ```env
-# For Qwen Runtime (OpenRouter)
+# For Qwen provider (OpenRouter)
 OPENROUTER_API_KEY=your_key_here
+
+# For Gemini provider (Google AI)
+GEMINI_API_KEY=your_key_here
 
 # For local Qwen (Ollama)
 OLLAMA_HOST=http://localhost:11434
