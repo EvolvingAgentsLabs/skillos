@@ -176,14 +176,18 @@ SkillOS serves as the **Prefrontal Cortex** in a three-part cognitive architectu
 
 All runtimes (Claude Code, Qwen, any HTTP client) access the robot through the same bridge:
 
-```
-Any Runtime (Claude / Qwen / curl)
-  ↓ HTTP :8430
-roclaw_bridge.py (10 robot tools)
-  ↓ one of:
-  ├─ --tool-server → run_sim3d.ts --serve (MuJoCo 3D sim)
-  ├─ --gateway     → OpenClaw Gateway (real hardware)
-  └─ --simulate    → Mock responses (no hardware)
+```mermaid
+flowchart TD
+    RT["Any Runtime\nClaude / Qwen / curl"]
+    BR["roclaw_bridge.py\n10 robot tools"]
+    TS["run_sim3d.ts --serve\nMuJoCo 3D sim"]
+    GW["OpenClaw Gateway\nReal hardware"]
+    MK["Mock responses\nNo hardware"]
+
+    RT --"HTTP :8430"--> BR
+    BR --"--tool-server"--> TS
+    BR --"--gateway"--> GW
+    BR --"--simulate"--> MK
 ```
 
 ### 10 Robot Tools
@@ -259,11 +263,17 @@ python qwen_runtime.py "Build a REST API with authentication"
 
 ### Multi-Agent Collaboration
 Agents automatically collaborate on complex tasks:
-```
-SystemAgent → Breaks down the problem
-├── ResearchAgent → Gathers information
-├── DesignAgent → Creates architecture
-└── ImplementationAgent → Builds solution
+
+```mermaid
+flowchart TD
+    SA["SystemAgent\nBreaks down the problem"]
+    RA["ResearchAgent\nGathers information"]
+    DA["DesignAgent\nCreates architecture"]
+    IA["ImplementationAgent\nBuilds solution"]
+
+    SA --> RA
+    SA --> DA
+    SA --> IA
 ```
 
 ## 🔧 Configuration
