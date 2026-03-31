@@ -11,6 +11,8 @@ import sys
 import subprocess
 from openai import OpenAI
 from dotenv import load_dotenv
+from permission_policy import PermissionPolicy, PermissionMode, SKILLOS_DEFAULT_POLICY, get_policy
+from compactor import CompactionConfig, should_compact, compact_messages
 
 # Fix Windows console encoding for emojis
 if sys.platform == "win32":
@@ -21,7 +23,7 @@ if sys.platform == "win32":
 load_dotenv()
 
 class QwenRuntime:
-    def __init__(self, manifest_path="QWEN.md"):
+    def __init__(self, manifest_path="QWEN.md", permission_policy: PermissionPolicy | None = None):
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -29,6 +31,8 @@ class QwenRuntime:
         self.model = "qwen/qwen3-4b:free"  # Using Qwen3 4B free model
         self.tools = {}
         self.system_prompt = ""
+        self.policy = permission_policy or SKILLOS_DEFAULT_POLICY
+        self.compaction_config = CompactionConfig()
         self._load_manifest(manifest_path)
         print("✅ Qwen Runtime Initialized.")
 
@@ -149,6 +153,11 @@ Do not use tool calls - just provide your expert response directly.
         for i in range(max_turns):
             print(f"\n--- Turn {i+1}/{max_turns} ---")
 
+            # Compact messages if token estimate exceeds threshold
+            if should_compact(messages, self.compaction_config):
+                messages, summary = compact_messages(messages, self.compaction_config)
+                print(f"[compaction] Condensed context ({len(summary)} chars summary)")
+
             try:
                 response = self._call_llm(messages)
             except Exception as e:
@@ -177,6 +186,18 @@ Do not use tool calls - just provide your expert response directly.
                     try:
                         # Parse JSON arguments
                         args = json.loads(args_str.strip())
+
+                        # Permission policy check
+                        input_preview = args_str.strip()[:120]
+                        authorized, reason = self.policy.authorize(tool_name, input_preview)
+                        if not authorized:
+                            tool_result = f"DENIED: {reason}"
+                            print(f"!!! Permission denied: {reason}")
+                            messages.append({
+                                "role": "user",
+                                "content": f"Tool '{tool_name}' was denied: {reason}"
+                            })
+                            continue
 
                         if tool_name in self.tools:
                             # Execute the tool
@@ -306,11 +327,24 @@ Simply type any goal to execute it, for example:
 if __name__ == "__main__":
     import sys
 
-    runtime = QwenRuntime()
+    # Parse --permission-policy flag
+    policy_arg = None
+    filtered_args = []
+    i = 1
+    while i < len(sys.argv):
+        if sys.argv[i] == "--permission-policy" and i + 1 < len(sys.argv):
+            policy_arg = sys.argv[i + 1]
+            i += 2
+        else:
+            filtered_args.append(sys.argv[i])
+            i += 1
+
+    policy = get_policy(policy_arg) if policy_arg else SKILLOS_DEFAULT_POLICY
+    runtime = QwenRuntime(permission_policy=policy)
 
     # Parse command line arguments
-    if len(sys.argv) > 1:
-        command = sys.argv[1].lower()
+    if len(filtered_args) > 0:
+        command = filtered_args[0].lower()
 
         if command == "interactive":
             runtime.interactive_mode()
@@ -328,7 +362,7 @@ if __name__ == "__main__":
             print(f"\nTest result: {result}")
         else:
             # Treat unknown command as a goal to execute
-            goal = " ".join(sys.argv[1:])
+            goal = " ".join(filtered_args)
             print(f"Executing goal: {goal}")
             result = runtime.run_goal(goal)
             print(f"\nResult: {result}")

@@ -148,7 +148,9 @@ skillos/
 ├── projects/              # Your projects (working directory)
 │   └── [project_name]/    # Project-specific agents
 ├── workspace/             # Execution outputs
-└── qwen_runtime.py        # Lightweight runtime
+├── qwen_runtime.py        # Lightweight runtime
+├── permission_policy.py   # Tool permission policy (ALLOW/DENY/PROMPT)
+└── compactor.py           # Context window compaction
 ```
 
 ## 🤖 Cognitive Trinity — RoClaw Physical Robot Integration
