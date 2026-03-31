@@ -66,21 +66,30 @@ claude --dangerously-skip-permissions "boot skillos"
 claude --dangerously-skip-permissions "skillos execute: 'Your goal here'"
 ```
 
-### Option 3: Qwen Runtime (Lightweight)
+### Option 3: Agent Runtime (Lightweight, Multi-Provider)
 **Best for:** Learning, development, resource-constrained environments
-- Uses Qwen 3 4B model (free tier)
+- Provider-agnostic: supports **Qwen** (OpenRouter, free tier) and **Gemini** (Google AI)
 - Minimal resource requirements
-- Self-hosted option available
+- LLM-powered context compaction for long sessions
 
 ```bash
 # Install dependencies
 pip install openai python-dotenv
 
-# Run any goal
+# Run with Qwen (default, free tier)
 python qwen_runtime.py "Your goal here"
+
+# Run with Gemini
+GEMINI_API_KEY=... python qwen_runtime.py --provider gemini "Your goal here"
+
+# Custom manifest + provider
+python qwen_runtime.py --provider gemini --manifest CUSTOM.md "Your goal"
 
 # Interactive mode
 python qwen_runtime.py interactive
+
+# Test mode
+python qwen_runtime.py --provider gemini test
 ```
 
 ## 💡 Core Concept
@@ -148,9 +157,9 @@ skillos/
 ├── projects/              # Your projects (working directory)
 │   └── [project_name]/    # Project-specific agents
 ├── workspace/             # Execution outputs
-├── qwen_runtime.py        # Lightweight runtime
+├── qwen_runtime.py        # AgentRuntime (multi-provider: Qwen, Gemini)
 ├── permission_policy.py   # Tool permission policy (ALLOW/DENY/PROMPT)
-└── compactor.py           # Context window compaction
+└── compactor.py           # Context compaction (sync + async LLM-powered)
 ```
 
 ## 🤖 Cognitive Trinity — RoClaw Physical Robot Integration
@@ -167,14 +176,18 @@ SkillOS serves as the **Prefrontal Cortex** in a three-part cognitive architectu
 
 All runtimes (Claude Code, Qwen, any HTTP client) access the robot through the same bridge:
 
-```
-Any Runtime (Claude / Qwen / curl)
-  ↓ HTTP :8430
-roclaw_bridge.py (10 robot tools)
-  ↓ one of:
-  ├─ --tool-server → run_sim3d.ts --serve (MuJoCo 3D sim)
-  ├─ --gateway     → OpenClaw Gateway (real hardware)
-  └─ --simulate    → Mock responses (no hardware)
+```mermaid
+flowchart TD
+    RT["Any Runtime\nClaude / Qwen / curl"]
+    BR["roclaw_bridge.py\n10 robot tools"]
+    TS["run_sim3d.ts --serve\nMuJoCo 3D sim"]
+    GW["OpenClaw Gateway\nReal hardware"]
+    MK["Mock responses\nNo hardware"]
+
+    RT --"HTTP :8430"--> BR
+    BR --"--tool-server"--> TS
+    BR --"--gateway"--> GW
+    BR --"--simulate"--> MK
 ```
 
 ### 10 Robot Tools
@@ -250,11 +263,17 @@ python qwen_runtime.py "Build a REST API with authentication"
 
 ### Multi-Agent Collaboration
 Agents automatically collaborate on complex tasks:
-```
-SystemAgent → Breaks down the problem
-├── ResearchAgent → Gathers information
-├── DesignAgent → Creates architecture
-└── ImplementationAgent → Builds solution
+
+```mermaid
+flowchart TD
+    SA["SystemAgent\nBreaks down the problem"]
+    RA["ResearchAgent\nGathers information"]
+    DA["DesignAgent\nCreates architecture"]
+    IA["ImplementationAgent\nBuilds solution"]
+
+    SA --> RA
+    SA --> DA
+    SA --> IA
 ```
 
 ## 🔧 Configuration
@@ -262,8 +281,11 @@ SystemAgent → Breaks down the problem
 ### Environment Variables
 Create a `.env` file:
 ```env
-# For Qwen Runtime (OpenRouter)
+# For Qwen provider (OpenRouter)
 OPENROUTER_API_KEY=your_key_here
+
+# For Gemini provider (Google AI)
+GEMINI_API_KEY=your_key_here
 
 # For local Qwen (Ollama)
 OLLAMA_HOST=http://localhost:11434
