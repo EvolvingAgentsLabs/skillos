@@ -148,7 +148,59 @@ skillos/
 ├── projects/              # Your projects (working directory)
 │   └── [project_name]/    # Project-specific agents
 ├── workspace/             # Execution outputs
-└── qwen_runtime.py        # Lightweight runtime
+├── qwen_runtime.py        # Lightweight runtime
+├── permission_policy.py   # Tool permission policy (ALLOW/DENY/PROMPT)
+└── compactor.py           # Context window compaction
+```
+
+## 🤖 Cognitive Trinity — RoClaw Physical Robot Integration
+
+SkillOS serves as the **Prefrontal Cortex** in a three-part cognitive architecture for autonomous robotics:
+
+| Component | Brain Region | Role |
+|---|---|---|
+| **[skillos](https://github.com/EvolvingAgentsLabs/skillos)** | Prefrontal Cortex | Planning, reasoning, dynamic agent creation |
+| **[RoClaw](https://github.com/EvolvingAgentsLabs/RoClaw)** | Cerebellum | VLM motor control, reactive navigation |
+| **[evolving-memory](https://github.com/EvolvingAgentsLabs/evolving-memory)** | Hippocampus | Dream consolidation, strategy learning |
+
+### Bridge Architecture
+
+All runtimes (Claude Code, Qwen, any HTTP client) access the robot through the same bridge:
+
+```
+Any Runtime (Claude / Qwen / curl)
+  ↓ HTTP :8430
+roclaw_bridge.py (10 robot tools)
+  ↓ one of:
+  ├─ --tool-server → run_sim3d.ts --serve (MuJoCo 3D sim)
+  ├─ --gateway     → OpenClaw Gateway (real hardware)
+  └─ --simulate    → Mock responses (no hardware)
+```
+
+### 10 Robot Tools
+
+`robot.go_to` · `robot.explore` · `robot.describe_scene` · `robot.stop` · `robot.status` · `robot.read_memory` · `robot.record_observation` · `robot.analyze_scene` · `robot.get_map` · `robot.telemetry`
+
+### Runtime Parity
+
+Both runtimes have full access to the cognitive stack:
+
+| Capability | Claude Code | Qwen Runtime |
+|------------|-------------|-------------|
+| Robot tools (10) | RoClawTool.md (curl) | execute_bash (curl) + robot_telemetry |
+| evolving-memory | EvolvingMemoryTool.md (curl) | query_memory_graph, log_trace, trigger_dream |
+| Dream consolidation | curl to :8420 | trigger_dream native tool |
+
+### Quick Start (Simulation)
+
+```bash
+# Terminal 1: Start bridge in mock mode
+python roclaw_bridge.py --port 8430 --simulate
+
+# Terminal 2: Navigate
+curl -s -X POST http://localhost:8430/tool/robot.go_to \
+  -H "Content-Type: application/json" \
+  -d '{"location": "kitchen"}'
 ```
 
 ## 🤝 Creating Custom Agents
