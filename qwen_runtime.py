@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """
-Unified Qwen Runtime for SkillOS - Complete Implementation
-Combines all features: interactive mode, sequential execution, corrected cepstral analysis
+Unified Agent Runtime for SkillOS - Complete Implementation
+Provider-agnostic runtime supporting Qwen (OpenRouter) and Gemini backends.
+Combines all features: interactive mode, sequential execution, LLM-powered compaction.
 """
+
+from __future__ import annotations
 
 import os
 import re
 import json
 import sys
+import asyncio
 import subprocess
 from openai import OpenAI
 from dotenv import load_dotenv
+from permission_policy import PermissionPolicy, PermissionMode, SKILLOS_DEFAULT_POLICY, get_policy
+from compactor import CompactionConfig, should_compact, compact_messages, compact_messages_async
 
 # Fix Windows console encoding for emojis
 if sys.platform == "win32":
@@ -20,17 +26,34 @@ if sys.platform == "win32":
 # Load API keys and other configs from .env file
 load_dotenv()
 
-class QwenRuntime:
-    def __init__(self, manifest_path="QWEN.md"):
+class AgentRuntime:
+    PROVIDER_CONFIGS = {
+        "qwen": {
+            "base_url": "https://openrouter.ai/api/v1",
+            "api_key_env": "OPENROUTER_API_KEY",
+            "model": "qwen/qwen3-4b:free",
+        },
+        "gemini": {
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "api_key_env": "GEMINI_API_KEY",
+            "model": "gemini-2.5-flash",
+        },
+    }
+
+    def __init__(self, manifest_path="QWEN.md", permission_policy: PermissionPolicy | None = None, provider: str = "qwen"):
+        cfg = self.PROVIDER_CONFIGS[provider]
         self.client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url=cfg["base_url"],
+            api_key=os.getenv(cfg["api_key_env"], ""),
         )
-        self.model = "qwen/qwen3-4b:free"  # Using Qwen3 4B free model
+        self.model = cfg["model"]
+        self.provider_name = provider
         self.tools = {}
         self.system_prompt = ""
+        self.policy = permission_policy or SKILLOS_DEFAULT_POLICY
+        self.compaction_config = CompactionConfig()
         self._load_manifest(manifest_path)
-        print("✅ Qwen Runtime Initialized.")
+        print(f"✅ Agent Runtime Initialized (provider={provider}, model={self.model}).")
 
     def _load_manifest(self, path):
         """Loads the system prompt and compiles native tools from the manifest."""
@@ -128,11 +151,20 @@ Do not use tool calls - just provide your expert response directly.
             return error_msg
 
     def _call_llm(self, messages):
-        """A wrapper for making calls to the OpenRouter API."""
+        """A wrapper for making calls to the LLM API."""
         return self.client.chat.completions.create(
             model=self.model,
             messages=messages,
         ).choices[0].message.content
+
+    async def _call_llm_async(self, prompt: str, system: str = "") -> str:
+        """Async LLM wrapper for compaction. Runs sync _call_llm in executor."""
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._call_llm, messages)
 
     def _extract_tag_content(self, tag, text):
         match = re.search(f"<{tag}>(.*?)</{tag}>", text, re.DOTALL)
@@ -148,6 +180,17 @@ Do not use tool calls - just provide your expert response directly.
 
         for i in range(max_turns):
             print(f"\n--- Turn {i+1}/{max_turns} ---")
+
+            # Compact messages if token estimate exceeds threshold (LLM-powered)
+            if should_compact(messages, self.compaction_config):
+                try:
+                    messages, summary = asyncio.run(
+                        compact_messages_async(messages, self.compaction_config, self._call_llm_async)
+                    )
+                except RuntimeError:
+                    # Fallback if event loop is already running
+                    messages, summary = compact_messages(messages, self.compaction_config)
+                print(f"[compaction] Condensed context ({len(summary)} chars summary)")
 
             try:
                 response = self._call_llm(messages)
@@ -177,6 +220,18 @@ Do not use tool calls - just provide your expert response directly.
                     try:
                         # Parse JSON arguments
                         args = json.loads(args_str.strip())
+
+                        # Permission policy check
+                        input_preview = args_str.strip()[:120]
+                        authorized, reason = self.policy.authorize(tool_name, input_preview)
+                        if not authorized:
+                            tool_result = f"DENIED: {reason}"
+                            print(f"!!! Permission denied: {reason}")
+                            messages.append({
+                                "role": "user",
+                                "content": f"Tool '{tool_name}' was denied: {reason}"
+                            })
+                            continue
 
                         if tool_name in self.tools:
                             # Execute the tool
@@ -232,10 +287,11 @@ Do not use tool calls - just provide your expert response directly.
 
 
 
-    def interactive_mode(self):
+    def interactive_mode(self, provider_label: str | None = None):
         """Interactive REPL mode for the runtime."""
+        label = provider_label or self.provider_name
         print("\n" + "="*60)
-        print("           SkillOS Qwen Runtime - Interactive Mode")
+        print(f"           SkillOS Agent Runtime ({label}) - Interactive Mode")
         print("="*60)
         print("Type 'help' for commands, 'exit' to quit")
         print("Or simply type your goal to execute it.")
@@ -300,17 +356,42 @@ Simply type any goal to execute it, for example:
             except Exception as e:
                 print(f"Error: {e}")
 
+# Backward compatibility alias
+QwenRuntime = AgentRuntime
+
+
 # ===================================================
 # Main Execution Block
 # ===================================================
 if __name__ == "__main__":
     import sys
 
-    runtime = QwenRuntime()
+    # Parse CLI flags: --permission-policy, --provider, --manifest
+    policy_arg = None
+    provider_arg = "qwen"
+    manifest_arg = "QWEN.md"
+    filtered_args = []
+    i = 1
+    while i < len(sys.argv):
+        if sys.argv[i] == "--permission-policy" and i + 1 < len(sys.argv):
+            policy_arg = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == "--provider" and i + 1 < len(sys.argv):
+            provider_arg = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == "--manifest" and i + 1 < len(sys.argv):
+            manifest_arg = sys.argv[i + 1]
+            i += 2
+        else:
+            filtered_args.append(sys.argv[i])
+            i += 1
+
+    policy = get_policy(policy_arg) if policy_arg else SKILLOS_DEFAULT_POLICY
+    runtime = AgentRuntime(manifest_path=manifest_arg, permission_policy=policy, provider=provider_arg)
 
     # Parse command line arguments
-    if len(sys.argv) > 1:
-        command = sys.argv[1].lower()
+    if len(filtered_args) > 0:
+        command = filtered_args[0].lower()
 
         if command == "interactive":
             runtime.interactive_mode()
@@ -328,7 +409,7 @@ if __name__ == "__main__":
             print(f"\nTest result: {result}")
         else:
             # Treat unknown command as a goal to execute
-            goal = " ".join(sys.argv[1:])
+            goal = " ".join(filtered_args)
             print(f"Executing goal: {goal}")
             result = runtime.run_goal(goal)
             print(f"\nResult: {result}")

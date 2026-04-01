@@ -92,6 +92,11 @@ class TestQwenNativeTools:
         "delegate_to_agent",
         "list_agents",
         "load_agent",
+        "query_memory_graph",
+        "log_trace",
+        "trigger_dream",
+        "get_memory_stats",
+        "robot_telemetry",
     ]
 
     @pytest.mark.parametrize("tool_name", REQUIRED_TOOLS)

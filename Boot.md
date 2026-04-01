@@ -62,6 +62,20 @@ Every runtime MUST complete these steps before processing any user command:
 - Boot Checklist: execute sequentially before first goal
 - All agents and tools are defined as markdown files — read, interpret, execute
 
+## Runtime Capabilities
+
+| Capability | Claude Code | Qwen Runtime | Required |
+|------------|-------------|-------------|----------|
+| File I/O (Read/Write) | Native tools | read_file/write_file | Yes |
+| Shell (Bash/curl) | Native Bash | execute_bash | Yes |
+| Agent delegation | Task tool | delegate_to_agent | Yes |
+| evolving-memory | EvolvingMemoryTool.md (curl) | query_memory_graph, log_trace, trigger_dream | Recommended |
+| RoClaw robot | RoClawTool.md (curl) | execute_bash (curl) + robot_telemetry | For robotics |
+| Web search | WebSearch/WebFetch | web_fetch | Optional |
+
+All runtimes access RoClaw hardware through the same HTTP bridge at `:8430`.
+All runtimes access evolving-memory through the same REST API at `:8420`.
+
 ## System Invariants
 
 These rules apply to ALL runtimes at ALL times:
