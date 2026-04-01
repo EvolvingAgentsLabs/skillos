@@ -1,7 +1,12 @@
 #!/bin/bash
-# SkillOS Agent Setup Script for Claude Code v2.0
+# SkillOS Agent Setup Script for Claude Code v3.0
 # Copies agent markdown files to .claude/agents/ for Claude Code discovery.
-# Processes 3 tiers: system/agents/, projects/*/components/agents/, components/agents/
+# Processes 4 tiers:
+#   Tier 1: system/skills/ tree (hierarchical — agents discovered via manifest files)
+#   Tier 2: system/agents/ (backward-compat stubs — skipped if full spec already copied)
+#   Tier 3: projects/*/components/agents/ (project-specific agents with project prefix)
+#   Tier 4: components/agents/ (shared agents, no prefix)
+#   Tier 5: Remote sources from sources.list (optional, --install-sources flag)
 #
 # Usage:
 #   ./setup_agents.sh              # Normal setup
@@ -127,16 +132,49 @@ process_agent() {
 }
 
 echo "=========================================="
-echo "SkillOS Agent Setup v2.0"
+echo "SkillOS Agent Setup v3.0"
 echo "=========================================="
 echo ""
 
-# --- Tier 1: System Agents (no prefix) ---
-echo "--- Tier 1: System Agents ---"
+# --- Tier 1: Hierarchical Skill Tree Agents (system/skills/) ---
+echo "--- Tier 1: Hierarchical Skill Tree Agents (system/skills/) ---"
+SKILL_TREE_AGENTS=()
+if [[ -d "system/skills" ]]; then
+    # Find all manifest files in the skill tree
+    while IFS= read -r manifest; do
+        [[ -f "$manifest" ]] || continue
+
+        # Check if this is an agent manifest (type: agent)
+        skill_type=$(grep -m 1 "^type:" "$manifest" 2>/dev/null | sed 's/type:\s*//' | tr -d '\r' || true)
+        [[ "$skill_type" == "agent" ]] || continue
+
+        # Get the full_spec path from the manifest
+        full_spec=$(grep -m 1 "^full_spec:" "$manifest" 2>/dev/null | sed 's/full_spec:\s*//' | tr -d '\r' || true)
+        [[ -n "$full_spec" && -f "$full_spec" ]] || continue
+
+        dest_name=$(basename "$full_spec")
+        dest="$AGENTS_DIR/$dest_name"
+        SKILL_TREE_AGENTS+=("$dest_name")
+        process_agent "$full_spec" "$dest"
+    done < <(find "system/skills" -name "*.manifest.md" 2>/dev/null | sort)
+else
+    echo "  No system/skills/ directory found — falling back to legacy system/agents/."
+fi
+echo ""
+
+# --- Tier 2: Legacy System Agents (backward-compat stubs — skip if already copied from skill tree) ---
+echo "--- Tier 2: Legacy System Agents (backward-compat stubs) ---"
 if [[ -d "system/agents" ]]; then
     for agent in system/agents/*.md; do
         [[ -f "$agent" ]] || continue
-        dest="$AGENTS_DIR/$(basename "$agent")"
+        dest_name=$(basename "$agent")
+        # Skip if already loaded from skill tree (avoid overwriting full spec with stub)
+        if [[ " ${SKILL_TREE_AGENTS[*]} " =~ " ${dest_name} " ]]; then
+            echo "  SKIP (already loaded from skill tree): $dest_name"
+            ((SKIP_COUNT++))
+            continue
+        fi
+        dest="$AGENTS_DIR/$dest_name"
         process_agent "$agent" "$dest"
     done
 else
@@ -144,8 +182,8 @@ else
 fi
 echo ""
 
-# --- Tier 2: Project Agents (project prefix) ---
-echo "--- Tier 2: Project Agents ---"
+# --- Tier 3: Project Agents (project prefix) ---
+echo "--- Tier 3: Project Agents ---"
 if [[ -d "projects" ]]; then
     for project_dir in projects/*/; do
         [[ -d "$project_dir/components/agents" ]] || continue
@@ -163,8 +201,8 @@ else
 fi
 echo ""
 
-# --- Tier 3: Shared Agents (no prefix) ---
-echo "--- Tier 3: Shared Agents (components/agents/) ---"
+# --- Tier 4: Shared Agents (no prefix) ---
+echo "--- Tier 4: Shared Agents (components/agents/) ---"
 if [[ -d "components/agents" ]]; then
     for agent in components/agents/*.md; do
         [[ -f "$agent" ]] || continue
@@ -176,9 +214,9 @@ else
 fi
 echo ""
 
-# --- Tier 4: Install from sources.list (optional) ---
+# --- Tier 5: Install from sources.list (optional) ---
 if $INSTALL_SOURCES && [[ -f "system/sources.list" ]]; then
-    echo "--- Tier 4: Remote Sources (sources.list) ---"
+    echo "--- Tier 5: Remote Sources (sources.list) ---"
     SOURCES_INSTALLED=0
     mkdir -p "$CACHE_DIR"
 
