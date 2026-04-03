@@ -2,10 +2,9 @@
 
 > **Transform any Agents + LLM into an intelligent operating system using pure markdown**
 
+SkillOS explores how to create and use AI agents and tools defined entirely in markdown documents. No code compilation — just markdown that any LLM can interpret to become a powerful problem-solving system.
 
-SkillOS continue to explore how create and use AI agents and tools  defined entirely in markdown documents. No code compilation, in this first exploration, no complex APIs - just markdown that any LLM can interpret to become a powerful problem-solving system.
-
-> This project is a evolution of [LLMos](https://github.com/EvolvingAgentsLabs/llmos) to test Skills as basic programs.
+> This project is an evolution of [LLMos](https://github.com/EvolvingAgentsLabs/llmos) to test Skills as basic programs.
 
 ## 🚀 Quick Start
 
@@ -20,7 +19,7 @@ SkillOS continue to explore how create and use AI agents and tools  defined enti
 git clone https://github.com/EvolvingAgentsLabs/skillos.git
 cd skillos
 
-# Initialize the agent system
+# Initialize the agent system (v3.0 — skill tree aware)
 ./setup_agents.sh    # Mac/Linux
 # OR
 powershell -ExecutionPolicy Bypass -File .\setup_agents.ps1  # Windows
@@ -54,9 +53,6 @@ skillos$ status
 
 ### Option 2: Claude Code (Direct)
 **Best for:** Scripting, CI/CD, single-command execution
-- Powered by Claude (model determined by your Claude Code installation)
-- Full tool integration
-- Advanced capabilities
 
 ```bash
 # Boot SkillOS
@@ -69,11 +65,8 @@ claude --dangerously-skip-permissions "skillos execute: 'Your goal here'"
 ### Option 3: Agent Runtime (Lightweight, Multi-Provider)
 **Best for:** Learning, development, resource-constrained environments
 - Provider-agnostic: supports **Qwen** (OpenRouter, free tier) and **Gemini** (Google AI)
-- Minimal resource requirements
-- LLM-powered context compaction for long sessions
 
 ```bash
-# Install dependencies
 pip install openai python-dotenv
 
 # Run with Qwen (default, free tier)
@@ -82,15 +75,90 @@ python qwen_runtime.py "Your goal here"
 # Run with Gemini
 GEMINI_API_KEY=... python qwen_runtime.py --provider gemini "Your goal here"
 
-# Custom manifest + provider
-python qwen_runtime.py --provider gemini --manifest CUSTOM.md "Your goal"
-
 # Interactive mode
 python qwen_runtime.py interactive
-
-# Test mode
-python qwen_runtime.py --provider gemini test
 ```
+
+---
+
+## 🧠 Hierarchical Skill System (v3.0)
+
+Skills are organized in a **3-level taxonomy** with lazy loading for significantly reduced token consumption.
+
+```
+Domain → Family → Skill
+────────────────────────────────────────────────────────
+orchestration/  core/           system-agent
+memory/         analysis/       memory-analysis-agent
+                consolidation/  memory-consolidation-agent
+                query/          query-memory-tool
+                trace/          memory-trace-manager
+robot/          navigation/     roclaw-navigation-agent
+                scene/          roclaw-scene-analysis-agent
+                dream/          roclaw-dream-agent
+                tools/          roclaw-tool, evolving-memory-tool
+validation/     system/         validation-agent
+recovery/       error/          error-recovery-agent
+project/        scaffold/       project-scaffold-tool
+                packages/       skill-package-manager-tool
+```
+
+### Lazy Loading Protocol (4 steps)
+
+Instead of loading the full component registry upfront, SkillOS uses a staged loading protocol:
+
+```
+Step 1  Identify domain from goal keywords        (no file reads)
+Step 2  Load SkillIndex.md (~50 lines)        →  get domain index path
+Step 3  Load domain/index.md (~30–60 lines)   →  select skill + manifest path
+Step 4  Load skill.manifest.md (~15 lines)    →  confirm fit, get full_spec path
+Step 5  Load full skill spec (~250–330 lines) →  invoke via Task tool
+```
+
+**Token savings vs. the old flat SmartLibrary.md approach:**
+
+| Scenario | Before | After | Savings |
+|----------|--------|-------|---------|
+| Routing phase | 295 lines | 115 lines | **61%** |
+| Single skill execution | 895 lines | 565 lines | **37%** |
+| 3-agent pipeline | 1,646 lines | 1,130 lines | **31%** |
+
+### Skill Inheritance
+
+Each domain has a `base.md` defining shared behaviors. Child skills declare `extends: {domain}/base`
+in their YAML frontmatter; the LLM merges inherited behaviors at runtime — no code needed.
+
+```yaml
+---
+name: memory-analysis-agent
+extends: memory/base        # inherits storage conventions, log format, query protocol
+domain: memory
+family: analysis
+...
+---
+```
+
+### Skill Manifests
+
+Every skill has a lightweight 15-line manifest for routing decisions, separate from the full spec:
+
+```yaml
+---
+skill_id: memory/analysis/memory-analysis-agent
+name: memory-analysis-agent
+type: agent
+domain: memory
+family: analysis
+extends: memory/base
+description: Cross-project pattern recognition and historical learning insights
+capabilities: [pattern-recognition, historical-analysis, performance-prediction]
+subagent_type: memory-analysis-agent
+invoke_when: [historical context, pattern analysis, past execution insights]
+full_spec: system/skills/memory/analysis/memory-analysis-agent.md
+---
+```
+
+---
 
 ## 💡 Core Concept
 
@@ -101,6 +169,7 @@ SkillOS treats everything as either an **Agent** (decision maker) or **Tool** (e
 name: example-agent
 description: An agent that solves problems
 tools: Read, Write, WebFetch
+extends: orchestration/base
 ---
 
 # ExampleAgent
@@ -108,59 +177,94 @@ You are an expert problem solver...
 ```
 
 The framework automatically:
-- 🔍 Discovers available agents
-- 🎯 Selects the best agent for each task
+- 🔍 Discovers available agents (via manifest files in `system/skills/`)
+- 🎯 Routes to the right skill using the 4-step lazy loading protocol
 - 🔄 Delegates work between specialized agents
 - 📝 Executes tools based on agent decisions
+- 🧬 Inherits shared domain behaviors via `extends:`
 
-## 🛠️ What Can You Build?
-
-SkillOS can handle any task by combining its agent ecosystem:
-
-### Research & Analysis
-```bash
-"Research the latest AI developments and create a comprehensive report"
-"Analyze this codebase and suggest improvements"
-"Compare different approaches to solving this problem"
-```
-
-### Development
-```bash
-"Create a web application with user authentication"
-"Build a data pipeline for processing CSV files"
-"Implement a machine learning model for classification"
-```
-
-### Content Creation
-```bash
-"Write a technical blog post about quantum computing"
-"Generate documentation for this API"
-"Create a tutorial for beginners"
-```
-
-### Complex Projects
-```bash
-"Design and implement a complete system for invoice processing"
-"Create a multi-agent research system for market analysis"
-"Build a quantum algorithm for signal processing"
-```
+---
 
 ## 🏗️ Framework Architecture
 
 ```
 skillos/
-├── skillos.sh             # Terminal launcher (bash wrapper)
-├── skillos.py             # Terminal REPL with markdown rendering
-├── system/                # Core framework
-│   ├── agents/            # System-level agents
-│   └── tools/             # Framework tools
-├── projects/              # Your projects (working directory)
-│   └── [project_name]/    # Project-specific agents
-├── workspace/             # Execution outputs
-├── qwen_runtime.py        # AgentRuntime (multi-provider: Qwen, Gemini)
-├── permission_policy.py   # Tool permission policy (ALLOW/DENY/PROMPT)
-└── compactor.py           # Context compaction (sync + async LLM-powered)
+├── system/
+│   ├── skills/                    # *** Hierarchical Skill Tree (primary) ***
+│   │   ├── SkillIndex.md         # Top-level routing index (~50 lines)
+│   │   ├── orchestration/        # Domain: workflow, goal execution
+│   │   │   ├── base.md          # Shared orchestration behaviors
+│   │   │   ├── index.md         # Domain index (~30 lines)
+│   │   │   └── core/            # system-agent + claude-code-tool-map
+│   │   ├── memory/              # Domain: learning, history, traces
+│   │   │   ├── base.md
+│   │   │   ├── index.md
+│   │   │   ├── analysis/        # memory-analysis-agent
+│   │   │   ├── consolidation/   # memory-consolidation-agent
+│   │   │   ├── query/           # query-memory-tool
+│   │   │   └── trace/           # memory-trace-manager
+│   │   ├── robot/               # Domain: physical robot control
+│   │   │   ├── base.md          # Cognitive Trinity shared behaviors
+│   │   │   ├── index.md
+│   │   │   ├── navigation/      # roclaw-navigation-agent
+│   │   │   ├── scene/           # roclaw-scene-analysis-agent
+│   │   │   ├── dream/           # roclaw-dream-agent
+│   │   │   └── tools/           # roclaw-tool, evolving-memory-tool
+│   │   ├── validation/          # Domain: health checks, spec integrity
+│   │   ├── recovery/            # Domain: error handling, circuit breaker
+│   │   └── project/             # Domain: scaffolding, packages
+│   ├── agents/                   # Backward-compat redirect stubs → skills/
+│   ├── tools/                    # Backward-compat redirect stubs → skills/
+│   ├── SmartLibrary.md          # DEPRECATED redirect → SkillIndex.md
+│   ├── SmartMemory.md           # Queryable experience database
+│   ├── sources.list             # Skill package sources
+│   └── packages.lock            # Installed skill tracking
+├── projects/                     # Your projects (auto-created per goal)
+│   └── [ProjectName]/
+│       ├── components/agents/   # Dynamically created project agents
+│       ├── output/              # Generated deliverables
+│       ├── memory/short_term/   # Agent interaction logs
+│       ├── memory/long_term/    # Consolidated insights
+│       └── state/               # Execution state files
+├── .claude/agents/              # Auto-populated for Claude Code discovery
+├── setup_agents.sh              # v3.0 — skill tree aware setup
+├── qwen_runtime.py              # Multi-provider agent runtime
+└── roclaw_bridge.py             # RoClaw HTTP↔WebSocket bridge
 ```
+
+---
+
+## 📦 Skill Package Management
+
+SkillOS includes an apt-like package manager for installing skills from external repositories.
+
+```bash
+# Install a skill
+skillos execute: "skill install research-assistant-agent"
+
+# Search across all sources
+skillos execute: "skill search quantum"
+
+# Update all installed skills
+skillos execute: "skill update"
+
+# List installed skills
+skillos execute: "skill list"
+```
+
+### Configured Sources (`system/sources.list`)
+
+| Source | Repo | Path |
+|--------|------|------|
+| Anthropic | `anthropics/skills` | `skills/` |
+| Hugging Face | `huggingface/skills` | `skills/` |
+| OpenAI | `openai/skills` | `.curated/` |
+| Google AI Edge | `google-ai-edge/gallery` | `skills/` |
+
+Skills are tracked in `system/packages.lock` with source attribution, version, and content hash.
+When a capability gap is detected during execution, SystemAgent automatically searches and installs the best matching skill.
+
+---
 
 ## 🤖 Cognitive Trinity — RoClaw Physical Robot Integration
 
@@ -173,8 +277,6 @@ SkillOS serves as the **Prefrontal Cortex** in a three-part cognitive architectu
 | **[evolving-memory](https://github.com/EvolvingAgentsLabs/evolving-memory)** | Hippocampus | Dream consolidation, strategy learning |
 
 ### Bridge Architecture
-
-All runtimes (Claude Code, Qwen, any HTTP client) access the robot through the same bridge:
 
 ```mermaid
 flowchart TD
@@ -194,16 +296,6 @@ flowchart TD
 
 `robot.go_to` · `robot.explore` · `robot.describe_scene` · `robot.stop` · `robot.status` · `robot.read_memory` · `robot.record_observation` · `robot.analyze_scene` · `robot.get_map` · `robot.telemetry`
 
-### Runtime Parity
-
-Both runtimes have full access to the cognitive stack:
-
-| Capability | Claude Code | Qwen Runtime |
-|------------|-------------|-------------|
-| Robot tools (10) | RoClawTool.md (curl) | execute_bash (curl) + robot_telemetry |
-| evolving-memory | EvolvingMemoryTool.md (curl) | query_memory_graph, log_trace, trigger_dream |
-| Dream consolidation | curl to :8420 | trigger_dream native tool |
-
 ### Quick Start (Simulation)
 
 ```bash
@@ -216,53 +308,79 @@ curl -s -X POST http://localhost:8430/tool/robot.go_to \
   -d '{"location": "kitchen"}'
 ```
 
+---
+
 ## 🤝 Creating Custom Agents
 
-1. **Define your agent** in markdown:
+1. **Define your agent** in markdown with hierarchy-aware frontmatter:
+
 ```markdown
 ---
-name: my-custom-agent
+name: my-domain-expert
 description: Specialized agent for my domain
 tools: Read, Write, Bash
+extends: memory/base          # inherit domain behaviors
+domain: memory                # or orchestration, robot, etc.
+family: analysis
 ---
 
-# MyCustomAgent
+# MyDomainExpert
 You are an expert in [domain]...
 ```
 
-2. **Place in project folder**: `projects/my_project/components/agents/`
+2. **Create a companion manifest** (15 lines) for efficient routing:
 
-3. **Use it immediately**:
-```bash
-"Use my-custom-agent to solve this problem"
+```yaml
+---
+skill_id: memory/analysis/my-domain-expert
+name: my-domain-expert
+type: agent
+subagent_type: my-domain-expert
+invoke_when: [domain-specific trigger keywords]
+full_spec: projects/MyProject/components/agents/my-domain-expert.md
+---
 ```
+
+3. **Place in project folder**: `projects/MyProject/components/agents/`
+
+4. **Use it immediately**:
+```bash
+"Use my-domain-expert to solve this problem"
+```
+
+---
+
+## 🛠️ What Can You Build?
+
+### Research & Analysis
+```bash
+"Research the latest AI developments and create a comprehensive report"
+"Analyze this codebase and suggest improvements"
+```
+
+### Development
+```bash
+"Create a web application with user authentication"
+"Build a data pipeline for processing CSV files"
+```
+
+### Content Creation
+```bash
+"Write a technical blog post about quantum computing"
+"Create a tutorial for beginners on chaos theory"
+```
+
+### Complex Projects
+```bash
+"Design and implement a complete system for invoice processing"
+"Create a multi-agent research system for market analysis"
+```
+
+---
 
 ## 📚 Advanced Features
 
-### Interactive Mode
-Explore SkillOS capabilities interactively:
-```bash
-# Full terminal experience (Claude Code)
-./skillos.sh
-skillos$ help                    # Show commands
-skillos$ status                  # Check workspace
-skillos$ Create a calculator     # Execute any goal
-
-# Lightweight interactive mode (Qwen)
-python qwen_runtime.py interactive
-> help                    # Show commands
-> Create a calculator     # Execute any goal
-```
-
-### Generic Goal Execution
-The runtime interprets natural language goals without hardcoded solutions:
-```python
-# Any text becomes an executable goal
-python qwen_runtime.py "Build a REST API with authentication"
-```
-
 ### Multi-Agent Collaboration
-Agents automatically collaborate on complex tasks:
 
 ```mermaid
 flowchart TD
@@ -276,10 +394,46 @@ flowchart TD
     SA --> IA
 ```
 
+### Sentient State Management
+
+Each execution maintains modular state files in `projects/[ProjectName]/state/`:
+- `plan.md` — current execution plan
+- `context.md` — accumulated context
+- `variables.json` — inter-agent data exchange
+- `history.md` — full execution trace
+- `constraints.md` — dynamic behavioral modifiers (adapt based on events)
+
+### Memory-Driven Learning
+
+Every execution is logged and consolidated for future improvement:
+
+```
+Short-term → projects/[Project]/memory/short_term/  (per session)
+Long-term  → projects/[Project]/memory/long_term/   (consolidated patterns)
+System     → system/SmartMemory.md                  (cross-project insights)
+```
+
+### Available Scenarios
+
+```bash
+# Live web research with real tool calls
+skillos execute: "Run the RealWorld_Research_Task scenario in EXECUTION MODE"
+
+# Quantum signal processing (three-agent cognitive pipeline)
+skillos execute: "Run the Project Aorta scenario"
+
+# Code analysis pipeline
+skillos execute: "Run the CodeAnalysis_Task scenario on this repository"
+
+# Physical robot navigation
+skillos execute: "Navigate to the kitchen and describe what you see"
+```
+
+---
+
 ## 🔧 Configuration
 
 ### Environment Variables
-Create a `.env` file:
 ```env
 # For Qwen provider (OpenRouter)
 OPENROUTER_API_KEY=your_key_here
@@ -291,72 +445,18 @@ GEMINI_API_KEY=your_key_here
 OLLAMA_HOST=http://localhost:11434
 ```
 
-### Local Deployment with Ollama
-```bash
-# Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Download Qwen model
-ollama pull qwen:4b
-
-# Update qwen_runtime.py base_url to localhost:11434
-```
+---
 
 ## 🌟 Why SkillOS?
 
-- **Pure Markdown**: No code compilation, just markdown interpretation
+- **Pure Markdown**: No code compilation — just markdown the LLM interprets
+- **Hierarchical Skills**: Domain → Family → Skill taxonomy with lazy loading
+- **Token Efficient**: 61% reduction in routing-phase token consumption
+- **Extensible**: Add agents/tools as markdown without modifying core
+- **Learning**: Every execution improves future runs via structured memory
 - **Universal**: Works with any LLM that can read markdown
-- **Extensible**: Add new agents and tools without modifying core
-- **Transparent**: See exactly what each agent is doing
-- **Powerful**: Solve complex problems through agent collaboration
 
-## 📖 Examples
-
-### Simple Task
-```bash
-python qwen_runtime.py "Create a Python script that generates passwords"
-```
-
-### Complex Project
-```bash
-python qwen_runtime.py "Build a complete web scraping system with scheduling, data storage, and error handling"
-```
-
-### Research Task
-```bash
-python qwen_runtime.py "Research quantum computing applications in medicine and create a detailed report"
-```
-
-## 🎓 Try It: Create Your First Project
-
-Generate a complete project with a single command:
-
-```bash
-claude --dangerously-skip-permissions "skillos execute: 'Create a tutorial on chaos theory with Python examples'"
-```
-
-SkillOS automatically:
-1. Creates a project directory with standard structure
-2. Generates specialized agents as markdown definitions
-3. Orchestrates multi-agent collaboration
-4. Produces deliverables in `projects/[ProjectName]/output/`
-5. Logs all interactions to memory for learning
-6. Extracts reusable patterns for future projects
-
-### Available Scenarios
-
-Run pre-built scenarios to see SkillOS in action:
-
-```bash
-# Live web research with real tool calls
-skillos execute: "Run the RealWorld_Research_Task scenario in EXECUTION MODE"
-
-# Quantum signal processing (three-agent cognitive pipeline)
-skillos execute: "Run the Project Aorta scenario"
-
-# Code analysis pipeline
-skillos execute: "Run the CodeAnalysis_Task scenario on this repository"
-```
+---
 
 ## 🤔 Getting Help
 
