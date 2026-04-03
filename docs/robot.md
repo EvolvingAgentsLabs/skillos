@@ -1,4 +1,4 @@
-# Physical Robot Integration — Cognitive Trinity
+#  Physical Agents (robots/environmentalbots) Integration — Cognitive Trinity
 
 SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, providing high-level planning, reasoning, and dynamic agent creation. Together with RoClaw and evolving-memory, it forms a three-part cognitive architecture called the **Cognitive Trinity**.
 

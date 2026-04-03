@@ -1,10 +1,10 @@
-# SkillOS — Pure Markdown Operating System
+# SkillOS — Pure Markdown Operating System [POC]
 
 > Transform any LLM + Agents into an intelligent operating system using pure markdown.
 
 SkillOS is a proof-of-concept OS where every component — agents, tools, memory, orchestration — is defined entirely in markdown documents. No code compilation. No complex APIs. Just markdown that any LLM interprets at runtime to become a powerful, composable problem-solving system.
 
-> Evolved from [LLMos](https://github.com/EvolvingAgentsLabs/llmos) — Skills as the basic unit of computation.
+> Evolved from [LLMos](https://github.com/EvolvingAgentsLabs/llmos) — Skills as the basic unit of programing.
 
 ---
 
@@ -106,7 +106,7 @@ skillos/
 │       ├── validation/          # Health checks, security scanning
 │       ├── recovery/            # Error handling, circuit breaker
 │       ├── project/             # Scaffolding, package manager
-│       └── robot/               # Physical robot control (RoClaw)
+│       └── robot/               # Physical Agents (robots/environmentalbots) control (RoClaw)
 ├── projects/                    # Your projects (auto-created per goal)
 │   └── [ProjectName]/
 │       ├── components/          # Project-specific agents & tools
@@ -114,7 +114,7 @@ skillos/
 │       └── memory/              # Project learning logs
 ├── scenarios/                   # Pre-built task scenarios
 ├── qwen_runtime.py              # Multi-provider agent runtime
-├── roclaw_bridge.py             # Physical robot HTTP bridge
+├── roclaw_bridge.py             # Physical Agents (robots/environmentalbots) HTTP bridge
 └── CLAUDE.md                    # OS configuration
 ```
 
@@ -131,7 +131,7 @@ Skills are organized as `Domain → Family → Skill` with lazy loading (~61% to
 | [docs/skills.md](docs/skills.md) | How to create agents and tools |
 | [docs/memory.md](docs/memory.md) | Memory system, learning, consolidation |
 | [docs/security.md](docs/security.md) | Skill security scanning, antivirus gate |
-| [docs/robot.md](docs/robot.md) | Physical robot integration (RoClaw / Cognitive Trinity) |
+| [docs/robot.md](docs/robot.md) |  Physical Agents (robots/environmentalbots) integration (RoClaw / Cognitive Trinity) |
 | [docs/scenarios.md](docs/scenarios.md) | Pre-built scenarios and examples |
 
 ---
