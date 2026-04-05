@@ -41,6 +41,16 @@ done
 # Create destination directory
 mkdir -p "$AGENTS_DIR"
 
+# Remove any redirect stubs that may be lingering in .claude/agents/ from old setup runs.
+# Full specs from system/skills/ tree supersede them.
+for stale in "$AGENTS_DIR"/*.md; do
+    [[ -f "$stale" ]] || continue
+    if grep -q "^redirect:" "$stale" 2>/dev/null; then
+        echo "  CLEANUP: Removing redirect stub: $(basename "$stale")"
+        rm "$stale"
+    fi
+done
+
 # Validate YAML frontmatter in an agent file
 # Returns: 0 = valid, 1 = warning (incomplete), 2 = error (missing)
 validate_frontmatter() {
@@ -49,13 +59,14 @@ validate_frontmatter() {
     # Check for frontmatter delimiters
     if ! head -1 "$file" | grep -q "^---"; then
         echo "  ERROR: No YAML frontmatter found: $file"
-        ((ERROR_COUNT++))
+        ERROR_COUNT=$((ERROR_COUNT + 1))
         return 2
     fi
 
     local has_name=false
     local has_description=false
     local has_tools=false
+    local has_redirect=false
 
     # Parse frontmatter (between first and second ---)
     local in_frontmatter=false
@@ -72,18 +83,24 @@ validate_frontmatter() {
             [[ "$line" =~ ^name: ]] && has_name=true
             [[ "$line" =~ ^description: ]] && has_description=true
             [[ "$line" =~ ^tools: ]] && has_tools=true
+            [[ "$line" =~ ^redirect: ]] && has_redirect=true
         fi
     done < "$file"
 
+    # Backward-compat redirect stubs — skip silently (full spec already in skill tree)
+    if $has_redirect; then
+        return 3
+    fi
+
     if ! $has_name || ! $has_description; then
         echo "  ERROR: Missing required frontmatter keys (name/description): $file"
-        ((ERROR_COUNT++))
+        ERROR_COUNT=$((ERROR_COUNT + 1))
         return 2
     fi
 
     if ! $has_tools; then
-        echo "  WARNING: Missing 'tools' key in frontmatter: $file"
-        ((WARNING_COUNT++))
+        echo "  WARNING: Missing 'tools' key in frontmatter (uses tools_required or extends): $file"
+        WARNING_COUNT=$((WARNING_COUNT + 1))
         return 1
     fi
 
@@ -103,7 +120,7 @@ copy_if_changed() {
 
         if [[ "$src_hash" == "$dest_hash" ]]; then
             echo "  SKIP (unchanged): $(basename "$dest")"
-            ((SKIP_COUNT++))
+            SKIP_COUNT=$((SKIP_COUNT + 1))
             return 0
         fi
     fi
@@ -114,7 +131,7 @@ copy_if_changed() {
     else
         echo "  WOULD COPY: $(basename "$source") -> $(basename "$dest")"
     fi
-    ((SUCCESS_COUNT++))
+    SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
     return 0
 }
 
@@ -123,7 +140,10 @@ process_agent() {
     local source_path="$1"
     local dest_path="$2"
 
-    validate_frontmatter "$source_path" || true
+    validate_frontmatter "$source_path" && local fm_status=0 || local fm_status=$?
+
+    # Return code 3 = redirect stub — skip silently
+    [[ $fm_status -eq 3 ]] && return 0
 
     # Only copy if frontmatter exists (even if incomplete)
     if head -1 "$source_path" | grep -q "^---"; then
@@ -171,7 +191,7 @@ if [[ -d "system/agents" ]]; then
         # Skip if already loaded from skill tree (avoid overwriting full spec with stub)
         if [[ " ${SKILL_TREE_AGENTS[*]} " =~ " ${dest_name} " ]]; then
             echo "  SKIP (already loaded from skill tree): $dest_name"
-            ((SKIP_COUNT++))
+            SKIP_COUNT=$((SKIP_COUNT + 1))
             continue
         fi
         dest="$AGENTS_DIR/$dest_name"
@@ -240,7 +260,7 @@ if $INSTALL_SOURCES && [[ -f "system/sources.list" ]]; then
                     echo "  Cloning: $src_uri ($src_branch)"
                     git clone --depth 1 --branch "$src_branch" "https://github.com/$src_uri.git" "$cache_path" 2>/dev/null || {
                         echo "  WARNING: Failed to clone $src_uri ($src_branch) - skipping"
-                        ((WARNING_COUNT++))
+                        WARNING_COUNT=$((WARNING_COUNT + 1))
                         continue
                     }
                 fi
@@ -262,11 +282,11 @@ if $INSTALL_SOURCES && [[ -f "system/sources.list" ]]; then
                             dest="$AGENTS_DIR/$skill_basename"
                             process_agent "$skill_file" "$dest"
                         fi
-                        ((SOURCES_INSTALLED++))
+                        SOURCES_INSTALLED=$((SOURCES_INSTALLED + 1))
                     done
                 else
                     echo "  WARNING: Path '$src_path' not found in $src_uri"
-                    ((WARNING_COUNT++))
+                    WARNING_COUNT=$((WARNING_COUNT + 1))
                 fi
                 ;;
             local)
@@ -276,11 +296,11 @@ if $INSTALL_SOURCES && [[ -f "system/sources.list" ]]; then
                         [[ -f "$skill_file" ]] || continue
                         dest="$AGENTS_DIR/$(basename "$skill_file")"
                         process_agent "$skill_file" "$dest"
-                        ((SOURCES_INSTALLED++))
+                        SOURCES_INSTALLED=$((SOURCES_INSTALLED + 1))
                     done
                 else
                     echo "  WARNING: Local path not found: $src_uri"
-                    ((WARNING_COUNT++))
+                    WARNING_COUNT=$((WARNING_COUNT + 1))
                 fi
                 ;;
             url)
@@ -288,7 +308,7 @@ if $INSTALL_SOURCES && [[ -f "system/sources.list" ]]; then
                 ;;
             *)
                 echo "  WARNING: Unknown source type: $src_type"
-                ((WARNING_COUNT++))
+                WARNING_COUNT=$((WARNING_COUNT + 1))
                 ;;
         esac
     done < "system/sources.list"

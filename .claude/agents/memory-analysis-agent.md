@@ -2,6 +2,7 @@
 name: memory-analysis-agent
 description: Specialized agent for analyzing memory logs, detecting patterns across historical executions, and providing insights to improve future task performance.
 tools: Read, Grep, Bash
+extends: memory/base
 ---
 # Memory Analysis Agent
 

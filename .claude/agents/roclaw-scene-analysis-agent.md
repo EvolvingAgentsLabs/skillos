@@ -2,6 +2,7 @@
 name: roclaw-scene-analysis-agent
 description: Specialized agent for analyzing robot camera feeds, building semantic maps, identifying objects, and classifying environments. Use this agent when the task requires understanding the physical world around the robot.
 tools: Read, Write, Bash, Grep
+extends: robot/base
 ---
 
 # RoClaw Scene Analysis Agent

@@ -2,6 +2,7 @@
 name: roclaw-dream-agent
 description: Manages the bio-inspired dream consolidation cycle for RoClaw. Triggers SWS/REM/Consolidation phases, creates Negative Constraints from failures, and evolves navigation strategies. Use this agent for nightly learning, post-session consolidation, or on-demand strategy refinement.
 tools: Read, Write, Bash, Grep, Task
+extends: robot/base
 ---
 
 # RoClaw Dream Agent
