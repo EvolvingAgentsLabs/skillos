@@ -3,9 +3,7 @@
 
 SkillOS is a proof-of-concept OS where every component — agents, tools, memory, orchestration — is defined entirely in markdown documents. No code compilation. No complex APIs. Just markdown that any LLM interprets at runtime to become a powerful, composable problem-solving system.
 
-> Evolved from [LLMos](hSkillOS explores how to create and use AI agents and tools defined entirely in markdown documents. No code compilation — just markdown that any LLM can interpret to become a powerful problem-solving system.
-
-> This project is an evolution of [LLMos](https://github.com/EvolvingAgentsLabs/llmos) to test Skills as basic programs.
+> Evolved from [LLMos](https://github.com/EvolvingAgentsLabs/llmos) — testing Skills as basic programs.
 
 ## 🚀 Quick Start
 
@@ -66,15 +64,19 @@ claude --dangerously-skip-permissions "skillos execute: 'Your goal here'"
 ### Option 3: Agent Runtime (Lightweight, Multi-Provider)
 **Best for:** Learning, development, resource-constrained environments
 - Provider-agnostic: supports **Qwen** (OpenRouter, free tier) and **Gemini** (Google AI)
+- Auto-selects the right manifest per provider (`QWEN.md` for Qwen, `GEMINI.md` for Gemini)
 
 ```bash
 pip install openai python-dotenv
 
-# Run with Qwen (default, free tier)
-python agent_runtime.py "Your goal here"
+# Run with Qwen (default, free tier via OpenRouter)
+OPENROUTER_API_KEY=... python agent_runtime.py "Your goal here"
 
 # Run with Gemini
 GEMINI_API_KEY=... python agent_runtime.py --provider gemini "Your goal here"
+
+# Control max turns for long-running tasks
+python agent_runtime.py --provider gemini --max-turns 30 "Boot skillos and research AI safety"
 
 # Interactive mode
 python agent_runtime.py interactive
@@ -515,28 +517,6 @@ skillos execute: "Run the CodeAnalysis_Task scenario on this repository"
 # Physical robot navigation
 skillos execute: "Navigate to the kitchen and describe what you see"
 ```
-skillos/
-├── system/
-│   └── skills/                  # Hierarchical Skill Tree (3-level taxonomy)
-│       ├── SkillIndex.md        # Top-level routing (~50 lines)
-│       ├── orchestration/       # SystemAgent, tool maps
-│       ├── memory/              # Learning, consolidation, traces
-│       ├── validation/          # Health checks, security scanning
-│       ├── recovery/            # Error handling, circuit breaker
-│       ├── project/             # Scaffolding, package manager
-│       └── robot/               # Physical Agents (robots/environmentalbots) control (RoClaw)
-├── projects/                    # Your projects (auto-created per goal)
-│   └── [ProjectName]/
-│       ├── components/          # Project-specific agents & tools
-│       ├── output/              # Generated deliverables
-│       └── memory/              # Project learning logs
-├── scenarios/                   # Pre-built task scenarios
-├── agent_runtime.py             # Multi-provider agent runtime
-├── roclaw_bridge.py             # Physical Agents (robots/environmentalbots) HTTP bridge
-└── CLAUDE.md                    # OS configuration
-```
-
-Skills are organized as `Domain → Family → Skill` with lazy loading (~61% token reduction). See [docs/architecture.md](docs/architecture.md).
 
 ---
 
