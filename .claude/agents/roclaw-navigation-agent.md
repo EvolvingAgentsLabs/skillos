@@ -2,6 +2,7 @@
 name: roclaw-navigation-agent
 description: Specialized agent for planning and executing physical robot navigation using RoClaw. Handles goal decomposition, route planning, obstacle recovery, and trace logging. Use this agent when the task involves physical movement or location-based goals.
 tools: Read, Write, Bash, Grep, Task
+extends: robot/base
 ---
 
 # RoClaw Navigation Agent

@@ -2,6 +2,7 @@
 name: error-recovery-agent
 description: Specialized agent for classifying, triaging, and recovering from errors in SkillOS task executions. Implements retry strategies with exponential backoff, circuit breaker patterns, and alternative approach suggestions.
 tools: Read, Write, Grep, Bash
+extends: recovery/base
 ---
 
 # ErrorRecoveryAgent: Resilient Error Recovery and Adaptation
