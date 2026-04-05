@@ -129,171 +129,18 @@ OPENROUTER_API_KEY=your_key_here
 
 ## SkillOS Bridge Implementation
 
-Create `external/pi-mono/packages/pi-skillos/src/index.ts`:
+> Full TypeScript source: `system/skills/runtime/pi-mono/implementation.md`
 
-```typescript
-import { createAI } from "@mariozechner/pi-ai";
-import { Agent, Tool, AgentOptions } from "@mariozechner/pi-agent-core";
-import * as fs from "fs";
-import * as path from "path";
+The bridge (`external/pi-mono/packages/pi-skillos/src/index.ts`) has five parts:
 
-// -------------------------------------------------------
-// 1. Tool-call translation: SkillOS XML → pi-agent-core
-// -------------------------------------------------------
+1. **XML parser** — extracts `<tool_call name="...">` blocks from agent output
+2. **Tool adapters** — `read_file`, `write_file`, `bash` mapped to pi-agent-core `Tool` schema
+3. **Manifest loader** — reads SkillOS `.md` specs as system prompts
+4. **`runSkillOSGoal()`** — creates a pi-agent-core `Agent`, runs the goal, returns output
+5. **CLI entry point** — `npx tsx src/index.ts "<goal>"`
 
-interface SkillOSToolCall {
-  name: string;
-  args: Record<string, unknown>;
-}
+To add tools, implement the `Tool` interface and append to the `tools` array in `AgentOptions`.
 
-function parseSkillOSToolCalls(agentOutput: string): SkillOSToolCall[] {
-  const calls: SkillOSToolCall[] = [];
-  const regex = /<tool_call name="([^"]+)">([\s\S]*?)<\/tool_call>/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(agentOutput)) !== null) {
-    try {
-      calls.push({ name: match[1], args: JSON.parse(match[2].trim()) });
-    } catch {
-      console.error(`[pi-skillos] Failed to parse args for tool: ${match[1]}`);
-    }
-  }
-  return calls;
-}
-
-// -------------------------------------------------------
-// 2. Native SkillOS tools mapped to pi-agent-core Tools
-// -------------------------------------------------------
-
-const readFileTool: Tool = {
-  name: "read_file",
-  description: "Read a file from the filesystem",
-  parameters: {
-    type: "object",
-    properties: {
-      path: { type: "string", description: "Absolute or relative file path" },
-    },
-    required: ["path"],
-  },
-  execute: async ({ path: filePath }: { path: string }) => {
-    return fs.readFileSync(filePath, "utf-8");
-  },
-};
-
-const writeFileTool: Tool = {
-  name: "write_file",
-  description: "Write content to a file",
-  parameters: {
-    type: "object",
-    properties: {
-      path: { type: "string" },
-      content: { type: "string" },
-    },
-    required: ["path", "content"],
-  },
-  execute: async ({ path: filePath, content }: { path: string; content: string }) => {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, content, "utf-8");
-    return `Written ${content.length} bytes to ${filePath}`;
-  },
-};
-
-const bashTool: Tool = {
-  name: "bash",
-  description: "Execute a bash command and return stdout",
-  parameters: {
-    type: "object",
-    properties: {
-      command: { type: "string" },
-    },
-    required: ["command"],
-  },
-  execute: async ({ command }: { command: string }) => {
-    const { execSync } = await import("child_process");
-    return execSync(command, { encoding: "utf-8", timeout: 30_000 });
-  },
-};
-
-// -------------------------------------------------------
-// 3. SkillOS manifest loader
-// -------------------------------------------------------
-
-function loadSkillOSManifest(manifestPath: string): string {
-  if (!fs.existsSync(manifestPath)) {
-    throw new Error(`SkillOS manifest not found: ${manifestPath}`);
-  }
-  return fs.readFileSync(manifestPath, "utf-8");
-}
-
-// -------------------------------------------------------
-// 4. PiMonoBridge — runs a SkillOS goal via pi-agent-core
-// -------------------------------------------------------
-
-export interface BridgeOptions {
-  provider?: "anthropic" | "openai" | "google" | "openrouter";
-  model?: string;
-  skillOSRoot?: string;
-  maxTurns?: number;
-}
-
-export async function runSkillOSGoal(
-  goal: string,
-  options: BridgeOptions = {}
-): Promise<string> {
-  const {
-    provider = "anthropic",
-    model,
-    skillOSRoot = process.cwd(),
-    maxTurns = 20,
-  } = options;
-
-  // Load the SkillOS system agent as system prompt
-  const systemAgentPath = path.join(
-    skillOSRoot,
-    "system/skills/orchestration/core/system-agent.md"
-  );
-  const systemPrompt = loadSkillOSManifest(systemAgentPath);
-
-  // Initialise pi-ai provider
-  const ai = createAI({ provider, model });
-
-  // Initialise pi-agent-core agent with SkillOS tools
-  const agentOptions: AgentOptions = {
-    ai,
-    systemPrompt,
-    tools: [readFileTool, writeFileTool, bashTool],
-    maxTurns,
-  };
-
-  const agent = new Agent(agentOptions);
-  const result = await agent.run(goal);
-  return result.output ?? "Agent completed without explicit output.";
-}
-
-// -------------------------------------------------------
-// 5. CLI entry point
-// -------------------------------------------------------
-
-if (process.argv[1] === new URL(import.meta.url).pathname) {
-  const goal = process.argv.slice(2).join(" ");
-  if (!goal) {
-    console.error("Usage: node dist/index.js <goal>");
-    process.exit(1);
-  }
-
-  const provider = (process.env.SKILLOS_PROVIDER as BridgeOptions["provider"]) ?? "anthropic";
-  console.log(`[pi-skillos] Running goal via ${provider}:\n  ${goal}\n`);
-
-  runSkillOSGoal(goal, { provider })
-    .then((result) => {
-      console.log("\n=== RESULT ===");
-      console.log(result);
-    })
-    .catch((err) => {
-      console.error("[pi-skillos] Error:", err);
-      process.exit(1);
-    });
-}
-```
 
 ---
 
@@ -411,42 +258,13 @@ When SystemAgent or another skill needs to delegate a goal to the pi-mono runtim
 4. Execute the bridge CLI with the delegated goal:
    Bash: "cd external/pi-mono/packages/pi-skillos && npx tsx src/index.ts '<goal>'"
 5. Capture stdout as the result and log to memory/short_term/.
-6. Update projects/[Project]/state/runtime_status.json with outcome metrics.
+6. Update projects/[Project]/state/runtime_config.json with outcome metrics.
 ```
 
 ---
 
-## Extending the Bridge
+## Runtime Comparison
 
-To add new SkillOS tools to the pi-mono bridge, follow this pattern:
-
-```typescript
-const myNewTool: Tool = {
-  name: "my_tool",
-  description: "Description for the LLM",
-  parameters: { /* JSON Schema */ },
-  execute: async (args) => { /* implementation */ },
-};
-
-// Add to the tools array in AgentOptions
-```
-
-Register new tools in `external/pi-mono/packages/pi-skillos/src/tools/` and re-export
-from `src/index.ts`.
-
----
-
-## Comparison: All Runtimes
-
-| Feature | Claude Code | pi-mono | Codex CLI | qwen_runtime.py |
-|---------|-------------|---------|-----------|----------------|
-| Language | — (LLM native) | TypeScript | — (LLM native) | Python |
-| LLM providers | Anthropic | OpenAI, Anthropic, Google, OpenRouter | OpenAI, Azure | Qwen, Gemini |
-| Tool calling | Native Claude tools | pi-agent-core tool schema | Shell commands | XML regex parse |
-| Web / Slack UI | No | Yes (pi-web-ui, pi-mom) | No | No |
-| GPU pod mgmt | No | Yes (pi-pods) | No | No |
-| Azure OpenAI | No | Via OpenRouter | Yes (native) | No |
-| Sandboxed exec | No | No | Yes | No |
-| Context compaction | Built-in | Built-in (pi-agent-core) | Built-in | Custom compactor.py |
-| Setup required | None | npm install | npm install | pip install |
-| Default runtime | ✅ yes | No | No | Legacy |
+See `system/skills/runtime/index.md` for the canonical runtime comparison table.
+Full implementation details (including tool extension patterns) are in
+`system/skills/runtime/pi-mono/implementation.md`.

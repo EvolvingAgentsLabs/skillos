@@ -112,14 +112,6 @@ Available alternative runtimes:
 
 ---
 
-## Limitations vs Alternative Runtimes
+## Runtime Comparison
 
-| Capability | Claude Code | pi-mono | Codex CLI |
-|------------|-------------|---------|-----------|
-| LLM providers | Anthropic only | OpenAI, Anthropic, Google, OpenRouter | OpenAI, Azure |
-| Language | — (LLM native) | TypeScript | — (LLM native) |
-| Web UI | No | Yes (pi-web-ui) | No |
-| Slack bot | No | Yes (pi-mom) | No |
-| GPU pod mgmt | No | Yes (pi-pods) | No |
-| Context compaction | Built-in | Built-in (pi-agent-core) | Built-in |
-| Offline / local LLM | No | Via OpenRouter | No |
+See `system/skills/runtime/index.md` for the canonical runtime comparison table.

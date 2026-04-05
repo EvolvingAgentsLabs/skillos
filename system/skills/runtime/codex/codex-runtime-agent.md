@@ -91,7 +91,7 @@ export AZURE_OPENAI_DEPLOYMENT=gpt-4o
 // projects/[Project]/state/runtime_config.json
 {
   "active_runtime": "codex",
-  "available_runtimes": ["claude-code", "codex", "pi-mono"],
+  "available_runtimes": ["claude-code", "pi-mono", "codex"],
   "runtime_config": {
     "provider": "openai",
     "model": "gpt-4o",
@@ -182,14 +182,6 @@ Map SkillOS permission levels to Codex approval policies:
 
 ---
 
-## Comparison: Codex CLI vs Other Runtimes
+## Runtime Comparison
 
-| Capability | Claude Code | pi-mono | Codex CLI |
-|------------|-------------|---------|-----------|
-| LLM providers | Anthropic | Multi (pi-ai) | OpenAI, Azure |
-| Azure OpenAI | No | Via OpenRouter | Yes (native) |
-| Sandboxed exec | No | No | Yes |
-| Approval tiers | Permission mode | Custom policy | suggest / auto-edit / full-auto |
-| Web UI | No | Yes (pi-web-ui) | No |
-| Multimodal input | Yes | No | Yes |
-| Offline / local LLM | No | Via OpenRouter | No |
+See `system/skills/runtime/index.md` for the canonical runtime comparison table.
