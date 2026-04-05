@@ -1,8 +1,9 @@
-# SkillOS: Pure Markdown Operating System [POC]
+# SkillOS — Pure Markdown Operating System [POC]
 
-> **Transform any Agents + LLM into an intelligent operating system using pure markdown**
 
-SkillOS explores how to create and use AI agents and tools defined entirely in markdown documents. No code compilation — just markdown that any LLM can interpret to become a powerful problem-solving system.
+SkillOS is a proof-of-concept OS where every component — agents, tools, memory, orchestration — is defined entirely in markdown documents. No code compilation. No complex APIs. Just markdown that any LLM interprets at runtime to become a powerful, composable problem-solving system.
+
+> Evolved from [LLMos](hSkillOS explores how to create and use AI agents and tools defined entirely in markdown documents. No code compilation — just markdown that any LLM can interpret to become a powerful problem-solving system.
 
 > This project is an evolution of [LLMos](https://github.com/EvolvingAgentsLabs/llmos) to test Skills as basic programs.
 
@@ -237,20 +238,21 @@ Full bridge protocol (skills ↔ wiki): `system/skills/knowledge/bridge.md`
 
 ---
 
-## 💡 Core Concept
+## Core Concept
 
-SkillOS treats everything as either an **Agent** (decision maker) or **Tool** (executor), all defined in markdown:
+Everything is either an **Agent** (decision maker) or a **Tool** (executor), defined in markdown:
 
 ```markdown
 ---
 name: example-agent
+type: agent
 description: An agent that solves problems
 tools: Read, Write, WebFetch
 extends: orchestration/base
 ---
 
-# ExampleAgent
-You are an expert problem solver...
+# ResearchAgent
+You are a research specialist. Given a topic, you...
 ```
 
 The framework automatically:
@@ -513,6 +515,28 @@ skillos execute: "Run the CodeAnalysis_Task scenario on this repository"
 # Physical robot navigation
 skillos execute: "Navigate to the kitchen and describe what you see"
 ```
+skillos/
+├── system/
+│   └── skills/                  # Hierarchical Skill Tree (3-level taxonomy)
+│       ├── SkillIndex.md        # Top-level routing (~50 lines)
+│       ├── orchestration/       # SystemAgent, tool maps
+│       ├── memory/              # Learning, consolidation, traces
+│       ├── validation/          # Health checks, security scanning
+│       ├── recovery/            # Error handling, circuit breaker
+│       ├── project/             # Scaffolding, package manager
+│       └── robot/               # Physical Agents (robots/environmentalbots) control (RoClaw)
+├── projects/                    # Your projects (auto-created per goal)
+│   └── [ProjectName]/
+│       ├── components/          # Project-specific agents & tools
+│       ├── output/              # Generated deliverables
+│       └── memory/              # Project learning logs
+├── scenarios/                   # Pre-built task scenarios
+├── qwen_runtime.py              # Multi-provider agent runtime
+├── roclaw_bridge.py             # Physical Agents (robots/environmentalbots) HTTP bridge
+└── CLAUDE.md                    # OS configuration
+```
+
+Skills are organized as `Domain → Family → Skill` with lazy loading (~61% token reduction). See [docs/architecture.md](docs/architecture.md).
 
 ---
 
@@ -543,16 +567,18 @@ OLLAMA_HOST=http://localhost:11434
 
 ---
 
-## 🤔 Getting Help
-
-- **Documentation**: See `projects/` folder for example implementations
-- **Issues**: [GitHub Issues](https://github.com/EvolvingAgentsLabs/skillos/issues)
-- **Interactive Help**: Run `python qwen_runtime.py interactive` then type `help`
-
-## 📄 License
-
-Apache License 2.0 - see LICENSE file for details
+| Project | Role |
+|---------|------|
+| [LLMos](https://github.com/EvolvingAgentsLabs/llmos) | Predecessor — foundation concepts |
+| [RoClaw](https://github.com/EvolvingAgentsLabs/RoClaw) | Physical robot — Cerebellum |
+| [evolving-memory](https://github.com/EvolvingAgentsLabs/evolving-memory) | Dream consolidation — Hippocampus |
 
 ---
 
-*Built with ❤️ by [Evolving Agents Labs](https://evolvingagentslabs.github.io)*
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE)
+
+---
+
+*Built by [Evolving Agents Labs](https://evolvingagentslabs.github.io)*
