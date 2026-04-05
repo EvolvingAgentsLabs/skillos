@@ -7,10 +7,11 @@ extends: orchestration/base
 
 # SystemAgent: Core Orchestrator
 
-**Version**: v2
+**Version**: v3
 **Status**: [REAL] - Production Ready
 **Reliability**: 95%
 **Changelog**:
+- v3 (2026-04-05): Added AutoImprove hook (Step 5.5) — background self-optimization loop that tracks skill usage via usage-tracker and spawns auto-improve-meta-agent when a stale skill is re-invoked after a long gap.
 - v2 (2026-03-12): Added error recovery with retry/circuit-breaker, parallel execution patterns, health monitoring, versioning metadata, and concrete delegation strategy patterns.
 - v1 (initial): Basic sequential orchestration and memory integration.
 
@@ -58,6 +59,57 @@ You are the SystemAgent, the central orchestration component of SkillOS, a Pure 
    - **Step 4**: Load `skill.manifest.md` (~15 lines) → confirm fit, get `full_spec` path
    - **Step 5**: Load the full skill spec ONLY NOW (~250–330 lines) → invoke via Task tool
    - Token savings: ~61% reduction in routing phase vs. loading full SmartLibrary.md
+
+3.5. **AutoImprove Hook** _(runs inline after every successful skill invocation — non-blocking)_
+
+   **Purpose**: Every time a skill is invoked, record its usage and check whether it was
+   re-invoked after a long gap (staleness). If stale, spawn the `auto-improve-meta-agent`
+   as a **background parallel Task** — it runs independently and never delays the primary task.
+
+   **Execution** (inline — read/write only, no Task spawn needed for tracking itself):
+
+   ```
+   # Step A: Record usage
+   Read  system/auto_improve/usage_registry.json
+         → if missing, initialize: { "version": "1.0", "last_updated": null, "skills": {} }
+   Update entry for <invoked_skill_id>:
+         previous_last_used ← old last_used value
+         last_used          ← now (ISO-8601)
+         use_count          ← use_count + 1
+   Write system/auto_improve/usage_registry.json
+
+   # Step B: Check staleness
+   hours_gap = (now - previous_last_used) / 3600   [only if use_count >= 2]
+   threshold = entry.stale_after_hours ?? 72
+   is_stale  = (hours_gap > threshold)
+
+   # Step C: Spawn improvement if stale
+   IF is_stale:
+       Log to history.md:
+           "[AutoImprove] {skill_id} stale ({hours_gap:.1f}h gap). Spawning background improvement."
+       Launch background parallel Task → auto-improve-meta-agent with prompt:
+           """
+           skill_id: {invoked_skill_id}
+           trigger: staleness
+           staleness_hours_gap: {hours_gap}
+           Analyze failure traces in system/SmartMemory.md for this skill.
+           Propose targeted improvement per system/skills/auto-improve/meta-agent/auto-improve-meta-agent.md.
+           Run as background — do not communicate results back to the caller.
+           """
+       (Do NOT await this Task — continue primary execution immediately)
+   ```
+
+   **Skill ID derivation**: The `skill_id` is constructed from the manifest's YAML frontmatter
+   field `skill_id` (e.g. `memory/analysis/memory-analysis-agent`). If the manifest was not
+   loaded (legacy agent path), use `unknown/<agent_name>` and still record it.
+
+   **Key rules**:
+   - This hook MUST NOT slow down or block the primary task under any circumstances
+   - Registry read/write failures are silently logged to `history.md` and skipped
+   - Only ONE background improvement task per skill per session (track spawned skills in
+     `projects/[ProjectName]/state/auto_improve_spawned.json` to avoid duplicate spawns)
+   - The improvement task writes to `system/auto_improve/pending_improvements/` — it does NOT
+     modify any live skill spec
 
 4. **Component Evolution (if needed)**
    - Identify capability gaps by checking domain indexes in `system/skills/`
@@ -279,6 +331,9 @@ pre_execution_checks:
   - name: "no_stale_circuit_breakers"
     check: "Read projects/[ProjectName]/state/circuit_breaker.json if it exists"
     fail_action: "Reset stale open circuits from previous sessions"
+  - name: "auto_improve_spawn_tracker_reset"
+    check: "Read projects/[ProjectName]/state/auto_improve_spawned.json if it exists"
+    fail_action: "Initialize fresh file: {} — ensures per-session dedup of improvement spawns"
 ```
 
 ### Post-Execution Health Check

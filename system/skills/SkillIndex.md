@@ -1,7 +1,7 @@
 ---
 type: skill-index
-version: 1.0.0
-total_skills: 20
+version: 1.1.0
+total_skills: 22
 last_updated: "2026-04-05"
 ---
 
@@ -30,6 +30,7 @@ Top-level routing table for the hierarchical skill system.
 | validation | 1 | system/skills/validation/index.md | health checks, spec integrity, preflight | system/skills/validation/base.md |
 | recovery | 1 | system/skills/recovery/index.md | error handling, retry, circuit breaker | system/skills/recovery/base.md |
 | project | 2 | system/skills/project/index.md | scaffolding, package install, new project | system/skills/project/base.md |
+| auto-improve | 2 | system/skills/auto-improve/index.md | track skill usage, detect stale skills, background self-optimization loop | system/skills/auto-improve/base.md |
 
 ## Quick Skill Lookup
 
@@ -54,6 +55,8 @@ Top-level routing table for the hierarchical skill system.
 | error-recovery-agent | recovery/error | error-recovery-agent | low |
 | project-scaffold-tool | project/scaffold | _(tool)_ | low |
 | skill-package-manager-tool | project/packages | _(tool)_ | low |
+| usage-tracker | auto-improve/usage-tracker | _(tool — inline)_ | negligible |
+| auto-improve-meta-agent | auto-improve/meta-agent | auto-improve-meta-agent | medium |
 
 ## Token Budget Guidance
 
