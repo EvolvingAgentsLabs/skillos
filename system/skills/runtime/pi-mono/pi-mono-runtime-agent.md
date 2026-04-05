@@ -19,6 +19,11 @@ runtime for SkillOS agents — replacing or complementing the Python `qwen_runti
 with a TypeScript-native stack that supports OpenAI, Anthropic, Google, and other LLM
 providers through a unified API.
 
+> **Pluggable runtime**: pi-mono is one of several interchangeable runtimes defined in
+> `system/skills/runtime/`. See `runtime/base.md` for the full interface contract and
+> `runtime/index.md` for all available runtimes (Claude Code, Codex CLI, pi-mono).
+> All SkillOS agents, skills, and memory work unchanged across every runtime.
+
 ---
 
 ## What is pi-mono?
@@ -357,20 +362,36 @@ pi-agent-core's native tool invocation:
 
 ---
 
+## Runtime Interface Implementation
+
+| Operation | pi-mono implementation |
+|-----------|------------------------|
+| `install` | `git clone https://github.com/badlogic/pi-mono external/pi-mono && npm install && npm run build` |
+| `start`   | `npx tsx src/index.ts` (bridge process) |
+| `invoke`  | Pass goal as CLI arg; bridge calls `agent.run(goal)` |
+| `status`  | Check `external/pi-mono/node_modules` exists + `node --version` |
+| `stop`    | Send SIGTERM to bridge process PID |
+
+---
+
 ## State & Memory Integration
 
-The bridge writes runtime health metrics after each goal execution:
+The bridge writes runtime config and health metrics after each goal execution:
 
 ```json
-// projects/[Project]/state/runtime_status.json
+// projects/[Project]/state/runtime_config.json
 {
-  "runtime": "pi-mono",
-  "provider": "anthropic",
-  "model": "claude-sonnet-4-6",
-  "status": "healthy",
-  "last_run": "2026-04-05T12:00:00Z",
-  "turns_used": 7,
-  "max_turns": 20
+  "active_runtime": "pi-mono",
+  "available_runtimes": ["claude-code", "pi-mono", "codex"],
+  "runtime_config": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "status": "healthy",
+    "last_run": "2026-04-05T12:00:00Z",
+    "turns_used": 7,
+    "max_turns": 20
+  },
+  "last_updated": "2026-04-05T00:00:00Z"
 }
 ```
 
@@ -415,15 +436,17 @@ from `src/index.ts`.
 
 ---
 
-## Comparison: qwen_runtime.py vs pi-mono
+## Comparison: All Runtimes
 
-| Feature | qwen_runtime.py | pi-mono bridge |
-|---------|----------------|----------------|
-| Language | Python | TypeScript |
-| LLM providers | Qwen (OpenRouter), Gemini | OpenAI, Anthropic, Google, OpenRouter + more |
-| Tool calling | XML regex parse | Native pi-agent-core tool schema |
-| UI | CLI REPL | CLI, Web UI, Slack, TUI |
-| Infrastructure | None | GPU pod management (pi-pods) |
-| Package ecosystem | pip | npm (31k+ star monorepo) |
-| Context compaction | Custom compactor.py | Built-in pi-agent-core |
-| Async | asyncio | Native async/await |
+| Feature | Claude Code | pi-mono | Codex CLI | qwen_runtime.py |
+|---------|-------------|---------|-----------|----------------|
+| Language | — (LLM native) | TypeScript | — (LLM native) | Python |
+| LLM providers | Anthropic | OpenAI, Anthropic, Google, OpenRouter | OpenAI, Azure | Qwen, Gemini |
+| Tool calling | Native Claude tools | pi-agent-core tool schema | Shell commands | XML regex parse |
+| Web / Slack UI | No | Yes (pi-web-ui, pi-mom) | No | No |
+| GPU pod mgmt | No | Yes (pi-pods) | No | No |
+| Azure OpenAI | No | Via OpenRouter | Yes (native) | No |
+| Sandboxed exec | No | No | Yes | No |
+| Context compaction | Built-in | Built-in (pi-agent-core) | Built-in | Custom compactor.py |
+| Setup required | None | npm install | npm install | pip install |
+| Default runtime | ✅ yes | No | No | Legacy |
