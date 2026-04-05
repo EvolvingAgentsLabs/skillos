@@ -251,7 +251,7 @@ Next navigation queries evolving-memory first
 skillos execute: "Trigger dream consolidation for robotics domain"
 
 # Via Qwen runtime
-python qwen_runtime.py "trigger dream consolidation"
+python agent_runtime.py "trigger dream consolidation"
 
 # Direct API call
 curl -X POST http://localhost:8420/dream/run \

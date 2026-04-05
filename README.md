@@ -71,13 +71,13 @@ claude --dangerously-skip-permissions "skillos execute: 'Your goal here'"
 pip install openai python-dotenv
 
 # Run with Qwen (default, free tier)
-python qwen_runtime.py "Your goal here"
+python agent_runtime.py "Your goal here"
 
 # Run with Gemini
-GEMINI_API_KEY=... python qwen_runtime.py --provider gemini "Your goal here"
+GEMINI_API_KEY=... python agent_runtime.py --provider gemini "Your goal here"
 
 # Interactive mode
-python qwen_runtime.py interactive
+python agent_runtime.py interactive
 ```
 
 ---
@@ -315,7 +315,7 @@ skillos/
 │       └── state/               # Execution state files
 ├── .claude/agents/              # Auto-populated for Claude Code discovery
 ├── setup_agents.sh              # v3.0 — skill tree aware setup
-├── qwen_runtime.py              # Multi-provider agent runtime
+├── agent_runtime.py              # Multi-provider agent runtime
 └── roclaw_bridge.py             # RoClaw HTTP↔WebSocket bridge
 ```
 
@@ -531,7 +531,7 @@ skillos/
 │       ├── output/              # Generated deliverables
 │       └── memory/              # Project learning logs
 ├── scenarios/                   # Pre-built task scenarios
-├── qwen_runtime.py              # Multi-provider agent runtime
+├── agent_runtime.py             # Multi-provider agent runtime
 ├── roclaw_bridge.py             # Physical Agents (robots/environmentalbots) HTTP bridge
 └── CLAUDE.md                    # OS configuration
 ```

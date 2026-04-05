@@ -4,7 +4,7 @@ SkillOS Test Suite — Shared fixtures and helpers.
 Covers boot validation across all supported runtimes:
   - Boot.md manifest (universal)
   - skillos.py  (Claude Code terminal runtime)
-  - QWEN.md / qwen_runtime.py  (Qwen runtime)
+  - QWEN.md / agent_runtime.py  (Agent runtime)
   - .claude/agents/  (Claude Code sub-agent runtime)
 """
 
@@ -84,7 +84,7 @@ def load_skillos_module():
 
 def load_qwen_module():
     """
-    Import qwen_runtime.py with openai / dotenv mocked.
+    Import agent_runtime.py with openai / dotenv mocked.
     Skips the test if the module cannot be loaded.
     """
     mocks = {
@@ -94,14 +94,14 @@ def load_qwen_module():
     with patch.dict(sys.modules, mocks):
         with patch("os.chdir"):
             spec = importlib.util.spec_from_file_location(
-                "qwen_runtime_module", ROOT / "qwen_runtime.py"
+                "agent_runtime_module", ROOT / "agent_runtime.py"
             )
             mod = importlib.util.module_from_spec(spec)
             try:
                 spec.loader.exec_module(mod)
                 return mod
             except Exception as exc:
-                pytest.skip(f"Could not import qwen_runtime.py: {exc}")
+                pytest.skip(f"Could not import agent_runtime.py: {exc}")
 
 
 # ── Fixtures ──────────────────────────────────────────────────────

@@ -424,7 +424,7 @@ skillos/
 ├── .claude/agents/                       # Auto-populated agent definitions for Claude Code discovery
 ├── setup_agents.sh                       # Unix/Mac agent setup script (v3.0 — skill tree aware)
 ├── setup_agents.ps1                      # Windows agent setup script
-├── qwen_runtime.py                       # Qwen LLM runtime engine
+├── agent_runtime.py                      # Multi-provider agent runtime engine
 ├── roclaw_bridge.py                      # RoClaw HTTP↔WebSocket bridge server
 └── CLAUDE.md                            # This configuration file
 ```

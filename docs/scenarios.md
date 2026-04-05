@@ -15,7 +15,7 @@ claude --dangerously-skip-permissions "skillos execute: 'Run the [ScenarioName] 
 skillos$ Run the RealWorld_Research_Task scenario in EXECUTION MODE
 
 # Qwen runtime
-python qwen_runtime.py "Run the RealWorld Research Task scenario"
+python agent_runtime.py "Run the RealWorld Research Task scenario"
 ```
 
 ---
