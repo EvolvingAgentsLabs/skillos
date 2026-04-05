@@ -31,16 +31,18 @@ class AgentRuntime:
         "qwen": {
             "base_url": "https://openrouter.ai/api/v1",
             "api_key_env": "OPENROUTER_API_KEY",
-            "model": "qwen/qwen3-4b:free",
+            "model": "qwen/qwen3.6-plus:free",
+            "manifest": "QWEN.md",
         },
         "gemini": {
             "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
             "api_key_env": "GEMINI_API_KEY",
             "model": "gemini-2.5-flash",
+            "manifest": "GEMINI.md",
         },
     }
 
-    def __init__(self, manifest_path="QWEN.md", permission_policy: PermissionPolicy | None = None, provider: str = "qwen"):
+    def __init__(self, manifest_path: str | None = None, permission_policy: PermissionPolicy | None = None, provider: str = "qwen"):
         cfg = self.PROVIDER_CONFIGS[provider]
         self.client = OpenAI(
             base_url=cfg["base_url"],
@@ -52,15 +54,33 @@ class AgentRuntime:
         self.system_prompt = ""
         self.policy = permission_policy or SKILLOS_DEFAULT_POLICY
         self.compaction_config = CompactionConfig()
-        self._load_manifest(manifest_path)
-        print(f"✅ Agent Runtime Initialized (provider={provider}, model={self.model}).")
+        resolved_manifest = manifest_path or cfg["manifest"]
+        self._load_manifest(resolved_manifest)
+        print(f"✅ Agent Runtime Initialized (provider={provider}, model={self.model}, manifest={resolved_manifest}).")
 
     def _load_manifest(self, path):
-        """Loads the system prompt and compiles native tools from the manifest."""
+        """Loads the system prompt and compiles native tools from the manifest.
+
+        Supports two manifest formats:
+          - QWEN format: ``### NATIVE TOOLS`` with ``<tool>`` XML blocks containing ``<python_code>``
+          - GEMINI format: ``### Tools`` with ``#### tool_name`` sections containing shell scripts
+        """
         print(f"--- Loading manifest from {path} ---")
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
 
+        if "### NATIVE TOOLS" in content:
+            self._load_qwen_format(content)
+        elif "### Tools" in content:
+            self._load_gemini_format(content)
+        else:
+            raise ValueError(f"Unrecognized manifest format in {path} (expected '### NATIVE TOOLS' or '### Tools')")
+
+        print("--- Manifest loaded successfully. ---")
+
+    # ── QWEN format loader (XML <tool> blocks with <python_code>) ────
+
+    def _load_qwen_format(self, content: str):
         parts = content.split("### NATIVE TOOLS")
         self.system_prompt = parts[0].strip()
 
@@ -83,9 +103,7 @@ class AgentRuntime:
 
             try:
                 namespace = {}
-                # Compile the tool function
                 exec(code, globals(), namespace)
-                # Find the function in the namespace
                 for key, value in namespace.items():
                     if callable(value) and not key.startswith('_'):
                         self.tools[name] = value
@@ -93,7 +111,113 @@ class AgentRuntime:
                         break
             except Exception as e:
                 print(f"!!! Error compiling tool '{name}': {e}")
-        print("--- Manifest loaded successfully. ---")
+
+    # ── GEMINI format loader (shell script blocks) ───────────────────
+
+    # Instructions appended to GEMINI.md system prompts so the LLM uses
+    # the same <tool_call> / <final_answer> wire format that run_goal parses.
+    _GEMINI_TOOL_FORMAT_INSTRUCTIONS = """
+
+---
+### RUNTIME TOOL CALL FORMAT
+
+When you need to use a tool, format it EXACTLY like this:
+```
+<tool_call name="tool_name">
+{"parameter1": "value1", "parameter2": "value2"}
+</tool_call>
+```
+
+When you have completed all tasks, you MUST end with:
+```
+<final_answer>
+Your complete summary of what was accomplished
+</final_answer>
+```
+
+### TOOL SIGNATURES
+
+- `read_file`: `{"path": "file/path.md"}`
+- `write_file`: `{"path": "file/path.md", "content": "..."}`
+- `append_to_file`: `{"path": "file/path.md", "content": "..."}`
+- `list_files`: `{"path": "directory/"}`
+- `web_fetch`: `{"url": "https://..."}`
+- `delegate_to_agent`: `{"agent_name": "agent-name", "task_description": "what to do", "input_data": {}}`
+- `call_llm`: `{"prompt": "your question"}`
+- `memory_store`: `{"type": "volatile|task|permanent", "key": "name", "value": "data"}`
+- `memory_recall`: `{"type": "volatile|task|permanent", "key": "name"}`
+- `memory_search`: `{"pattern": "search term"}`
+
+Agents are discovered in `system/agents/` and `.claude/agents/`. Use agent names without path or extension (e.g. `"research-assistant-agent"`, not `"system/agents/research-assistant-agent.md"`).
+"""
+
+    def _load_gemini_format(self, content: str):
+        parts = content.split("### Tools", 1)
+        self.system_prompt = parts[0].strip() + self._GEMINI_TOOL_FORMAT_INSTRUCTIONS
+        tools_section = parts[1]
+
+        # Split into individual tool sections by #### headings
+        tool_sections = re.split(r"^####\s+", tools_section, flags=re.MULTILINE)
+
+        for section in tool_sections:
+            if not section.strip():
+                continue
+
+            # Extract tool name from first line
+            lines = section.strip().split("\n", 1)
+            tool_name = lines[0].strip()
+            body = lines[1] if len(lines) > 1 else ""
+
+            # Extract shell script from ```sh ... ``` block
+            sh_match = re.search(r"```sh\n(.*?)```", body, re.DOTALL)
+            shell_script = sh_match.group(1).strip() if sh_match else None
+
+            # Map Gemini CLI-specific tools to Python runtime equivalents
+            if tool_name == "run_agent":
+                self.tools["delegate_to_agent"] = self._handle_delegate_to_agent
+                print(f"  - Mapped {tool_name} → delegate_to_agent")
+                continue
+            if tool_name == "run_tool":
+                # run_tool delegates via shell; in Python runtime we use delegate_to_agent
+                print(f"  - Skipped {tool_name} (handled via delegate_to_agent)")
+                continue
+            if tool_name == "google_search":
+                self.tools["call_llm"] = self._handle_call_llm
+                print(f"  - Mapped {tool_name} → call_llm")
+                continue
+
+            if not shell_script:
+                print(f"  - Skipped {tool_name} (no shell script found)")
+                continue
+
+            # Create a Python wrapper that runs the shell script via subprocess
+            self.tools[tool_name] = self._make_shell_tool(shell_script, tool_name)
+            print(f"  - Wrapped shell tool: {tool_name}")
+
+        # Ensure special tools are always available
+        if "call_llm" not in self.tools:
+            self.tools["call_llm"] = self._handle_call_llm
+            print(f"  - Registered special tool: call_llm")
+        if "delegate_to_agent" not in self.tools:
+            self.tools["delegate_to_agent"] = self._handle_delegate_to_agent
+            print(f"  - Registered special tool: delegate_to_agent")
+
+    @staticmethod
+    def _make_shell_tool(script: str, tool_name: str):
+        """Create a Python callable that executes a GEMINI.md shell script."""
+        def tool_fn(**kwargs):
+            env = os.environ.copy()
+            env["GEMINI_TOOL_ARGS"] = json.dumps(kwargs)
+            result = subprocess.run(
+                ["bash", "-c", script],
+                capture_output=True, text=True, env=env, timeout=30,
+            )
+            output = result.stdout.strip()
+            if result.returncode != 0:
+                err = result.stderr.strip()
+                return f"Error running {tool_name}: {err}" if err else output
+            return output
+        return tool_fn
 
     def _handle_call_llm(self, prompt: str):
         """Handles recursive calls to the LLM."""
@@ -107,10 +231,14 @@ class AgentRuntime:
         """Handles delegation to specialized agents."""
         print(f"\n🎯 Delegating to agent: {agent_name}")
 
-        # Load the agent definition
-        agent_info = self.tools["load_agent"](agent_name)
+        # Load the agent definition — use compiled load_agent tool if available,
+        # otherwise fall back to built-in filesystem search.
+        if "load_agent" in self.tools:
+            agent_info = self.tools["load_agent"](agent_name)
+        else:
+            agent_info = self._find_agent(agent_name)
         if not agent_info.get("found"):
-            return f"❌ Agent '{agent_name}' not found. Available agents: {list(self.tools['list_agents']().keys())}"
+            return f"❌ Agent '{agent_name}' not found."
 
         # Create agent-specific prompt using the agent's context
         agent_prompt = f"""
@@ -149,6 +277,45 @@ Do not use tool calls - just provide your expert response directly.
             error_msg = f"❌ Error executing agent {agent_name}: {e}"
             print(f"   {error_msg}")
             return error_msg
+
+    @staticmethod
+    def _find_agent(agent_name: str) -> dict:
+        """Built-in agent lookup across standard directories (fallback for GEMINI manifests)."""
+        for agents_dir in [".claude/agents", "system/agents"]:
+            if not os.path.isdir(agents_dir):
+                continue
+            for fname in os.listdir(agents_dir):
+                if not fname.endswith(".md"):
+                    continue
+                fpath = os.path.join(agents_dir, fname)
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        content = f.read()
+                except OSError:
+                    continue
+                # Parse YAML frontmatter for name
+                if content.startswith("---"):
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        for line in parts[1].strip().splitlines():
+                            if line.strip().startswith("name:"):
+                                name_val = line.split(":", 1)[1].strip()
+                                if name_val == agent_name:
+                                    desc = ""
+                                    tools_val = ""
+                                    for l2 in parts[1].strip().splitlines():
+                                        if l2.strip().startswith("description:"):
+                                            desc = l2.split(":", 1)[1].strip()
+                                        elif l2.strip().startswith("tools:"):
+                                            tools_val = l2.split(":", 1)[1].strip()
+                                    return {
+                                        "name": name_val,
+                                        "description": desc,
+                                        "tools": tools_val,
+                                        "content": content,
+                                        "found": True,
+                                    }
+        return {"found": False}
 
     def _call_llm(self, messages):
         """A wrapper for making calls to the LLM API."""
@@ -366,10 +533,11 @@ QwenRuntime = AgentRuntime
 if __name__ == "__main__":
     import sys
 
-    # Parse CLI flags: --permission-policy, --provider, --manifest
+    # Parse CLI flags: --permission-policy, --provider, --manifest, --max-turns
     policy_arg = None
     provider_arg = "qwen"
-    manifest_arg = "QWEN.md"
+    manifest_arg = None  # None = auto-select from provider config
+    max_turns_arg = 10
     filtered_args = []
     i = 1
     while i < len(sys.argv):
@@ -381,6 +549,9 @@ if __name__ == "__main__":
             i += 2
         elif sys.argv[i] == "--manifest" and i + 1 < len(sys.argv):
             manifest_arg = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == "--max-turns" and i + 1 < len(sys.argv):
+            max_turns_arg = int(sys.argv[i + 1])
             i += 2
         else:
             filtered_args.append(sys.argv[i])
@@ -411,7 +582,7 @@ if __name__ == "__main__":
             # Treat unknown command as a goal to execute
             goal = " ".join(filtered_args)
             print(f"Executing goal: {goal}")
-            result = runtime.run_goal(goal)
+            result = runtime.run_goal(goal, max_turns=max_turns_arg)
             print(f"\nResult: {result}")
     else:
         # Default: Run Project Aorta using generic runtime

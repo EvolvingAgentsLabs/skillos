@@ -68,7 +68,7 @@ For tighter control, use `permission_policy.py` to define ALLOW/DENY/PROMPT rule
 
 **Best for:** Lightweight use, learning, resource-constrained environments, free-tier access.
 
-`qwen_runtime.py` is a provider-agnostic agent runtime that supports Qwen (via OpenRouter) and Gemini (Google AI). It interprets `QWEN.md` as the system manifest and implements the same agent delegation model as Claude Code.
+`agent_runtime.py` is a provider-agnostic agent runtime that supports Qwen (via OpenRouter) and Gemini (Google AI). It interprets `QWEN.md` as the system manifest and implements the same agent delegation model as Claude Code.
 
 ### Setup
 
@@ -89,19 +89,19 @@ GEMINI_API_KEY=your_key_here
 
 ```bash
 # Run with Qwen (default)
-python qwen_runtime.py "Your goal here"
+python agent_runtime.py "Your goal here"
 
 # Run with Gemini
-python qwen_runtime.py --provider gemini "Your goal here"
+python agent_runtime.py --provider gemini "Your goal here"
 
 # Use a custom manifest
-python qwen_runtime.py --provider gemini --manifest CUSTOM.md "Your goal"
+python agent_runtime.py --provider gemini --manifest CUSTOM.md "Your goal"
 
 # Interactive mode
-python qwen_runtime.py interactive
+python agent_runtime.py interactive
 
 # Test connectivity
-python qwen_runtime.py --provider gemini test
+python agent_runtime.py --provider gemini test
 ```
 
 ### Local Deployment with Ollama
@@ -115,7 +115,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 # Pull model
 ollama pull qwen:4b
 
-# Update base_url in qwen_runtime.py to:
+# Update base_url in agent_runtime.py to:
 # base_url = "http://localhost:11434/v1"
 ```
 

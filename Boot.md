@@ -47,7 +47,7 @@ Every runtime MUST complete these steps before processing any user command:
 - Start scheduler background thread
 - Invoke `boot skillos` to initialize session context
 
-### QWEN Runtime (`qwen_runtime.py`)
+### QWEN Runtime (`agent_runtime.py`)
 - Read `Boot.md` as first context injection before any system prompt
 - Parse boot checklist and execute each step as a `read_file` tool call
 - Set `session_booted = true` in runtime state after checklist completes

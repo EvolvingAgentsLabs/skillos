@@ -1,11 +1,11 @@
 """
-Tests for the QWEN runtime (QWEN.md manifest + qwen_runtime.py).
+Tests for the Agent runtime (QWEN.md manifest + agent_runtime.py).
 
 Covers:
   - QWEN.md has mandatory boot requirement referencing Boot.md
   - Tool call format is valid XML
   - Required native tools are defined
-  - qwen_runtime.py loads manifest and compiles tools
+  - agent_runtime.py loads manifest and compiles tools
   - Tool names match what Boot.md and QWEN.md promise
 """
 
@@ -27,8 +27,8 @@ class TestQwenManifestExists:
     def test_qwen_md_not_empty(self, qwen_md_text):
         assert len(qwen_md_text.strip()) > 200
 
-    def test_qwen_runtime_py_exists(self, root):
-        assert (root / "qwen_runtime.py").exists()
+    def test_agent_runtime_py_exists(self, root):
+        assert (root / "agent_runtime.py").exists()
 
 
 class TestQwenBootRequirement:
@@ -157,7 +157,7 @@ class TestQwenToolCallFormat:
                 )
 
 
-# ── qwen_runtime.py module tests ──────────────────────────────────
+# ── agent_runtime.py module tests ─────────────────────────────────
 
 class TestQwenRuntimeModule:
     @pytest.fixture(scope="class")
@@ -216,3 +216,43 @@ class TestQwenRuntimeModule:
         assert callable(rt.tools.get("delegate_to_agent")), (
             "delegate_to_agent must be callable"
         )
+
+
+# ── GEMINI.md manifest loader tests ─────────────────────────────
+
+class TestGeminiManifestLoader:
+    """Verify that _load_manifest correctly parses GEMINI.md shell-based tools."""
+
+    @pytest.fixture(scope="class")
+    def gemini_rt(self, root):
+        mod = load_qwen_module()
+        with patch.dict(sys.modules, {"openai": MagicMock(), "dotenv": MagicMock()}):
+            rt = object.__new__(mod.AgentRuntime)
+            rt.client = MagicMock()
+            rt.model = "test-model"
+            rt.tools = {}
+            rt.system_prompt = ""
+            rt._load_manifest(str(root / "GEMINI.md"))
+        return rt
+
+    def test_system_prompt_populated(self, gemini_rt):
+        assert len(gemini_rt.system_prompt) > 100
+
+    def test_shell_tools_loaded(self, gemini_rt):
+        """Core shell tools from GEMINI.md must be wrapped as callables."""
+        for tool in ["read_file", "write_file", "list_files", "web_fetch"]:
+            assert tool in gemini_rt.tools, f"Tool '{tool}' not loaded from GEMINI.md"
+            assert callable(gemini_rt.tools[tool])
+
+    def test_delegate_mapped(self, gemini_rt):
+        """run_agent in GEMINI.md must be mapped to delegate_to_agent."""
+        assert callable(gemini_rt.tools.get("delegate_to_agent"))
+
+    def test_call_llm_available(self, gemini_rt):
+        assert callable(gemini_rt.tools.get("call_llm"))
+
+    def test_provider_default_manifest(self):
+        """Each provider config must include a default manifest path."""
+        mod = load_qwen_module()
+        for provider, cfg in mod.AgentRuntime.PROVIDER_CONFIGS.items():
+            assert "manifest" in cfg, f"Provider '{provider}' missing 'manifest' key"

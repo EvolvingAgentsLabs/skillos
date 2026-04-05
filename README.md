@@ -66,7 +66,7 @@ skillos$ help
 |---------|----------|---------|
 | **SkillOS Terminal** | Interactive use, full experience | `./skillos.sh` |
 | **Claude Code** | Scripting, CI/CD, full tool access | `claude --dangerously-skip-permissions "..."` |
-| **Qwen / Gemini** | Lightweight, multi-provider, free tier | `python qwen_runtime.py "..."` |
+| **Qwen / Gemini** | Lightweight, multi-provider, free tier | `python agent_runtime.py "..."` |
 
 See [docs/runtimes.md](docs/runtimes.md) for full runtime documentation.
 
@@ -113,7 +113,7 @@ skillos/
 │       ├── output/              # Generated deliverables
 │       └── memory/              # Project learning logs
 ├── scenarios/                   # Pre-built task scenarios
-├── qwen_runtime.py              # Multi-provider agent runtime
+├── agent_runtime.py             # Multi-provider agent runtime
 ├── roclaw_bridge.py             # Physical Agents (robots/environmentalbots) HTTP bridge
 └── CLAUDE.md                    # OS configuration
 ```
