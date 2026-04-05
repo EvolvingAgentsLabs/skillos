@@ -2,6 +2,7 @@
 name: validation-agent
 description: Quality assurance agent for SkillOS that validates agent/tool markdown specifications, project directory completeness, SmartLibrary consistency, and memory log format integrity, then emits a structured system health report.
 tools: Read, Write, Grep, Glob
+extends: validation/base
 ---
 
 # ValidationAgent: System Quality Assurance

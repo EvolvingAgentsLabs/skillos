@@ -2,6 +2,7 @@
 name: memory-consolidation-agent
 description: Analyzes completed agent sessions to extract learnings, identify patterns, and consolidate insights into long-term memory
 tools: Read, Write, Grep
+extends: memory/base
 ---
 
 # MemoryConsolidationAgent

@@ -519,6 +519,93 @@ How would you like to refine this goal?
 - Full execution history and context available throughout session
 - Boot persists throughout the conversation — no need to re-boot
 
+## Knowledge Representation System
+
+**Inspired by**: Andrej Karpathy's LLM Wiki / Knowledge Base pattern
+
+SkillOS includes a first-class knowledge representation system built on Karpathy's insight:
+raw source documents should be **compiled** by the LLM into a persistent, compounding wiki
+— not re-derived via RAG on every query.
+
+### The Key Distinction
+
+| System | Stores | Operated by | Grows via |
+|--------|--------|-------------|-----------|
+| `system/SmartMemory.md` | HOW executions went (procedural) | memory-analysis-agent | Append per execution |
+| `projects/[KB]/wiki/` | WHAT was learned (declarative) | knowledge/ domain skills | Compile + ingest + query |
+
+### Three-Layer Architecture (Karpathy)
+
+```
+Layer 1: raw/          — Immutable curated sources (articles, papers, repos, images)
+Layer 2: wiki/         — LLM-compiled knowledge (.md files, cross-referenced)
+Layer 3: wiki/_schema.md — Wiki constitution (tells LLM what structure to maintain)
+```
+
+### Knowledge Domain Skills
+
+| Skill | invoke_when |
+|-------|-------------|
+| `knowledge-compile-agent` | Initialize KB or full rebuild after schema change |
+| `knowledge-ingest-agent` | New source added to raw/ — incremental wiki update |
+| `knowledge-query-agent` | Ask questions; files answers back into wiki/queries/ |
+| `knowledge-lint-agent` | Health check — contradictions, orphans, broken links |
+| `knowledge-search-tool` | Keyword + WikiLink graph search (used by query agent) |
+
+### The Compounding Loop
+
+```
+Add sources → knowledge-ingest-agent → wiki grows
+Ask question → knowledge-query-agent → answer filed back to wiki/queries/
+             → next query benefits from all prior filed answers
+Run lint → knowledge-lint-agent → gaps identified → new ingest targets
+```
+
+Every cycle compounds. The wiki grows smarter with every operation.
+
+### Project Structure (Knowledge-Enabled)
+
+```
+projects/[KBName]/
+├── raw/                    # Immutable sources (never modified by LLM)
+├── wiki/
+│   ├── _schema.md         # Wiki constitution (from templates/wiki/_schema.template.md)
+│   ├── _index.md          # Auto-maintained content catalog
+│   ├── _log.md            # Append-only operation log
+│   ├── concepts/          # Core concept articles
+│   ├── entities/          # Named entities (people, papers, orgs)
+│   ├── summaries/         # Per-source summaries
+│   └── queries/           # Filed Q&A outputs (compounding loop)
+└── output/                # Reports, Marp slides, images (viewable in Obsidian)
+```
+
+### Skills ↔ Wiki Cross-Linking
+
+**Wiki → Skills**: concept pages carry `skills:` frontmatter:
+```yaml
+concept: transformer-architecture
+skills: [knowledge-query-agent, knowledge-ingest-agent]
+```
+
+**Skills → Wiki**: skill manifests carry optional `knowledge_domains:` field.
+
+**Access control**: Only `knowledge/` domain skills write to `wiki/`. All other domains
+read wiki pages but invoke knowledge skills to modify them.
+
+Full protocol: `system/skills/knowledge/bridge.md`
+
+### Wiki Schema Template
+
+Bootstrap a new knowledge base:
+```
+skillos execute: "Initialize a knowledge base on [topic] using templates/wiki/_schema.template.md"
+```
+
+Or run the demo scenario:
+```
+skillos execute: "Run the KnowledgeBase_Research_Task scenario"
+```
+
 ## RoClaw Physical Robot Integration (Cognitive Trinity)
 
 SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, replacing LLMOS as the high-level brain. The architecture forms a **Cognitive Trinity**:
