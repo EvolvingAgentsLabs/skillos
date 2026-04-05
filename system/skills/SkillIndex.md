@@ -1,7 +1,7 @@
 ---
 type: skill-index
 version: 1.0.0
-total_skills: 20
+total_skills: 21
 last_updated: "2026-04-05"
 ---
 
@@ -30,6 +30,7 @@ Top-level routing table for the hierarchical skill system.
 | validation | 1 | system/skills/validation/index.md | health checks, spec integrity, preflight | system/skills/validation/base.md |
 | recovery | 1 | system/skills/recovery/index.md | error handling, retry, circuit breaker | system/skills/recovery/base.md |
 | project | 2 | system/skills/project/index.md | scaffolding, package install, new project | system/skills/project/base.md |
+| runtime | 1 | system/skills/runtime/index.md | pi-mono, TypeScript agent runtime, multi-provider LLM, Node.js deployment | system/skills/runtime/base.md |
 
 ## Quick Skill Lookup
 
@@ -54,6 +55,7 @@ Top-level routing table for the hierarchical skill system.
 | error-recovery-agent | recovery/error | error-recovery-agent | low |
 | project-scaffold-tool | project/scaffold | _(tool)_ | low |
 | skill-package-manager-tool | project/packages | _(tool)_ | low |
+| pi-mono-runtime-agent | runtime/pi-mono | pi-mono-runtime-agent | medium |
 
 ## Token Budget Guidance
 
