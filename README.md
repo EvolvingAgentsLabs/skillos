@@ -160,6 +160,83 @@ full_spec: system/skills/memory/analysis/memory-analysis-agent.md
 
 ---
 
+## 📚 Knowledge Representation System
+
+> *Inspired by Andrej Karpathy's LLM Wiki pattern*
+
+SkillOS includes a first-class knowledge domain that implements the **LLM-compiled wiki** pattern:
+raw sources are compiled into a persistent, compounding wiki — not re-derived via RAG on every query.
+
+```
+raw/  →  wiki/  →  queries/
+         ↑              ↓
+     ingest/compile    filed back (compounding loop)
+```
+
+### Two Systems, One Bridge
+
+| System | What it stores | Grows via |
+|--------|---------------|-----------|
+| `system/SmartMemory.md` | HOW executions went (procedural memory) | Append per execution |
+| `projects/[KB]/wiki/` | WHAT was learned (declarative knowledge) | Compile + ingest + query |
+
+### Five Knowledge Skills
+
+```
+knowledge-compile-agent  →  Full wiki build from raw/ (initialization or rebuild)
+knowledge-ingest-agent   →  Incremental wiki update from new sources
+knowledge-query-agent    →  Q&A with citations + files answers back to wiki/queries/
+knowledge-lint-agent     →  Health checks: contradictions, orphan pages, broken links
+knowledge-search-tool    →  Hybrid keyword + WikiLink graph search
+```
+
+### The Compounding Loop
+
+Every query gets filed back into `wiki/queries/`. The next query benefits from all prior answers.
+Every lint pass surfaces gaps. Every gap triggers new ingest. The wiki grows smarter over time.
+
+```bash
+# Start a knowledge base
+skillos execute: "Initialize a knowledge base on transformer architectures"
+
+# Add sources
+skillos execute: "Ingest raw/papers/attention-is-all-you-need.md into the transformer KB"
+
+# Query
+skillos execute: "What are the key differences between MHA and MLA attention?"
+
+# Health check
+skillos execute: "Run a lint check on the transformer KB"
+
+# Run the full demo
+skillos execute: "Run the KnowledgeBase_Research_Task scenario"
+```
+
+### Wiki Structure (Obsidian-Compatible)
+
+```
+projects/[KBName]/
+├── raw/                    # Immutable sources
+├── wiki/
+│   ├── _schema.md         # Wiki constitution (LLM's constitution for this KB)
+│   ├── _index.md          # Auto-maintained content catalog
+│   ├── _log.md            # Append-only operation log
+│   ├── concepts/          # Core concept articles
+│   ├── entities/          # People, papers, orgs, datasets
+│   ├── summaries/         # Per-source summaries
+│   └── queries/           # Filed Q&A outputs (compounding loop)
+└── output/                # Marp slides, reports, images — viewable in Obsidian
+```
+
+Bootstrap a new wiki from the template:
+```
+templates/wiki/_schema.template.md
+```
+
+Full bridge protocol (skills ↔ wiki): `system/skills/knowledge/bridge.md`
+
+---
+
 ## 💡 Core Concept
 
 SkillOS treats everything as either an **Agent** (decision maker) or **Tool** (executor), all defined in markdown:
@@ -210,6 +287,14 @@ skillos/
 │   │   │   ├── scene/           # roclaw-scene-analysis-agent
 │   │   │   ├── dream/           # roclaw-dream-agent
 │   │   │   └── tools/           # roclaw-tool, evolving-memory-tool
+│   │   ├── knowledge/           # Domain: wiki compilation, Q&A, lint, search
+│   │   │   ├── base.md          # 3-layer architecture (raw/wiki/schema)
+│   │   │   ├── bridge.md        # Skills ↔ wiki connection protocol
+│   │   │   ├── ingest/          # knowledge-ingest-agent
+│   │   │   ├── compile/         # knowledge-compile-agent
+│   │   │   ├── query/           # knowledge-query-agent
+│   │   │   ├── lint/            # knowledge-lint-agent
+│   │   │   └── search/          # knowledge-search-tool
 │   │   ├── validation/          # Domain: health checks, spec integrity
 │   │   ├── recovery/            # Domain: error handling, circuit breaker
 │   │   └── project/             # Domain: scaffolding, packages
