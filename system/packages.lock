@@ -5,7 +5,7 @@
 # Format: YAML
 ---
 schema_version: 1
-last_updated: "2026-03-16T12:00:00Z"
+last_updated: "2026-04-05T00:00:00Z"
 installed:
   - name: algorithmic-art
     source: "github:anthropics/skills"
@@ -18,3 +18,103 @@ installed:
       - LICENSE.txt
       - templates/viewer.html
       - templates/generator_template.js
+  - name: pdf
+    source: "github:anthropics/skills"
+    source_path: "skills/pdf/"
+    installed_to: "components/skills/pdf/"
+    skill_spec: "system/skills/content/documents/pdf.md"
+    manifest: "system/skills/content/documents/pdf.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md
+  - name: docx
+    source: "github:anthropics/skills"
+    source_path: "skills/docx/"
+    installed_to: "components/skills/docx/"
+    skill_spec: "system/skills/content/documents/docx.md"
+    manifest: "system/skills/content/documents/docx.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md
+  - name: xlsx
+    source: "github:anthropics/skills"
+    source_path: "skills/xlsx/"
+    installed_to: "components/skills/xlsx/"
+    skill_spec: "system/skills/content/spreadsheets/xlsx.md"
+    manifest: "system/skills/content/spreadsheets/xlsx.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md
+  - name: pptx
+    source: "github:anthropics/skills"
+    source_path: "skills/pptx/"
+    installed_to: "components/skills/pptx/"
+    skill_spec: "system/skills/content/presentations/pptx.md"
+    manifest: "system/skills/content/presentations/pptx.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md
+  - name: skill-creator
+    source: "github:anthropics/skills"
+    source_path: "skills/skill-creator/"
+    installed_to: "components/skills/skill-creator/"
+    skill_spec: "system/skills/content/meta/skill-creator.md"
+    manifest: "system/skills/content/meta/skill-creator.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md
+  - name: mcp-builder
+    source: "github:anthropics/skills"
+    source_path: "skills/mcp-builder/"
+    installed_to: "components/skills/mcp-builder/"
+    skill_spec: "system/skills/content/meta/mcp-builder.md"
+    manifest: "system/skills/content/meta/mcp-builder.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md
+  - name: claude-api
+    source: "github:anthropics/skills"
+    source_path: "skills/claude-api/"
+    installed_to: "components/skills/claude-api/"
+    skill_spec: "system/skills/content/meta/claude-api.md"
+    manifest: "system/skills/content/meta/claude-api.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md
+  - name: huggingface-papers
+    source: "github:huggingface/skills"
+    source_path: "skills/huggingface-papers/"
+    installed_to: "components/skills/huggingface-papers/"
+    skill_spec: "system/skills/research/papers/huggingface-papers.md"
+    manifest: "system/skills/research/papers/huggingface-papers.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md
+  - name: huggingface-datasets
+    source: "github:huggingface/skills"
+    source_path: "skills/huggingface-datasets/"
+    installed_to: "components/skills/huggingface-datasets/"
+    skill_spec: "system/skills/research/datasets/huggingface-datasets.md"
+    manifest: "system/skills/research/datasets/huggingface-datasets.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md
+  - name: huggingface-llm-trainer
+    source: "github:huggingface/skills"
+    source_path: "skills/huggingface-llm-trainer/"
+    installed_to: "components/skills/huggingface-llm-trainer/"
+    skill_spec: "system/skills/research/datasets/huggingface-llm-trainer.md"
+    manifest: "system/skills/research/datasets/huggingface-llm-trainer.manifest.md"
+    installed_at: "2026-04-05T00:00:00Z"
+    updated_at: null
+    files:
+      - SKILL.md

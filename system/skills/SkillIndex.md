@@ -1,8 +1,8 @@
 ---
 type: skill-index
 version: 1.0.0
-total_skills: 15
-last_updated: "2026-03-30"
+total_skills: 28
+last_updated: "2026-04-05"
 ---
 
 # SkillOS Skill Index
@@ -29,6 +29,9 @@ Top-level routing table for the hierarchical skill system.
 | validation | 1 | system/skills/validation/index.md | health checks, spec integrity, preflight | system/skills/validation/base.md |
 | recovery | 1 | system/skills/recovery/index.md | error handling, retry, circuit breaker | system/skills/recovery/base.md |
 | project | 2 | system/skills/project/index.md | scaffolding, package install, new project | system/skills/project/base.md |
+| content | 7 | system/skills/content/index.md | PDF, DOCX, XLSX, PPTX, skill creation, MCP, Claude API | system/skills/content/base.md |
+| research | 4 | system/skills/research/index.md | web research, HF papers, datasets, LLM fine-tuning | system/skills/research/base.md |
+| analytics | 2 | system/skills/analytics/index.md | data analysis, CSV/JSON, git workflow automation | system/skills/analytics/base.md |
 
 ## Quick Skill Lookup
 
@@ -48,6 +51,19 @@ Top-level routing table for the hierarchical skill system.
 | error-recovery-agent | recovery/error | error-recovery-agent | low |
 | project-scaffold-tool | project/scaffold | _(tool)_ | low |
 | skill-package-manager-tool | project/packages | _(tool)_ | low |
+| pdf | content/documents | _(tool)_ | low |
+| docx | content/documents | _(tool)_ | low |
+| xlsx | content/spreadsheets | _(tool)_ | low |
+| pptx | content/presentations | _(tool)_ | low |
+| skill-creator | content/meta | _(tool)_ | low |
+| mcp-builder | content/meta | _(tool)_ | medium |
+| claude-api | content/meta | _(tool)_ | low |
+| web-research-agent | research/web | web-research-agent | medium |
+| huggingface-papers | research/papers | _(tool)_ | low |
+| huggingface-datasets | research/datasets | _(tool)_ | low |
+| huggingface-llm-trainer | research/datasets | _(tool)_ | high |
+| data-analysis-agent | analytics/tabular | data-analysis-agent | medium |
+| git-workflow-agent | analytics/tabular | git-workflow-agent | low |
 
 ## Token Budget Guidance
 
