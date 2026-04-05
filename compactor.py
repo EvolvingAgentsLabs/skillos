@@ -8,8 +8,23 @@ Supports optional LLM-powered summarization via async compact_messages_async().
 from __future__ import annotations
 
 import asyncio
+import warnings
 from dataclasses import dataclass
 from typing import Awaitable, Callable
+
+# ── Model context-window registry ────────────────────────────────
+MODEL_CONTEXT_WINDOWS: dict[str, int] = {
+    # Qwen via OpenRouter
+    "qwen/qwen3.6-plus:free": 32_000,
+    "qwen/qwen3-plus": 32_000,
+    # Gemini
+    "gemini-2.5-flash": 1_048_576,
+    "gemini-2.5-pro": 1_048_576,
+    "gemini-2.0-flash": 1_048_576,
+}
+
+DEFAULT_COMPACTION_RATIO = 0.70   # compact at 70 % of context window
+MIN_COMPACTION_THRESHOLD = 8_000  # never compact below this floor
 
 
 @dataclass
@@ -17,6 +32,19 @@ class CompactionConfig:
     """Controls when and how message lists are compacted."""
     preserve_recent_messages: int = 4
     max_estimated_tokens: int = 10_000
+
+    def configure_for_model(self, model_name: str) -> None:
+        """Set *max_estimated_tokens* from the model's context window.
+
+        Unknown models keep the current default.
+        """
+        window = MODEL_CONTEXT_WINDOWS.get(model_name)
+        if window is not None:
+            self.max_estimated_tokens = max(
+                MIN_COMPACTION_THRESHOLD,
+                int(window * DEFAULT_COMPACTION_RATIO),
+            )
+        # else: keep the default 10_000
 
 
 def estimate_tokens(messages: list[dict]) -> int:
@@ -52,6 +80,14 @@ def compact_messages(
     Returns (compacted_messages, summary_text).
     If compaction is not needed, returns the original messages unchanged.
     """
+    if messages and messages[0].get("role") == "system":
+        warnings.warn(
+            "compact_messages received a system prompt as messages[0]. "
+            "The system prompt should be prepended at call time, not stored "
+            "in the conversation list — compaction will erase it.",
+            stacklevel=2,
+        )
+
     if not should_compact(messages, config):
         return messages, ""
 
@@ -117,6 +153,14 @@ async def compact_messages_async(
     If llm_fn is provided and there are enough messages, uses LLM for
     semantic summarization. Otherwise falls back to text truncation.
     """
+    if messages and messages[0].get("role") == "system":
+        warnings.warn(
+            "compact_messages_async received a system prompt as messages[0]. "
+            "The system prompt should be prepended at call time, not stored "
+            "in the conversation list — compaction will erase it.",
+            stacklevel=2,
+        )
+
     if not should_compact(messages, config):
         return messages, ""
 
