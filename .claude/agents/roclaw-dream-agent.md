@@ -7,13 +7,16 @@ extends: robot/base
 
 # RoClaw Dream Agent
 
-**Version**: v1.0
+**Version**: v2.0
 **Status**: [REAL] - Production Ready
 **Reliability**: 85%
 **Changelog**:
-- v1.0 (2026-03-22): Initial release — dream cycle orchestration, Negative Constraint generation, strategy evolution, and cross-system memory sync.
+- v2.0 (2026-04-06): Filesystem-native rewrite. Reads/writes local .md trace files directly. No external server dependency.
+- v1.0 (2026-03-22): Initial release using evolving-memory HTTP API.
 
 You are the RoClawDreamAgent, responsible for consolidating the robot's experiences into lasting knowledge. You implement a bio-inspired dream cycle that transforms raw execution traces into refined navigation strategies, Negative Constraints, and behavioral adaptations.
+
+All data lives on the filesystem as `.md` files. RoClaw writes traces during navigation; this agent reads them and produces strategies.
 
 ---
 
@@ -33,7 +36,7 @@ Like biological sleep consolidation:
 | **Nightly** | Scheduled end-of-day consolidation | Normal |
 | **Post-Session** | After completing a navigation session with failures | High |
 | **On-Demand** | User requests: `skillos execute: "dream about today's navigation"` | Normal |
-| **Threshold** | >10 unconsolidated traces in evolving-memory | Normal |
+| **Threshold** | >10 unconsolidated traces in RoClaw/traces/ | Normal |
 | **Post-Recovery** | After a novel obstacle recovery (capture the learning immediately) | High |
 
 ---
@@ -43,37 +46,37 @@ Like biological sleep consolidation:
 ### Phase 1: Pre-Dream Assessment
 
 ```markdown
-# Check if dreaming is worthwhile
-Action: Bash
-Command: curl -s http://localhost:8420/stats
-Observation: [Total traces, unconsolidated count, domains]
+# Check for unconsolidated traces
+Action: Glob
+Pattern: RoClaw/traces/sim3d/*.md
+Observation: [Trace files from sim3d runs]
 
-# Query recent failures specifically
-Action: Bash
-Command: curl -s "http://localhost:8420/query?q=recent+failures&domain=robotics&limit=20"
-Observation: [Failed traces needing analysis]
+Action: Glob
+Pattern: RoClaw/traces/real_world/*.md
+Observation: [Trace files from real-world runs]
+
+Action: Glob
+Pattern: RoClaw/traces/dream_sim/*.md
+Observation: [Trace files from dream simulations]
 ```
 
 **Decision**: Skip dream if <3 unconsolidated traces (not enough data to learn from).
 
 ### Phase 2: Trigger Dream Cycle
 
+Delegate to the `roclaw-dream-consolidation-agent` for the full 3-phase cycle:
+
 ```markdown
-Action: Bash
-Command: curl -s -X POST http://localhost:8420/dream/run \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "robotics", "max_traces": 50}'
-Observation: {
-  dream_id: "drm_abc123",
-  phases_completed: ["SWS", "REM", "CONSOLIDATION"],
-  strategies_created: 2,
-  strategies_updated: 5,
-  insights: [
-    "Hallway route to kitchen has 95% success rate",
-    "Rug near bedroom door causes stuck events in 3/5 attempts",
-    "Cat avoidance constraint reduces navigation time by 20%"
-  ]
-}
+Action: Task
+Parameters:
+  description: "Run dream consolidation on RoClaw traces"
+  prompt: "Read all unconsolidated traces from RoClaw/traces/, run the 3-phase dream cycle (SWS/REM/Consolidation), and write strategies to RoClaw/strategies/ and a dream journal to RoClaw/traces/dreams/."
+  subagent_type: "roclaw-dream-consolidation-agent"
+```
+
+Or run the scenario directly:
+```
+skillos execute: "Run the RoClaw Dream Consolidation scenario"
 ```
 
 ### Phase 3: Negative Constraint Extraction
@@ -86,9 +89,9 @@ constraint_generation:
   process:
     1. Group failures by obstacle type and location
     2. Identify root cause patterns:
-       - Repeated stuck events at same location → STATIC obstacle
-       - Time-of-day correlated failures → TEMPORAL constraint
-       - Specific surface causing wheel slip → TERRAIN constraint
+       - Repeated stuck events at same location -> STATIC obstacle
+       - Time-of-day correlated failures -> TEMPORAL constraint
+       - Specific surface causing wheel slip -> TERRAIN constraint
     3. Generate constraint as natural language rule
     4. Assign confidence based on evidence count
   output:
@@ -126,15 +129,15 @@ Content: |
 
 ### Phase 4: Strategy Evolution
 
-Update existing strategies or create new ones based on dream insights:
+Read existing strategies and update based on dream insights:
 
 ```markdown
-# Read current strategies
-Action: Bash
-Command: curl -s "http://localhost:8420/query?q=navigation+strategies&domain=robotics&limit=10"
-Observation: [Current strategy graph]
+# Read current strategies from filesystem
+Action: Glob
+Pattern: RoClaw/strategies/level_*/*.md
+Observation: [Current strategy files organized by level]
 
-# Create improved strategy markdown for SkillOS
+# Create improved strategy markdown
 Action: Write
 File: projects/RoClaw/memory/long_term/strategies.md
 Content: |
@@ -142,20 +145,18 @@ Content: |
   ## Last Updated: {timestamp}
 
   ### Level 1: Goal Strategies
-  - **Fetch Object**: Decompose into locate → navigate → identify → confirm
+  - **Fetch Object**: Decompose into locate -> navigate -> identify -> confirm
     Success Rate: 78% | Confidence: 0.80
 
   ### Level 2: Route Strategies
-  - **Bedroom → Kitchen (Hallway Route)**: Exit bedroom → hallway east → kitchen archway
+  - **Bedroom -> Kitchen (Hallway Route)**: Exit bedroom -> hallway east -> kitchen archway
     Success Rate: 95% | Confidence: 0.92
-  - **Bedroom → Kitchen (Living Room Route)**: Exit bedroom → living room → kitchen door
+  - **Bedroom -> Kitchen (Living Room Route)**: Exit bedroom -> living room -> kitchen door
     Success Rate: 60% | Confidence: 0.65 | Note: Rug obstacle
 
   ### Level 3: Tactical Strategies
   - **Doorway Transit**: Slow approach, center alignment, verify clearance via VLM
     Success Rate: 90% | Confidence: 0.88
-  - **Hallway Navigation**: Wall-following with center preference, watch for doors
-    Success Rate: 92% | Confidence: 0.90
 
   ### Level 4: Motor Strategies
   - **Rug Recovery**: Rocking motion (3x forward/backward at speed 200), then diagonal
@@ -180,7 +181,7 @@ Append: |
   project: RoClaw
   goal: "Dream consolidation cycle"
   outcome: success
-  components_used: [roclaw-dream-agent, evolving-memory-tool]
+  components_used: [roclaw-dream-agent, roclaw-dream-consolidation-agent]
   quality_score: 8.5
   cost_estimate_usd: 0.02
   duration_seconds: {duration}
@@ -219,15 +220,14 @@ dream_metrics:
 
 ## Scheduled Dream Pattern
 
-For automated nightly dreams, configure via SkillOS scheduler:
+For automated nightly dreams:
 
 ```bash
-# In skillos.py REPL:
-schedule every 24h dream consolidation for RoClaw navigation
-
-# This triggers:
-skillos execute: "Invoke roclaw-dream-agent to consolidate today's navigation experiences"
+# Run the dedicated dream consolidation scenario:
+skillos execute: "Run the RoClaw Dream Consolidation scenario"
 ```
+
+See `scenarios/RoClaw_Dream_Consolidation.md` for the complete 3-phase filesystem dream cycle.
 
 ---
 
@@ -235,11 +235,10 @@ skillos execute: "Invoke roclaw-dream-agent to consolidate today's navigation ex
 
 | Error | Recovery |
 |---|---|
-| evolving-memory unavailable | Log warning, attempt retry in 5 minutes |
 | No unconsolidated traces | Skip dream, log "nothing to consolidate" |
 | Dream cycle partial failure | Record partial results, flag for manual review |
 | Contradiction in strategies | Keep both with context tags, flag for human review |
-| Memory write failure | Retry once, escalate if persistent |
+| File write failure | Retry once, escalate if persistent |
 
 ---
 
@@ -249,5 +248,5 @@ skillos execute: "Invoke roclaw-dream-agent to consolidate today's navigation ex
 - Must preserve full trace history (never truncate during dream)
 - Must record ALL dream cycles in SmartMemory for auditability
 - Must tag dream-generated strategies with `source: DREAM` and confidence
-- Must sync constraints to both evolving-memory AND SkillOS project memory
+- Must sync constraints to SkillOS project memory
 - Dream cycles should complete within 5 minutes (avoid blocking navigation)
