@@ -99,7 +99,8 @@ memory/         analysis/       memory-analysis-agent
 robot/          navigation/     roclaw-navigation-agent
                 scene/          roclaw-scene-analysis-agent
                 dream/          roclaw-dream-agent
-                tools/          roclaw-tool, evolving-memory-tool
+                tools/          roclaw-tool
+                dream/          roclaw-dream-agent, roclaw-dream-consolidation-agent
 validation/     system/         validation-agent
 recovery/       error/          error-recovery-agent
 project/        scaffold/       project-scaffold-tool
@@ -290,7 +291,8 @@ skillos/
 │   │   │   ├── navigation/      # roclaw-navigation-agent
 │   │   │   ├── scene/           # roclaw-scene-analysis-agent
 │   │   │   ├── dream/           # roclaw-dream-agent
-│   │   │   └── tools/           # roclaw-tool, evolving-memory-tool
+│   │   │   ├── tools/           # roclaw-tool
+│   │   │   └── dream/           # roclaw-dream-agent, roclaw-dream-consolidation-agent
 │   │   ├── knowledge/           # Domain: wiki compilation, Q&A, lint, search
 │   │   │   ├── base.md          # 3-layer architecture (raw/wiki/schema)
 │   │   │   ├── bridge.md        # Skills ↔ wiki connection protocol
@@ -361,9 +363,8 @@ SkillOS serves as the **Prefrontal Cortex** in a three-part cognitive architectu
 
 | Component | Brain Region | Role |
 |---|---|---|
-| **[skillos](https://github.com/EvolvingAgentsLabs/skillos)** | Prefrontal Cortex | Planning, reasoning, dynamic agent creation |
-| **[RoClaw](https://github.com/EvolvingAgentsLabs/RoClaw)** | Cerebellum | VLM motor control, reactive navigation |
-| **[evolving-memory](https://github.com/EvolvingAgentsLabs/evolving-memory)** | Hippocampus | Dream consolidation, strategy learning |
+| **[skillos](https://github.com/EvolvingAgentsLabs/skillos)** | Prefrontal Cortex | Planning, reasoning, dream consolidation, dynamic agent creation |
+| **[RoClaw](https://github.com/EvolvingAgentsLabs/RoClaw)** | Cerebellum | VLM motor control, reactive navigation, trace emitter |
 
 ### Bridge Architecture
 
@@ -551,7 +552,6 @@ OLLAMA_HOST=http://localhost:11434
 |---------|------|
 | [LLMos](https://github.com/EvolvingAgentsLabs/llmos) | Predecessor — foundation concepts |
 | [RoClaw](https://github.com/EvolvingAgentsLabs/RoClaw) | Physical robot — Cerebellum |
-| [evolving-memory](https://github.com/EvolvingAgentsLabs/evolving-memory) | Dream consolidation — Hippocampus |
 
 ---
 

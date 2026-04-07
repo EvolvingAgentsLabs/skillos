@@ -43,8 +43,8 @@ Top-level routing table for the hierarchical skill system.
 | roclaw-navigation-agent | robot/navigation | roclaw-navigation-agent | high |
 | roclaw-scene-analysis-agent | robot/scene | roclaw-scene-analysis-agent | medium |
 | roclaw-dream-agent | robot/dream | roclaw-dream-agent | medium |
+| roclaw-dream-consolidation-agent | robot/dream | roclaw-dream-consolidation-agent | medium |
 | roclaw-tool | robot/tools | _(tool)_ | low |
-| evolving-memory-tool | robot/tools | _(tool)_ | low |
 | knowledge-ingest-agent | knowledge/ingest | knowledge-ingest-agent | medium |
 | knowledge-compile-agent | knowledge/compile | knowledge-compile-agent | high |
 | knowledge-query-agent | knowledge/query | knowledge-query-agent | medium |

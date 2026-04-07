@@ -381,7 +381,8 @@ skillos/
 │   │   │   ├── navigation/          # roclaw-navigation-agent
 │   │   │   ├── scene/               # roclaw-scene-analysis-agent
 │   │   │   ├── dream/               # roclaw-dream-agent
-│   │   │   └── tools/               # roclaw-tool, evolving-memory-tool
+│   │   │   ├── tools/               # roclaw-tool
+│   │   │   └── dream/               # roclaw-dream-agent, roclaw-dream-consolidation-agent
 │   │   ├── validation/              # Domain: health checks, spec integrity
 │   │   │   ├── base.md
 │   │   │   ├── index.md
@@ -612,9 +613,8 @@ SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, repla
 
 | Component | Role | Connection |
 |---|---|---|
-| **SkillOS** | Prefrontal Cortex — planning, reasoning, dynamic agent creation | HTTP to bridge + memory |
-| **RoClaw** | Cerebellum — reactive motor control, VLM navigation | WebSocket via OpenClaw Gateway |
-| **evolving-memory** | Hippocampus — shared memory, dream consolidation | REST API on :8420 |
+| **SkillOS** | Prefrontal Cortex — planning, reasoning, dream consolidation | HTTP to bridge, reads local .md traces |
+| **RoClaw** | Cerebellum — reactive motor control, VLM navigation, trace emitter | WebSocket via OpenClaw Gateway |
 
 ### RoClaw Components
 
@@ -623,9 +623,8 @@ SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, repla
 - `RoClawDreamAgent.md` — Bio-inspired dream consolidation, Negative Constraint generation
 - `RoClawSceneAnalysisAgent.md` — VLM scene interpretation, semantic mapping
 
-**Tools** (in `system/tools/`):
+**Tools** (in `system/skills/robot/tools/`):
 - `RoClawTool.md` — HTTP bridge to RoClaw's 9 robot tools (go_to, explore, stop, etc.)
-- `EvolvingMemoryTool.md` — REST bridge to evolving-memory API (traces, dreams, queries)
 
 **Bridge** (root):
 - `roclaw_bridge.py` — Python HTTP server that translates REST calls to WebSocket tool invocations
@@ -634,7 +633,6 @@ SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, repla
 
 ```bash
 # Start prerequisites
-python -m evolving_memory.server --port 8420          # Hippocampus
 python roclaw_bridge.py --port 8430 --simulate        # Bridge (sim mode)
 
 # Navigate

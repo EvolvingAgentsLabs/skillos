@@ -1,12 +1,11 @@
 ---
 name: roclaw-integration-scenario
 description: End-to-end demonstration of SkillOS controlling the RoClaw robot — from high-level goal to physical navigation, obstacle recovery, and dream consolidation.
-version: "1.0"
+version: "2.0"
 difficulty: intermediate
 estimated_duration_minutes: 10
 mode: EXECUTION
 prerequisites:
-  - evolving-memory server running on :8420
   - roclaw_bridge.py running on :8430
   - RoClaw hardware OR simulation mode
 ---
@@ -15,20 +14,20 @@ prerequisites:
 
 ## Overview
 
-This scenario demonstrates the full **Cognitive Trinity** architecture:
+This scenario demonstrates the **Cognitive Trinity** architecture:
 - **SkillOS** (Prefrontal Cortex) reasons about goals in markdown
-- **RoClaw** (Cerebellum) executes reactive motor control
-- **evolving-memory** (Hippocampus) stores and consolidates experiences
+- **RoClaw** (Cerebellum) executes reactive motor control, writes .md trace files
+- **SkillOS Dream Agents** consolidate traces into strategies by reading .md files directly
 
 **Goal**: "Go get my shoes from the closet."
 
 This deceptively simple command requires:
-1. Querying memory for shoe location history
+1. Reading recent trace files for navigation history and strategies
 2. Planning a multi-room navigation route
 3. Executing reactive motor control through RoClaw
 4. Recovering from obstacles (cat in hallway, rug in bedroom)
 5. Verifying arrival via scene analysis
-6. Logging the experience for dream consolidation
+6. Logging the experience as a .md trace file for later dream consolidation
 
 ---
 
@@ -48,27 +47,36 @@ parsed_goal:
   urgency: "normal"
 ```
 
-### Step 1.2: Consult Memory
+### Step 1.2: Consult Local Memory
 
 ```markdown
-Action: Task
-Parameters:
-  description: "Query memory for shoe location and closet navigation"
-  prompt: "Query evolving-memory for: (1) last known location of shoes, (2) successful routes to closet, (3) any Negative Constraints for closet area"
-  subagent_type: "roclaw-navigation-agent"
+# Read recent traces for navigation history
+Action: Glob
+Pattern: RoClaw/traces/real_world/*.md
+Observation: [Recent trace files]
+
+# Read existing strategies
+Action: Glob
+Pattern: RoClaw/strategies/level_2_routes/*.md
+Observation: [Route strategies]
+
+# Read negative constraints from dream journals
+Action: Glob
+Pattern: RoClaw/traces/dreams/*.md
+Observation: [Dream journals with constraints]
 ```
 
-**Expected Memory Response**:
+**Expected Memory Response** (from reading local .md files):
 ```yaml
 shoe_location:
   last_seen: "closet, floor left side"
   confidence: 0.7
-  last_updated: "2 days ago"
+  source: "traces/real_world/2026-04-04_*.md"
 closet_routes:
-  - route: "bedroom → hallway → closet"
+  - route: "bedroom -> hallway -> closet"
     success_rate: 0.85
-    avg_duration: 35s
-  - route: "bedroom → living room → closet"
+    source: "strategies/level_2_routes/hallway_route.md"
+  - route: "bedroom -> living room -> closet"
     success_rate: 0.60
     note: "Rug obstacle in living room"
 negative_constraints:
@@ -95,8 +103,7 @@ execution_plan:
       agent: "system-agent"
       goal: "Report result to user"
     - phase: "learn"
-      agent: "roclaw-dream-agent"
-      goal: "Log experience, update constraints if needed"
+      goal: "Trace file written automatically by RoClaw; consolidation via dream scenario"
 ```
 
 ---
@@ -214,17 +221,17 @@ verification_result:
 
 ## Stage 4: Report and Learning
 
-**Agent**: `system-agent` + `roclaw-dream-agent`
+**Agent**: `system-agent`
 
 ### Step 4.1: Report to User
 
 ```markdown
-## Navigation Complete ✓
+## Navigation Complete
 
 **Goal**: Get shoes from closet
 **Status**: SUCCESS
 **Duration**: ~45 seconds
-**Route**: Bedroom → Hallway (cat detour) → Closet
+**Route**: Bedroom -> Hallway (cat detour) -> Closet
 
 **Shoes located**: Floor, left side of closet (confidence: 87%)
 
@@ -235,35 +242,17 @@ verification_result:
 **Tip**: The shoes are on the floor to the left as you enter the closet.
 ```
 
-### Step 4.2: Log Experience
+### Step 4.2: Trace Already Written
+
+RoClaw automatically writes a `.md` trace file during navigation to `traces/real_world/`. No manual logging step needed — the trace collector captures every VLM frame and motor command.
+
+The trace file includes:
+- YAML frontmatter: timestamp, goal, outcome, source (real_world), fidelity (1.0), confidence
+- Full action log: VLM reasoning, bytecode commands, scene descriptions
+
+### Step 4.3: Update Constraints (Local)
 
 ```markdown
-# Log to evolving-memory
-Action: Bash
-Command: curl -s -X POST http://localhost:8420/traces \
-  -H "Content-Type: application/json" \
-  -d '{
-    "goal": "Fetch shoes from closet",
-    "hierarchyLevel": 1,
-    "outcome": "SUCCESS",
-    "confidence": 0.87,
-    "source": "REAL_WORLD",
-    "actions": [
-      {"description": "Planned hallway route based on memory", "result": "Plan created"},
-      {"description": "Navigated bedroom to hallway", "result": "Success, 2 steps"},
-      {"description": "Cat obstacle in hallway — waited 15s", "result": "Cat moved, path cleared"},
-      {"description": "Navigated hallway to closet", "result": "Success, 4 steps"},
-      {"description": "Verified arrival and located shoes", "result": "Shoes found, confidence 0.87"}
-    ],
-    "tags": ["navigation", "fetch", "closet", "shoes", "cat-obstacle", "success"],
-    "domain": "robotics"
-  }'
-```
-
-### Step 4.3: Update Constraints
-
-```markdown
-# Cat encounter creates a soft constraint update
 Action: Write
 File: projects/RoClaw/workspace/state/constraints.md
 Content: |
@@ -277,32 +266,19 @@ Content: |
 
 ## Stage 5: Dream Consolidation (Post-Session)
 
-**Agent**: `roclaw-dream-agent`
-**Trigger**: Post-session (>3 new traces)
+Dream consolidation is now a **separate scenario** that reads the trace files RoClaw wrote.
 
-### Expected Dream Output
-
-```yaml
-dream_results:
-  traces_processed: 5
-  phases: ["SWS", "REM", "CONSOLIDATION"]
-
-  insights:
-    - "Cat obstacle in hallway is a recurring pattern (3 occurrences this week)"
-    - "Wait strategy for cat has 80% success rate (vs. re-route at 60%)"
-    - "Closet shoe location is consistent — update confidence to 0.90"
-
-  new_negative_constraints:
-    - "Cat is frequently in hallway — always check before traversing"
-
-  strategy_updates:
-    - strategy: "Hallway traversal"
-      update: "Add cat check step before full-speed navigation"
-      new_confidence: 0.88
-    - strategy: "Shoe fetch from closet"
-      update: "New dedicated strategy created from 3 successful traces"
-      confidence: 0.85
+**Run it with**:
 ```
+skillos execute: "Run the RoClaw Dream Consolidation scenario"
+```
+
+**Or schedule nightly**:
+```
+schedule every 24h: "Run the RoClaw Dream Consolidation scenario"
+```
+
+See `scenarios/RoClaw_Dream_Consolidation.md` for the full 3-phase (SWS/REM/Consolidation) dream cycle.
 
 ---
 
@@ -311,13 +287,13 @@ dream_results:
 | Criterion | Threshold | Measurement |
 |---|---|---|
 | Goal completed | Yes | Shoes located in closet |
-| Navigation success | ≥1 of 2 routes works | robot.go_to returns success |
+| Navigation success | >= 1 of 2 routes works | robot.go_to returns success |
 | Obstacle recovery | Graceful handling | No crashes, no stuck state |
-| Scene verification | Confidence ≥ 0.80 | analyze_scene confidence |
-| Trace logged | Complete trace ingested | evolving-memory /traces response |
-| Memory consulted | Strategy used | Query response influenced route choice |
-| Execution time | <120 seconds | Total wall clock time |
-| Cost | <$0.10 | LLM inference costs |
+| Scene verification | Confidence >= 0.80 | analyze_scene confidence |
+| Trace written | .md file in traces/ | File exists after navigation |
+| Memory consulted | Strategy used | Local .md files read before planning |
+| Execution time | < 120 seconds | Total wall clock time |
+| Cost | < $0.10 | LLM inference costs |
 
 ---
 
@@ -326,15 +302,12 @@ dream_results:
 To run this scenario without hardware:
 
 ```bash
-# Terminal 1: Start evolving-memory
-cd /path/to/evolving-memory && python -m evolving_memory.server --port 8420
-
-# Terminal 2: Start bridge in simulation mode
+# Terminal 1: Start bridge in simulation mode
 cd /path/to/skillos && python roclaw_bridge.py --port 8430 --simulate
 
-# Terminal 3: Run scenario
-cd /path/to/skillos && python skillos.py
-# Then: skillos execute: "Run the RoClaw Integration scenario"
+# Terminal 2: Run scenario
+cd /path/to/skillos
+skillos execute: "Run the RoClaw Integration scenario"
 ```
 
 The simulation client provides realistic-looking responses for all 9 robot tools, with simulated pose tracking and semantic map building.
@@ -346,7 +319,8 @@ The simulation client provides realistic-looking responses for all 9 robot tools
 After mastering this scenario, try these variations:
 
 1. **Multi-object fetch**: "Get my shoes AND my jacket from the closet"
-2. **Unknown location**: "Find my keys" (no memory of last location — requires exploration)
+2. **Unknown location**: "Find my keys" (no trace history — requires exploration)
 3. **Time-pressure**: "Quickly get my shoes — I'm in a hurry" (urgency=high, prioritize speed)
-4. **Night mode**: Reduced lighting → lower VLM confidence → more cautious navigation
+4. **Night mode**: Reduced lighting -> lower VLM confidence -> more cautious navigation
 5. **Multi-room sweep**: "Check all rooms for the cat" (parallel exploration + reporting)
+6. **Dream after**: "Navigate to kitchen, then consolidate" (chain with Dream Consolidation scenario)

@@ -8,7 +8,6 @@ last_updated: "2026-03-22"
 tools: Bash, Read, Write
 depends_on:
   - roclaw_bridge.py
-  - evolving-memory-tool
 extends: robot/base
 ---
 
@@ -25,9 +24,8 @@ extends: robot/base
 The RoClawTool is the bridge that makes the physical robot (RoClaw) available as a "skill" within the SkillOS markdown universe. It translates high-level SkillOS agent commands into RoClaw's 9 robot tool invocations via the RoClaw Bridge HTTP API.
 
 This tool realizes the **Cognitive Trinity** architecture:
-- **SkillOS** = Prefrontal Cortex (planning, reasoning, dynamic agent creation)
-- **RoClaw** = Cerebellum (reactive motor control, VLM-powered navigation)
-- **evolving-memory** = Hippocampus (shared memory, dream consolidation)
+- **SkillOS** = Prefrontal Cortex (planning, reasoning, dynamic agent creation, dream consolidation)
+- **RoClaw** = Cerebellum (reactive motor control, VLM-powered navigation, trace file writer)
 
 ## Architecture
 
@@ -312,12 +310,10 @@ Observation: [Navigation result with trace_id]
 
 ### Dream Consolidation Pattern
 ```markdown
-# After navigation sessions, trigger dream via evolving-memory-tool
-Action: Bash
-Command: curl -s -X POST http://localhost:8420/dream/run \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "robotics"}'
-Observation: [Dream consolidation results with new strategies]
+# After navigation sessions, trigger dream consolidation via skillos scenario
+# RoClaw writes trace .md files automatically during navigation
+# Run the dream consolidation scenario to process them:
+skillos execute: "Run the RoClaw Dream Consolidation scenario"
 ```
 
 ## Simulation Mode
@@ -332,7 +328,7 @@ This uses `virtual_roclaw.ts` internally, providing:
 - Virtual ESP32-S3 (kinematic simulation)
 - Virtual ESP32-CAM (minimal MJPEG stream)
 - Full tool compatibility with simulated responses
-- Trace logging to evolving-memory (with source=SIM_2D)
+- Trace logging to local .md files (with source=SIM_2D)
 
 ## Trace Fidelity
 
