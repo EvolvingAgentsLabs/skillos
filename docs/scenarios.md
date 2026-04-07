@@ -204,6 +204,47 @@ skillos execute: "Run the RoClaw Integration scenario"
 
 ---
 
+### Operation_Echo_Q
+
+**File:** `scenarios/Operation_Echo_Q.md`
+**Mode:** EXECUTION
+**Tutorial:** [docs/tutorial-echo-q.md](tutorial-echo-q.md)
+
+Mathematically rigorous quantum computing scenario: derive, prove, and implement a Quantum Cepstral Analysis algorithm. The "Markdown as mathematical blackboard" demonstration.
+
+**Agents in pipeline:**
+1. **quantum-theorist-agent** — Builds LaTeX wiki with QFT, QSVT, block-encoding concepts
+2. **pure-mathematician-agent** — Extracts mathematical invariants as enforceable constraints
+3. **qiskit-engineer-agent** — Implements algorithm with reflective error-recovery loop
+4. **system-architect-agent** — Synthesizes whitepaper with wiki citations
+
+**What it demonstrates:**
+- Knowledge Wiki as persistent mathematical scratchpad (compounding loop)
+- Sentient state constraints derived from physics (unitarity, no-cloning, polynomial depth)
+- Reflective error recovery cross-referenced against wiki math
+- 4-agent hierarchical decomposition with wiki handoffs
+
+**Run it:**
+```bash
+skillos execute: "Run the Operation Echo-Q scenario: derive and implement a quantum cepstral analysis algorithm using the wiki as a mathematical blackboard"
+```
+
+---
+
+### KnowledgeBase_Research_Task
+
+**File:** `scenarios/KnowledgeBase_Research_Task.md`
+**Mode:** EXECUTION
+
+LLM Knowledge Base demonstration (Karpathy pattern): compounding wiki with ingest, query, lint, and output generation cycles.
+
+**Run it:**
+```bash
+skillos execute: "Run the KnowledgeBase_Research_Task scenario"
+```
+
+---
+
 ## Writing Custom Scenarios
 
 A scenario file is a markdown document describing a goal and context for SkillOS to execute:
