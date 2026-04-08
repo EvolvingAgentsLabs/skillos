@@ -48,11 +48,6 @@ installed:
     hash: "md5:abc123def456"
     installed_at: "2026-03-12T14:00:00Z"
     updated_at: null
-    security_scan:
-      verdict: "SAFE"                                          # SAFE | WARNING | BLOCKED
-      scan_id: "a1b2c3d4-..."
-      report_path: "system/security/scan_reports/example-agent_20260312.md"
-      scanned_at: "2026-03-12T14:00:00Z"
 ```
 
 ## Operations
@@ -72,22 +67,17 @@ Installs a skill from configured sources.
    - For each match, check repo contents for `.md` skill files
    - If a valid skill is found, download it via `gh api repos/{owner}/{repo}/contents/{path} --jq '.content' | base64 -d`
    - Prompt user to confirm installation from unconfigured source
-3. **Security scan (pre-install gate)**:
-   - Invoke `skill-security-scan-agent` with `{ skill_file: temp_path, source: source_uri }`
-   - `BLOCKED` → abort install immediately, display block reasons, delete temp file, log to `system/security/scan_reports/`
-   - `WARNING` → display findings, prompt user: "Install anyway? [y/N]" — abort if no/N
-   - `SAFE` → proceed
-4. Validate the skill file:
+3. Validate the skill file:
    - Must have YAML frontmatter with `name`, `description`, `tools`
    - Must not conflict with an already-installed skill (unless `--force`)
-5. Determine installation target:
+4. Determine installation target:
    - If frontmatter contains `type: agent` or filename ends with `Agent.md` → `system/agents/`
    - If frontmatter contains `type: tool` or filename ends with `Tool.md` → `system/tools/`
    - Otherwise → `components/agents/` (default)
-6. Copy skill file to target directory
-7. Copy to `.claude/agents/` for discovery (agents only)
-8. Append entry to `system/packages.lock` (include `security_scan: { verdict, scan_id, report_path, scanned_at }`)
-9. Optionally register in `system/SmartLibrary.md`
+5. Copy skill file to target directory
+6. Copy to `.claude/agents/` for discovery (agents only)
+7. Append entry to `system/packages.lock`
+8. Optionally register in `system/SmartLibrary.md`
 
 **Parameters**:
 ```yaml
@@ -155,10 +145,7 @@ Refreshes source indexes and updates installed skills to latest versions.
 2. For each installed skill from a remote source:
    - Fetch the latest version from the original source
    - Compare hash with installed version
-   - If changed: **invoke `skill-security-scan-agent` on the new version before overwriting**
-     - `BLOCKED` → skip update, warn user, keep existing version
-     - `WARNING` → prompt user before overwriting
-     - `SAFE` → overwrite local file, update hash and `updated_at` in lock file
+   - If changed: overwrite local file, update hash and `updated_at` in lock file
    - If unchanged: skip
 3. Re-run `setup_agents.sh` to refresh `.claude/agents/`
 
@@ -223,8 +210,6 @@ Cache is in `.skillos-cache/` (gitignored). Each source gets a directory named b
 | VALIDATION_FAILED | Missing frontmatter keys | Reject skill, report which keys missing. |
 | CONFLICT | Skill name already installed | Skip unless `--force`. |
 | HASH_MISMATCH | Lock file hash doesn't match disk | Warn user, offer reinstall. |
-| SECURITY_BLOCKED | skill-security-scan-agent returned BLOCKED | Abort install, display block reasons, keep scan report. |
-| SECURITY_WARNING | skill-security-scan-agent returned WARNING | Prompt user for manual override. Install only on explicit confirmation. |
 
 ## Claude Tool Mapping
 
