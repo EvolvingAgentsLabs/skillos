@@ -2,22 +2,21 @@
 
 ## Overview
 
-This project connects SkillOS (the Prefrontal Cortex) to the RoClaw physical robot (the Cerebellum) through the evolving-memory server (the Hippocampus), forming the **Cognitive Trinity** architecture.
+This project connects SkillOS (the Prefrontal Cortex) to the RoClaw physical robot (the Cerebellum). SkillOS handles planning, reasoning, and dream consolidation; RoClaw handles reactive motor control and VLM navigation. Strategy memory is stored as local `.md` files — no external memory server required.
 
 ## Architecture
 
 ```
 SkillOS (this project)
-  ├── RoClawNavigationAgent → Plans and executes physical navigation
+  ├── RoClawNavigationAgent    → Plans and executes physical navigation
   ├── RoClawSceneAnalysisAgent → Interprets VLM camera feeds
-  ├── RoClawDreamAgent → Consolidates experiences into strategies
-  ├── RoClawTool → HTTP bridge to robot hardware
-  └── EvolvingMemoryTool → Bridge to shared memory server
+  ├── RoClawDreamAgent         → Consolidates experiences to local .md traces
+  └── RoClawTool               → HTTP bridge to robot hardware
 
-        ↓ HTTP (:8430)              ↓ HTTP (:8420)
+        ↓ HTTP (:8430)
 
-RoClaw Bridge (roclaw_bridge.py)    evolving-memory server
-        ↓ WebSocket (:8080)
+RoClaw Bridge (roclaw_bridge.py)
+        ↓ WebSocket
 OpenClaw Gateway
         ↓
 RoClaw CortexNode → VisionLoop → BytecodeCompiler → UDP → ESP32-S3
@@ -26,15 +25,10 @@ RoClaw CortexNode → VisionLoop → BytecodeCompiler → UDP → ESP32-S3
 ## Quick Start
 
 ```bash
-# 1. Start evolving-memory server
-cd /path/to/evolving-memory
-python -m evolving_memory.server --port 8420
-
-# 2. Start RoClaw bridge (simulation mode for testing)
-cd /path/to/skillos
+# 1. Start RoClaw bridge (simulation mode for testing)
 python roclaw_bridge.py --port 8430 --simulate
 
-# 3. Run a navigation task
+# 2. Run a navigation task
 python skillos.py
 # > skillos execute: "Navigate to the kitchen and describe what you see"
 ```
@@ -47,8 +41,7 @@ python skillos.py
 - **RoClawSceneAnalysisAgent** — Scene interpretation, semantic mapping
 
 ### System Tools (in system/tools/)
-- **RoClawTool** — HTTP bridge to RoClaw's 9 robot tools
-- **EvolvingMemoryTool** — REST bridge to evolving-memory API
+- **RoClawTool** — HTTP bridge to RoClaw's robot tools
 
 ### Project Memory
 - `memory/long_term/strategies.md` — Learned navigation strategies
@@ -61,3 +54,5 @@ Run the integration demo:
 ```
 skillos execute: "Run the RoClaw Integration scenario from scenarios/RoClaw_Integration.md"
 ```
+
+For full documentation see [docs/robot.md](../../docs/robot.md).
