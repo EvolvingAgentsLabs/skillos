@@ -1,7 +1,7 @@
 ---
 type: skill-index
 version: 1.1.0
-total_skills: 26
+total_skills: 28
 last_updated: "2026-04-26"
 ---
 
@@ -32,6 +32,7 @@ Top-level routing table for the hierarchical skill system.
 | dialects | 3 | system/skills/dialects/index.md | token compression, dialect expansion, dialect lookup | system/skills/dialects/base.md |
 | project | 2 | system/skills/project/index.md | scaffolding, package install, new project | system/skills/project/base.md |
 | auto-improve | 2 | system/skills/auto-improve/index.md | track skill usage, detect stale skills, background self-optimization loop | system/skills/auto-improve/base.md |
+| **planning** | **2** | **system/skills/planning/index.md** | **goal decomposition, subgoal generation, HWM hierarchical planning** | **system/skills/planning/base.md** |
 
 ## Quick Skill Lookup
 
@@ -63,6 +64,8 @@ Top-level routing table for the hierarchical skill system.
 | skill-package-manager-tool | project/packages | _(tool)_ | low |
 | usage-tracker | auto-improve/usage-tracker | _(tool — inline)_ | negligible |
 | auto-improve-meta-agent | auto-improve/meta-agent | auto-improve-meta-agent | medium |
+| **hwm-planner-agent** | **planning/hwm** | **hwm-planner-agent** | **medium** |
+| **flat-planner-agent** | **planning/flat** | **flat-planner-agent** | **low** |
 
 ## Token Budget Guidance
 
