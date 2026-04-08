@@ -64,6 +64,7 @@ Place skills in the domain that matches their purpose:
 | Domain | Purpose | Example Skills |
 |--------|---------|----------------|
 | `orchestration` | Goal execution, workflow | system-agent |
+| `planning` | HWM hierarchical planning, subgoal generation | hwm-planner-agent, flat-planner-agent |
 | `memory` | Learning, consolidation | memory-analysis-agent, query-memory-tool |
 | `validation` | Health checks, security | validation-agent, skill-security-scan-agent |
 | `recovery` | Error handling | error-recovery-agent |
@@ -197,6 +198,7 @@ The LLM merges the base spec's behaviors with the child skill's instructions at 
 | Base | Key Shared Behaviors |
 |------|---------------------|
 | `orchestration/base` | Goal decomposition pattern, state management, memory logging |
+| `planning/base` | World state schema, MPPI optimization, cost function, subgoal protocol, replanning triggers |
 | `memory/base` | Memory format, query interface, consolidation triggers |
 | `validation/base` | Read-only constraint, health report format, HEALTHY/DEGRADED/CRITICAL |
 | `recovery/base` | Retry strategy, circuit breaker, exponential backoff |
