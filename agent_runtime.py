@@ -54,16 +54,28 @@ class AgentRuntime:
             "manifest": "GEMINI.md",
             "cache_headers": {},
         },
+        "gemma": {
+            "base_url": "http://localhost:11434/v1",
+            "base_url_env": "OLLAMA_BASE_URL",
+            "api_key_env": "OLLAMA_API_KEY",
+            "api_key_default": "ollama",
+            "model": "gemma4",
+            "model_env": "GEMMA_MODEL",
+            "manifest": "GEMINI.md",
+            "cache_headers": {},
+        },
     }
 
     def __init__(self, manifest_path: str | None = None, permission_policy: PermissionPolicy | None = None, provider: str = "qwen", stream: bool = True):
         cfg = self.PROVIDER_CONFIGS[provider]
+        resolved_base_url = os.getenv(cfg.get("base_url_env", ""), "") or cfg["base_url"]
+        api_key_default = cfg.get("api_key_default", "")
         self.client = OpenAI(
-            base_url=cfg["base_url"],
-            api_key=os.getenv(cfg["api_key_env"], ""),
+            base_url=resolved_base_url,
+            api_key=os.getenv(cfg["api_key_env"], api_key_default),
             default_headers=cfg.get("cache_headers", {}),
         )
-        self.model = cfg["model"]
+        self.model = os.getenv(cfg.get("model_env", ""), "") or cfg["model"]
         self.provider_name = provider
         self.use_streaming = stream
         self.tools = {}
