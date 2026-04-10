@@ -441,6 +441,67 @@ Do not use tool calls - just provide your expert response directly.
         match = re.search(f"<{tag}>(.*?)</{tag}>", text, re.DOTALL)
         return match.group(1).strip() if match else None
 
+    @staticmethod
+    def _infer_tool_from_args(json_str: str) -> str | None:
+        """Infer tool name from JSON argument keys when model omits the name."""
+        try:
+            args = json.loads(json_str)
+        except json.JSONDecodeError:
+            return None
+        keys = set(args.keys())
+        if "agent_name" in keys:
+            return "delegate_to_agent"
+        if "path" in keys and "content" in keys:
+            return "write_file"
+        if "url" in keys:
+            return "web_fetch"
+        if "prompt" in keys:
+            return "call_llm"
+        if "pattern" in keys:
+            return "memory_search"
+        if "type" in keys and "key" in keys and "value" in keys:
+            return "memory_store"
+        if "type" in keys and "key" in keys:
+            return "memory_recall"
+        if "path" in keys:
+            return "read_file"
+        if "query" in keys:
+            return "call_llm"
+        return None
+
+    def _parse_json_array_tools(self, response: str) -> list[tuple[str, str]]:
+        """Parse JSON array tool calls from response (Format D).
+
+        Handles both bare JSON arrays and ```json code blocks containing arrays like:
+          [{"tool_name": "write_file", "parameters": {"path": "...", "content": "..."}}]
+        Also handles variants with "tool_call" or "name" instead of "tool_name".
+        """
+        results = []
+        # Extract JSON from ```json code blocks or bare arrays
+        candidates = re.findall(r"```json\s*\n(.*?)```", response, re.DOTALL)
+        if not candidates:
+            # Try bare JSON arrays
+            candidates = re.findall(r"(\[[\s\S]*?\])", response)
+
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate.strip())
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(parsed, list):
+                continue
+            for item in parsed:
+                if not isinstance(item, dict):
+                    continue
+                # Extract tool name from various key conventions
+                name = item.get("tool_name") or item.get("tool_call") or item.get("name") or ""
+                params = item.get("parameters") or item.get("params") or item.get("arguments") or {}
+                if not name and params:
+                    name = self._infer_tool_from_args(json.dumps(params))
+                if name:
+                    results.append((name, json.dumps(params)))
+        return results
+
     def run_goal(self, goal, max_turns=10):
         """Execute a goal using the general workflow system.
 
@@ -496,8 +557,27 @@ Do not use tool calls - just provide your expert response directly.
 
             messages.append({"role": "assistant", "content": response})
 
-            # Check for tool calls in the response
+            # Check for tool calls in the response — support multiple formats:
+            #   Format A: <tool_call name="tool_name">{"arg": "val"}</tool_call>
+            #   Format B: <tool_call>\ntool_name\n{"arg": "val"}\n</tool_call>
+            #   Format C: <tool_call>\n{"arg": "val"}\n</tool_call>  (infer tool from args)
+            #   Format D: JSON array [{"tool_name":"x","parameters":{...}}] (in code block or bare)
             tool_calls = re.findall(r"<tool_call name=\"(.*?)\">(.*?)</tool_call>", response, re.DOTALL)
+            if not tool_calls:
+                for m in re.finditer(r"<tool_call>(.*?)</tool_call>", response, re.DOTALL):
+                    body = m.group(1).strip()
+                    # Try to parse the whole body as JSON (Format C)
+                    tool_name = self._infer_tool_from_args(body)
+                    if tool_name:
+                        tool_calls.append((tool_name, body))
+                    else:
+                        # Format B: first line is tool name, rest is JSON args
+                        lines = body.split("\n", 1)
+                        if len(lines) == 2 and not lines[0].strip().startswith("{"):
+                            tool_calls.append((lines[0].strip(), lines[1].strip()))
+            # Format D: JSON array of tool calls (sometimes in ```json blocks)
+            if not tool_calls:
+                tool_calls = self._parse_json_array_tools(response)
 
             # Process tool calls first (if any), then check for final answer
             if tool_calls:
