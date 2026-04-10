@@ -562,8 +562,15 @@ Do not use tool calls - just provide your expert response directly.
                 print("\n" + "="*20 + " GOAL ACHIEVED " + "="*20)
                 return final_answer
 
-            # If no tool calls and no final answer, prompt the agent
+            # If no tool calls and no final answer, prompt the agent once;
+            # if it responds without tags again, treat that as the final answer.
             if not tool_calls and "final_answer" not in response.lower():
+                prev_role = messages[-2]["role"] if len(messages) >= 2 else ""
+                prev_content = messages[-2].get("content", "") if len(messages) >= 2 else ""
+                if prev_role == "user" and "provide a final_answer" in prev_content:
+                    # Model failed to use tags twice — treat response as final answer
+                    print("\n" + "="*20 + " GOAL ACHIEVED " + "="*20)
+                    return response
                 messages.append({
                     "role": "user",
                     "content": "Please either make a tool call or provide a final_answer."
