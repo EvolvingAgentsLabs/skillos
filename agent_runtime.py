@@ -442,6 +442,41 @@ Do not use tool calls - just provide your expert response directly.
         return match.group(1).strip() if match else None
 
     @staticmethod
+    def _extract_json_object(text: str) -> str:
+        """Extract the first complete JSON object from text, ignoring trailing garbage.
+
+        Models sometimes append non-JSON text (e.g. ``<channel|>...``) after the
+        closing brace. This uses a simple brace/bracket counter that respects
+        quoted strings to find where the JSON object ends.
+        """
+        start = text.find("{")
+        if start == -1:
+            return text
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(text)):
+            c = text[i]
+            if escape:
+                escape = False
+                continue
+            if c == "\\":
+                escape = True
+                continue
+            if c == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if c in "{[":
+                depth += 1
+            elif c in "}]":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+        return text  # fallback: return as-is
+
+    @staticmethod
     def _infer_tool_from_args(json_str: str) -> str | None:
         """Infer tool name from JSON argument keys when model omits the name."""
         try:
@@ -559,10 +594,22 @@ Do not use tool calls - just provide your expert response directly.
 
             # Check for tool calls in the response — support multiple formats:
             #   Format A: <tool_call name="tool_name">{"arg": "val"}</tool_call>
+            #   Format A2: <tool_call name="tool_name">{"arg": "val"} (unclosed tag)
             #   Format B: <tool_call>\ntool_name\n{"arg": "val"}\n</tool_call>
             #   Format C: <tool_call>\n{"arg": "val"}\n</tool_call>  (infer tool from args)
             #   Format D: JSON array [{"tool_name":"x","parameters":{...}}] (in code block or bare)
             tool_calls = re.findall(r"<tool_call name=\"(.*?)\">(.*?)</tool_call>", response, re.DOTALL)
+            # Format A2: unclosed <tool_call name="..."> — match to next tag or end
+            if not tool_calls:
+                for m in re.finditer(
+                    r'<tool_call name="(.*?)">(.*?)(?=<tool_call|<final_answer|$)',
+                    response, re.DOTALL,
+                ):
+                    name, body = m.group(1).strip(), m.group(2).strip()
+                    # Remove trailing </tool_call> if present (partial overlap with Format A)
+                    body = re.sub(r"</tool_call>\s*$", "", body).strip()
+                    if name and body:
+                        tool_calls.append((name, body))
             if not tool_calls:
                 for m in re.finditer(r"<tool_call>(.*?)</tool_call>", response, re.DOTALL):
                     body = m.group(1).strip()
@@ -584,8 +631,9 @@ Do not use tool calls - just provide your expert response directly.
                 for tool_name, args_str in tool_calls:
                     print(f"\n--- Executing Tool: {tool_name} ---")
                     try:
-                        # Parse JSON arguments
-                        args = json.loads(args_str.strip())
+                        # Parse JSON arguments — strip trailing garbage after the JSON object
+                        clean_args = self._extract_json_object(args_str.strip())
+                        args = json.loads(clean_args)
 
                         # Permission policy check
                         input_preview = args_str.strip()[:120]
