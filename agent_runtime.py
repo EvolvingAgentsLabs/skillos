@@ -62,7 +62,7 @@ class AgentRuntime:
             "model": "gemma4",
             "model_env": "GEMMA_MODEL",
             "manifest": "GEMINI.md",
-            "cache_headers": {},
+            "cache_headers": {"Bypass-Tunnel-Reminder": "true"},
         },
     }
 
