@@ -1,4 +1,52 @@
-# Skill Security Scanning
+# SkillOS Security
+
+SkillOS enforces three layers of execution security:
+
+| Layer | What it does | Where |
+|-------|-------------|-------|
+| **Path Traversal Prevention** | Blocks file-IO tools from reading/writing outside the workspace root | `permission_policy.py` → `PathPolicy` |
+| **Skill Security Scanner** | Antivirus-style 8-check gate that scans every skill before installation | `system/skills/validation/security/skill-security-scan-agent.md` |
+| **Execution Sandbox** | Wraps shell execution in a pluggable backend (local or E2B cloud) | `sandbox.py` → `LocalExecutor` / `E2bExecutor` |
+
+---
+
+## Layer 1: Path Traversal Prevention
+
+Every file-IO tool call (`read_file`, `write_file`, `Read`, `Write`, `Glob`, `Grep`, etc.) is validated **before** the permission mode check. Even tools in ALLOW mode cannot escape the workspace root.
+
+```python
+from permission_policy import PathPolicy
+
+p = PathPolicy()                                          # defaults to cwd
+p.validate_path("read_file", {"path": "/etc/passwd"})     # (False, "path traversal blocked: ...")
+p.validate_path("read_file", {"path": "projects/foo.md"}) # (True, "")
+```
+
+- Resolves symlinks via `Path.resolve()` before checking
+- Relative paths are resolved against the workspace root
+- Non-file-IO tools (e.g. `Bash`, `call_llm`) are not checked
+
+---
+
+## Layer 2: Execution Sandbox
+
+Shell commands run through a pluggable `SandboxExecutor` instead of raw `subprocess.run()`.
+
+```bash
+# Default — runs on host (same as before)
+python agent_runtime.py "Your goal"
+
+# E2B cloud sandbox — requires pip install e2b-code-interpreter + E2B_API_KEY
+python agent_runtime.py --sandbox e2b "Your goal"
+```
+
+If `--sandbox e2b` is requested but the package or API key is missing, the runtime falls back to local with a warning.
+
+Additionally, the QWEN manifest `exec()` namespace is restricted — `exec`, `eval`, and `compile` are removed from builtins so manifest-defined tools cannot execute arbitrary code generation.
+
+---
+
+## Layer 3: Skill Security Scanning
 
 SkillOS includes an antivirus-style security gate that scans every skill file before installation. No external skill reaches disk without passing through `skill-security-scan-agent`.
 

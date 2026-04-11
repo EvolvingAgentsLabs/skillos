@@ -19,6 +19,7 @@ from openai import OpenAI, APIStatusError, APIConnectionError, APITimeoutError
 from dotenv import load_dotenv
 from permission_policy import PermissionPolicy, PermissionMode, SKILLOS_DEFAULT_POLICY, get_policy
 from compactor import CompactionConfig, should_compact, compact_messages, compact_messages_async
+from sandbox import create_executor
 
 # Fix Windows console encoding for emojis
 if sys.platform == "win32":
@@ -66,7 +67,7 @@ class AgentRuntime:
         },
     }
 
-    def __init__(self, manifest_path: str | None = None, permission_policy: PermissionPolicy | None = None, provider: str = "qwen", stream: bool = True):
+    def __init__(self, manifest_path: str | None = None, permission_policy: PermissionPolicy | None = None, provider: str = "qwen", stream: bool = True, sandbox_mode: str = "local"):
         cfg = self.PROVIDER_CONFIGS[provider]
         resolved_base_url = os.getenv(cfg.get("base_url_env", ""), "") or cfg["base_url"]
         api_key_default = cfg.get("api_key_default", "")
@@ -81,11 +82,12 @@ class AgentRuntime:
         self.tools = {}
         self.system_prompt = ""
         self.policy = permission_policy or SKILLOS_DEFAULT_POLICY
+        self.executor = create_executor(sandbox_mode)
         self.compaction_config = CompactionConfig()
         self.compaction_config.configure_for_model(self.model)
         resolved_manifest = manifest_path or cfg["manifest"]
         self._load_manifest(resolved_manifest)
-        print(f"✅ Agent Runtime Initialized (provider={provider}, model={self.model}, manifest={resolved_manifest}).")
+        print(f"✅ Agent Runtime Initialized (provider={provider}, model={self.model}, manifest={resolved_manifest}, sandbox={sandbox_mode}).")
 
     def _load_manifest(self, path):
         """Loads the system prompt and compiles native tools from the manifest.
@@ -131,8 +133,17 @@ class AgentRuntime:
                 continue
 
             try:
+                restricted_globals = {k: v for k, v in globals().items()
+                                      if k != "__builtins__"}
+                _blocked = ("exec", "eval", "compile")
+                safe_builtins = {k: v for k, v in __builtins__.items()
+                                 if k not in _blocked} if isinstance(__builtins__, dict) else {
+                    k: getattr(__builtins__, k) for k in dir(__builtins__)
+                    if k not in _blocked and not k.startswith("_")
+                }
+                restricted_globals["__builtins__"] = safe_builtins
                 namespace = {}
-                exec(code, globals(), namespace)
+                exec(code, restricted_globals, namespace)
                 for key, value in namespace.items():
                     if callable(value) and not key.startswith('_'):
                         self.tools[name] = value
@@ -231,21 +242,16 @@ Agents are discovered in `system/agents/` and `.claude/agents/`. Use agent names
             self.tools["delegate_to_agent"] = self._handle_delegate_to_agent
             print(f"  - Registered special tool: delegate_to_agent")
 
-    @staticmethod
-    def _make_shell_tool(script: str, tool_name: str):
+    def _make_shell_tool(self, script: str, tool_name: str):
         """Create a Python callable that executes a GEMINI.md shell script."""
+        executor = self.executor
+
         def tool_fn(**kwargs):
-            env = os.environ.copy()
-            env["GEMINI_TOOL_ARGS"] = json.dumps(kwargs)
-            result = subprocess.run(
-                ["bash", "-c", script],
-                capture_output=True, text=True, env=env, timeout=30,
-            )
-            output = result.stdout.strip()
+            env = {"GEMINI_TOOL_ARGS": json.dumps(kwargs)}
+            result = executor.execute(script, env=env, timeout=30)
             if result.returncode != 0:
-                err = result.stderr.strip()
-                return f"Error running {tool_name}: {err}" if err else output
-            return output
+                return f"Error running {tool_name}: {result.stderr}" if result.stderr else result.stdout
+            return result.stdout
         return tool_fn
 
     def _handle_call_llm(self, prompt: str):
@@ -738,7 +744,7 @@ Do not use tool calls - just provide your expert response directly.
 
                         # Permission policy check
                         input_preview = args_str.strip()[:120]
-                        authorized, reason = self.policy.authorize(tool_name, input_preview)
+                        authorized, reason = self.policy.authorize(tool_name, input_preview, args=args)
                         if not authorized:
                             tool_result = f"DENIED: {reason}"
                             print(f"!!! Permission denied: {reason}")
@@ -888,12 +894,13 @@ QwenRuntime = AgentRuntime
 if __name__ == "__main__":
     import sys
 
-    # Parse CLI flags: --permission-policy, --provider, --manifest, --max-turns, --no-stream
+    # Parse CLI flags: --permission-policy, --provider, --manifest, --max-turns, --no-stream, --sandbox
     policy_arg = None
     provider_arg = "qwen"
     manifest_arg = None  # None = auto-select from provider config
     max_turns_arg = 10
     stream_arg = True
+    sandbox_arg = "local"
     filtered_args = []
     i = 1
     while i < len(sys.argv):
@@ -912,12 +919,23 @@ if __name__ == "__main__":
         elif sys.argv[i] == "--no-stream":
             stream_arg = False
             i += 1
+        elif sys.argv[i] == "--sandbox" and i + 1 < len(sys.argv):
+            sandbox_arg = sys.argv[i + 1]
+            i += 2
         else:
             filtered_args.append(sys.argv[i])
             i += 1
 
+    # Graceful fallback: if e2b requested but unavailable, fall back to local
+    if sandbox_arg == "e2b":
+        try:
+            _test_executor = create_executor("e2b")
+        except (ImportError, RuntimeError) as exc:
+            print(f"⚠️  E2B sandbox unavailable ({exc}), falling back to local executor.")
+            sandbox_arg = "local"
+
     policy = get_policy(policy_arg) if policy_arg else SKILLOS_DEFAULT_POLICY
-    runtime = AgentRuntime(manifest_path=manifest_arg, permission_policy=policy, provider=provider_arg, stream=stream_arg)
+    runtime = AgentRuntime(manifest_path=manifest_arg, permission_policy=policy, provider=provider_arg, stream=stream_arg, sandbox_mode=sandbox_arg)
 
     # Parse command line arguments
     if len(filtered_args) > 0:
