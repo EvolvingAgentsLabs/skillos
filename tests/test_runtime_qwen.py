@@ -227,11 +227,13 @@ class TestGeminiManifestLoader:
     def gemini_rt(self, root):
         mod = load_qwen_module()
         with patch.dict(sys.modules, {"openai": MagicMock(), "dotenv": MagicMock()}):
+            from sandbox import create_executor
             rt = object.__new__(mod.AgentRuntime)
             rt.client = MagicMock()
             rt.model = "test-model"
             rt.tools = {}
             rt.system_prompt = ""
+            rt.executor = create_executor("local")
             rt._load_manifest(str(root / "GEMINI.md"))
         return rt
 
