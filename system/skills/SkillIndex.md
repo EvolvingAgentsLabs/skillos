@@ -1,8 +1,8 @@
 ---
 type: skill-index
 version: 1.0.0
-total_skills: 20
-last_updated: "2026-04-05"
+total_skills: 23
+last_updated: "2026-04-11"
 ---
 
 # SkillOS Skill Index
@@ -29,6 +29,7 @@ Top-level routing table for the hierarchical skill system.
 | robot | 5 | system/skills/robot/index.md | physical robot, navigation, camera, dreams | system/skills/robot/base.md |
 | validation | 1 | system/skills/validation/index.md | health checks, spec integrity, preflight | system/skills/validation/base.md |
 | recovery | 1 | system/skills/recovery/index.md | error handling, retry, circuit breaker | system/skills/recovery/base.md |
+| dialects | 3 | system/skills/dialects/index.md | token compression, dialect expansion, dialect lookup | system/skills/dialects/base.md |
 | project | 2 | system/skills/project/index.md | scaffolding, package install, new project | system/skills/project/base.md |
 
 ## Quick Skill Lookup
@@ -53,6 +54,9 @@ Top-level routing table for the hierarchical skill system.
 | validation-agent | validation/system | validation-agent | low |
 | error-recovery-agent | recovery/error | error-recovery-agent | low |
 | project-scaffold-tool | project/scaffold | _(tool)_ | low |
+| dialect-compiler-agent | dialects/compiler | dialect-compiler-agent | medium |
+| dialect-expander-agent | dialects/expander | dialect-expander-agent | medium |
+| dialect-registry-tool | dialects/registry | _(tool)_ | low |
 | skill-package-manager-tool | project/packages | _(tool)_ | low |
 
 ## Token Budget Guidance
