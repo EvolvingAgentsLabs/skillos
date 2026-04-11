@@ -116,6 +116,9 @@ memory/         analysis/       memory-analysis-agent
 robot/          navigation/     roclaw-navigation-agent
                 scene/          roclaw-scene-analysis-agent
                 dream/          roclaw-dream-agent
+dialects/       compiler/       dialect-compiler-agent
+                expander/       dialect-expander-agent
+                registry/       dialect-registry-tool
 validation/     system/         validation-agent
 recovery/       error/          error-recovery-agent
 project/        scaffold/       project-scaffold-tool
@@ -129,6 +132,7 @@ project/        scaffold/       project-scaffold-tool
 - **Pure Markdown** — No code compilation. The LLM is the interpreter.
 - **Hierarchical Skills** — Domain → Family → Skill taxonomy with 4-step lazy loading
 - **Token Efficient** — 61% reduction in routing-phase token consumption
+- **Dialects** — 9 domain-specific compression formats (60-99% token reduction) for edge AI
 - **Knowledge Wiki** — Compounding knowledge base inspired by Karpathy's LLM Wiki pattern
 - **Memory System** — Every execution improves future runs via structured memory
 - **Robot Integration** — SkillOS as Prefrontal Cortex for the RoClaw physical robot
@@ -138,12 +142,33 @@ project/        scaffold/       project-scaffold-tool
 
 ---
 
+## Dialects: Token Compression for Edge AI
+
+SkillOS includes a **dialect framework** — 9 domain-specific compression formats that transform verbose content into minimal, actionable representations. Dialects reduce token cost by 60-99% while preserving (or improving) quality.
+
+**The three pillars:**
+
+| Pillar | Dialect | Example | Reduction |
+|--------|---------|---------|-----------|
+| Hardware | `roclaw-bytecode` | `"Move forward"` → `AA 01 80 80 01 FF` | ~99% |
+| Reasoning | `caveman-prose` | `"You should always run tests before pushing"` → `"Run tests before push."` | ~75% |
+| Software | `strict-patch` | 500-line file rewrite → `[DEL:42]`/`[ADD:42]` (4 lines) | ~98% |
+
+Plus 6 more: `strategy-pointer`, `trace-log`, `memory-xp`, `constraint-dsl`, `exec-plan`, `dom-nav`.
+
+**Why it matters for small models:** Gemma 4B generates a strict-patch in 0.5s instead of 30s for a full rewrite — and gets it right. A 50,000-token HTML page becomes 80 tokens of interactive elements. The dialect removes the cognitive load, letting small models punch above their weight.
+
+See [docs/dialects.md](docs/dialects.md) for the full guide.
+
+---
+
 ## Documentation
 
 | Doc | Contents |
 |-----|----------|
 | [docs/architecture.md](docs/architecture.md) | Skill tree, lazy loading, agent discovery, execution flow |
 | [docs/skills.md](docs/skills.md) | Authoring agents and tools, manifests, inheritance, best practices |
+| [docs/dialects.md](docs/dialects.md) | Dialect framework, 9 compression formats, MAD for edge AI |
 | [docs/memory.md](docs/memory.md) | SmartMemory, short/long-term layers, memory-driven execution |
 | [docs/runtimes.md](docs/runtimes.md) | Claude Code, Qwen/Gemini, Ollama — setup and comparison |
 | [docs/scenarios.md](docs/scenarios.md) | All built-in scenarios and how to run them |
