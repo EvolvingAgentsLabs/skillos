@@ -441,6 +441,11 @@ Do not use tool calls - just provide your expert response directly.
         match = re.search(f"<{tag}>(.*?)</{tag}>", text, re.DOTALL)
         return match.group(1).strip() if match else None
 
+    # Alias map for tool names the model might use vs what the runtime registers
+    _TOOL_ALIASES = {
+        "run_agent": "delegate_to_agent",
+    }
+
     @staticmethod
     def _extract_json_object(text: str) -> str:
         """Extract the first complete JSON object from text, ignoring trailing garbage.
@@ -475,6 +480,91 @@ Do not use tool calls - just provide your expert response directly.
                 if depth == 0:
                     return text[start:i + 1]
         return text  # fallback: return as-is
+
+    @staticmethod
+    def _repair_json_args(raw: str) -> dict | None:
+        """Attempt to repair JSON with unescaped double quotes inside string values.
+
+        LLMs (especially Gemma) often produce JSON like:
+            {"path": "f.md", "content": "text with "quotes" inside"}
+        which is invalid because the inner quotes aren't escaped.
+
+        Strategy: parse key-by-key using the known structure. For each
+        ``"key": "value"`` pair, the value's opening quote is right after
+        ``": "`` and its closing quote is found by scanning backwards from
+        the next ``", "`` or ``"}`` boundary.
+        """
+        raw = raw.strip()
+        if not raw.startswith("{") or not raw.endswith("}"):
+            return None
+        inner = raw[1:-1].strip()  # strip outer braces
+
+        result = {}
+        while inner:
+            # Match key
+            km = re.match(r'"([^"]+)"\s*:\s*', inner)
+            if not km:
+                break
+            key = km.group(1)
+            inner = inner[km.end():]
+
+            if not inner:
+                break
+
+            if inner[0] == '"':
+                # String value — find where it truly ends.
+                # Look for the pattern: ", "next_key" or end of object "
+                inner = inner[1:]  # skip opening quote
+                # Try to find: "next comma + space + quote + key + quote + colon"
+                # Pattern: '", "' followed by a key name
+                next_key = re.search(r'",\s*"[^"]+"\s*:', inner)
+                if next_key:
+                    value = inner[:next_key.start()]
+                    inner = inner[next_key.start() + 2:]  # skip '",'
+                    inner = inner.strip()
+                else:
+                    # Last value — everything up to final quote
+                    if inner.endswith('"'):
+                        value = inner[:-1]
+                    else:
+                        value = inner
+                    inner = ""
+                result[key] = value
+            elif inner[0] == '{':
+                # Nested object — use brace counting
+                depth, i = 0, 0
+                for i, c in enumerate(inner):
+                    if c == '{': depth += 1
+                    elif c == '}': depth -= 1
+                    if depth == 0: break
+                try:
+                    result[key] = json.loads(inner[:i+1])
+                except json.JSONDecodeError:
+                    result[key] = inner[:i+1]
+                inner = inner[i+1:].lstrip().lstrip(",").strip()
+            elif inner[0] == '[':
+                depth, i = 0, 0
+                for i, c in enumerate(inner):
+                    if c == '[': depth += 1
+                    elif c == ']': depth -= 1
+                    if depth == 0: break
+                try:
+                    result[key] = json.loads(inner[:i+1])
+                except json.JSONDecodeError:
+                    result[key] = inner[:i+1]
+                inner = inner[i+1:].lstrip().lstrip(",").strip()
+            else:
+                # Number, bool, null — read until comma or end
+                vm = re.match(r'([^,}]+)', inner)
+                if vm:
+                    raw_val = vm.group(1).strip()
+                    try:
+                        result[key] = json.loads(raw_val)
+                    except json.JSONDecodeError:
+                        result[key] = raw_val
+                    inner = inner[vm.end():].lstrip().lstrip(",").strip()
+
+        return result if result else None
 
     @staticmethod
     def _infer_tool_from_args(json_str: str) -> str | None:
@@ -629,11 +719,22 @@ Do not use tool calls - just provide your expert response directly.
             # Process tool calls first (if any), then check for final answer
             if tool_calls:
                 for tool_name, args_str in tool_calls:
+                    # Resolve tool name aliases (e.g. run_agent → delegate_to_agent)
+                    tool_name = self._TOOL_ALIASES.get(tool_name, tool_name)
                     print(f"\n--- Executing Tool: {tool_name} ---")
                     try:
                         # Parse JSON arguments — strip trailing garbage after the JSON object
                         clean_args = self._extract_json_object(args_str.strip())
-                        args = json.loads(clean_args)
+                        try:
+                            args = json.loads(clean_args)
+                        except json.JSONDecodeError:
+                            # Fallback: repair JSON with unescaped quotes
+                            args = self._repair_json_args(clean_args)
+                            if args is None:
+                                raise json.JSONDecodeError(
+                                    "Repair failed", clean_args, 0
+                                )
+                            print(f"   (repaired malformed JSON)")
 
                         # Permission policy check
                         input_preview = args_str.strip()[:120]
