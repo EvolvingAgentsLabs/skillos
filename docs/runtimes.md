@@ -134,17 +134,17 @@ python agent_runtime.py --provider gemma test
 | `gemma4:26b` | 27B (Q4) | ~18 GB | 256K |
 | `gemma4:31b` | 27B (Q8) | ~20 GB | 256K |
 
-**Remote tunnel (Colab + Pinggy):**
+**Remote tunnel (Colab + Cloudflare):**
 
 ```bash
-# On your local machine, point to the Pinggy tunnel URL:
-OLLAMA_BASE_URL=https://xxx.a.pinggy.link/v1 python agent_runtime.py --provider gemma "Say hello"
+# On your local machine, point to the Cloudflare tunnel URL:
+OLLAMA_BASE_URL=https://xxx.trycloudflare.com/v1 python agent_runtime.py --provider gemma "Say hello"
 
 # Override model variant:
 GEMMA_MODEL=gemma4:e2b python agent_runtime.py --provider gemma interactive
 ```
 
-See `notebooks/skillos_gemma4_colab.ipynb` for a self-contained Colab notebook that sets up Ollama + Gemma 4 + Pinggy tunnel on a free T4 GPU.
+See `notebooks/skillos_gemma4_colab.ipynb` for a self-contained Colab notebook that sets up Ollama + Gemma 4 + Cloudflare tunnel on a free T4 GPU, and [docs/tutorial-gemma4-colab.md](tutorial-gemma4-colab.md) for the full walkthrough.
 
 ### Native Tools Available
 
@@ -234,7 +234,7 @@ OPENROUTER_API_KEY=sk-or-...
 GEMINI_API_KEY=AI...
 
 # Gemma 4 via Ollama
-OLLAMA_BASE_URL=https://xxx.a.pinggy.link/v1   # omit for local Ollama (defaults to localhost:11434)
+OLLAMA_BASE_URL=https://xxx.trycloudflare.com/v1 # omit for local Ollama (defaults to localhost:11434)
 OLLAMA_API_KEY=ollama                            # Ollama ignores auth; placeholder for OpenAI client
 GEMMA_MODEL=gemma4                               # override: gemma4:e2b, gemma4:26b, gemma4:31b
 ```

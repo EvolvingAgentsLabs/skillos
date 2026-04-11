@@ -1,6 +1,6 @@
 # Tutorial: Running SkillOS with Gemma 4 on a Free Colab GPU
 
-A step-by-step guide to running SkillOS with Google's Gemma 4 model via Ollama — locally or on a free Colab T4 GPU tunneled to your machine with Pinggy.
+A step-by-step guide to running SkillOS with Google's Gemma 4 model via Ollama — locally or on a free Colab T4 GPU tunneled to your machine with a Cloudflare tunnel.
 
 ---
 
@@ -76,33 +76,35 @@ GEMMA_MODEL=gemma4:e2b python agent_runtime.py --provider gemma interactive
 
 ---
 
-## Option B: Free Colab T4 GPU + Pinggy Tunnel
+## Option B: Free Colab T4 GPU + Cloudflare Tunnel
 
-No local GPU? No problem. Google Colab gives you a free T4 (15 GB VRAM) and Pinggy tunnels the Ollama API back to your machine over SSH.
+No local GPU? No problem. Google Colab gives you a free T4 (15 GB VRAM) and a Cloudflare tunnel exposes the Ollama API back to your machine over HTTPS — no signup required.
 
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│  Google Colab (free T4 GPU)                 │
-│                                             │
-│  Ollama server (:11434)                     │
-│       │                                     │
-│       └── Pinggy SSH tunnel ──────────────┐ │
-│                                           │ │
-└───────────────────────────────────────────┘ │
-                                              │
-            Internet (HTTPS)                  │
-                                              │
-┌─────────────────────────────────────────────┐
-│  Your local machine                         │
-│                                             │
-│  OLLAMA_BASE_URL=https://xxx.a.pinggy.link  │
-│       │                                     │
-│       └── agent_runtime.py --provider gemma │
-│              │                              │
-│              └── SkillOS agents & tools     │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  Google Colab (free T4 GPU)                      │
+│                                                  │
+│  Ollama server (:11434)                          │
+│       │  OLLAMA_ORIGINS=*                        │
+│       │  OLLAMA_HOST=0.0.0.0:11434               │
+│       │                                          │
+│       └── cloudflared tunnel ──────────────────┐ │
+│                                                │ │
+└────────────────────────────────────────────────┘ │
+                                                   │
+            Internet (HTTPS)                       │
+                                                   │
+┌──────────────────────────────────────────────────┐
+│  Your local machine                              │
+│                                                  │
+│  OLLAMA_BASE_URL=https://xxx.trycloudflare.com   │
+│       │                                          │
+│       └── agent_runtime.py --provider gemma      │
+│              │                                   │
+│              └── SkillOS agents & tools           │
+└──────────────────────────────────────────────────┘
 ```
 
 ### Step 1: Open the Colab notebook
@@ -120,66 +122,79 @@ Run all cells in order:
 | Cell | What it does | Time |
 |------|-------------|------|
 | 1 | (Markdown) Overview and instructions | — |
-| 2 | Install Ollama, start server | ~30s |
-| 3 | Pull `gemma4:e2b` model | ~2 min |
+| 2 | Install zstd + Ollama, start server with `OLLAMA_ORIGINS=*` | ~30s |
+| 3 | Pull `gemma4` model (Q4 quantization) | ~2 min |
 | 4 | Quick test via `/v1/chat/completions` | ~5s |
-| 5 | Start Pinggy SSH tunnel, print URL | ~10s |
+| 5 | Install `cloudflared`, start tunnel, print URL | ~10s |
 | 6 | (Markdown) Model variants and tips | — |
 
 After Cell 5, you'll see output like:
 
 ```
 ============================================================
-Tunnel URL: https://rnxyz-abc-123.a.pinggy.link
+Tunnel URL: https://something-something.trycloudflare.com
 
 Use on your local machine:
-  OLLAMA_BASE_URL=https://rnxyz-abc-123.a.pinggy.link/v1 python agent_runtime.py --provider gemma "Say hello"
+  OLLAMA_BASE_URL=https://something-something.trycloudflare.com/v1 python agent_runtime.py --provider gemma "Say hello"
 ============================================================
 ```
 
-### Step 3: Copy the tunnel URL to your local machine
+### Step 3: Install dependencies and set the tunnel URL
 
 ```bash
 cd skillos
 
-# Set the tunnel URL and run
-export OLLAMA_BASE_URL=https://rnxyz-abc-123.a.pinggy.link/v1
+# One-time setup
+python3 -m venv .venv
+.venv/bin/pip install openai python-dotenv
 
-# Test
-python agent_runtime.py --provider gemma test
+# Set the tunnel URL
+export OLLAMA_BASE_URL=https://something-something.trycloudflare.com/v1
+
+# Test connectivity
+.venv/bin/python agent_runtime.py --provider gemma test
 
 # Interactive mode
-python agent_runtime.py --provider gemma interactive
-
-# Single goal
-python agent_runtime.py --provider gemma "Create a Python script that prints the Fibonacci sequence"
+.venv/bin/python agent_runtime.py --provider gemma interactive
 ```
 
 Or use a `.env` file:
 
 ```bash
 # Add to skillos/.env
-OLLAMA_BASE_URL=https://rnxyz-abc-123.a.pinggy.link/v1
+OLLAMA_BASE_URL=https://something-something.trycloudflare.com/v1
 ```
 
 Then just run:
 
 ```bash
-python agent_runtime.py --provider gemma interactive
+.venv/bin/python agent_runtime.py --provider gemma interactive
 ```
 
-### Step 4: Run a full scenario
+### Step 4: Run a multi-agent scenario
+
+The runtime supports full agent delegation — Gemma 4 can discover and delegate to specialized agents in `components/agents/`:
 
 ```bash
+# Multi-agent content creation (ResearchAgent → WriterAgent → file write)
+.venv/bin/python agent_runtime.py --provider gemma --permission-policy autonomous --max-turns 15 \
+  "Write a short guide explaining what large language models are. Save the article to projects/Project_llm_guide/output/article.md"
+
 # Research task
-python agent_runtime.py --provider gemma "Research the latest developments in robotics and create a summary"
+.venv/bin/python agent_runtime.py --provider gemma --max-turns 15 \
+  "Research the latest developments in robotics and create a summary"
 
-# Agent delegation
-python agent_runtime.py --provider gemma "Create a tutorial on Python decorators with code examples"
-
-# With more turns for complex tasks
-python agent_runtime.py --provider gemma --max-turns 15 "Build a REST API specification for a todo app"
+# Code analysis
+.venv/bin/python agent_runtime.py --provider gemma --max-turns 15 \
+  "Analyze the files in components/agents/ and describe each agent's purpose"
 ```
+
+**Tested end-to-end workflow:**
+1. Gemma 4 plans the task and discovers available agents via `list_files`
+2. Delegates research to `ResearchAgent` (produces structured notes)
+3. Delegates writing to `WriterAgent` (produces polished article)
+4. Calls `write_file` to save the output
+5. Returns a `<final_answer>` summary
 
 ---
 
@@ -193,7 +208,7 @@ python agent_runtime.py --provider gemma --max-turns 15 "Build a REST API specif
 | `gemma4:26b` | 27B | Q4 | ~18 GB | 256K | No (A100) |
 | `gemma4:31b` | 27B | Q8 | ~20 GB | 256K | No (A100) |
 
-**Recommendation**: Use `gemma4:e2b` for Colab (fits comfortably in T4's 15 GB). Use `gemma4` locally if you have >= 10 GB VRAM.
+**Recommendation**: Use `gemma4` (Q4) for both Colab and local — it fits in the T4's 15 GB VRAM and produces significantly better instruction-following than the Q2 variant. Only use `gemma4:e2b` if you're very tight on VRAM.
 
 To switch variants:
 
@@ -239,31 +254,40 @@ Pull the model first:
 ollama pull gemma4
 ```
 
-### Pinggy tunnel URL expired
+### Cloudflare tunnel URL expired / 524 timeout
 
-Free Pinggy tunnels last ~60 minutes. Re-run Cell 5 in the Colab notebook to get a new URL. Update your `OLLAMA_BASE_URL` accordingly.
+Cloudflare quick tunnels have no uptime guarantee. If you see a 524 timeout error, the Colab session likely expired. Re-run Cell 5 (or all cells from Cell 2 if the runtime was recycled) to get a fresh URL. Update your `OLLAMA_BASE_URL` accordingly.
 
 ### Colab disconnected
 
 Colab free tier disconnects after ~90 minutes of inactivity. Keep the browser tab active, or re-run all cells from Cell 2 onward.
 
 For longer sessions, consider:
-- [Pinggy Pro](https://pinggy.io) for persistent subdomains
+- A named Cloudflare tunnel with a [Cloudflare account](https://dash.cloudflare.com) for persistent URLs
 - Running Ollama on a cloud VM (any provider with a T4/L4 GPU)
+
+### Ollama returns 403 through the tunnel
+
+Ollama rejects requests with non-localhost `Origin` headers by default. The Colab notebook sets `OLLAMA_ORIGINS=*` and `OLLAMA_HOST=0.0.0.0:11434` to fix this. If you're running Ollama manually:
+
+```bash
+OLLAMA_ORIGINS='*' OLLAMA_HOST='0.0.0.0:11434' ollama serve
+```
 
 ### Slow responses
 
-Gemma 4 on a T4 generates ~20-40 tokens/sec (Q2 quant). Add network latency for the Pinggy tunnel. For faster responses:
+Gemma 4 on a T4 generates ~20-40 tokens/sec. Add network latency for the Cloudflare tunnel. For faster responses:
 - Use local Ollama (no tunnel overhead)
-- Use `gemma4:e2b` (smaller, faster)
+- Use `gemma4:e2b` (smaller, faster, but worse instruction following)
 - Use `--no-stream` flag to skip streaming (slightly faster for short responses)
 
 ### Agent produces malformed tool calls
 
-Gemma 4 uses the same `<tool_call>/<final_answer>` format as Gemini via the `GEMINI.md` manifest. If tool calls are malformed:
-- Try `gemma4` (Q4) instead of `gemma4:e2b` (Q2) — higher quantization = better instruction following
+Gemma 4 uses the same `<tool_call>/<final_answer>` format as Gemini via the `GEMINI.md` manifest. The runtime handles five different tool call formats that Gemma may produce (named tags, unnamed tags, JSON arrays, unclosed tags) and includes automatic JSON repair for unescaped quotes inside string values. If tool calls still fail:
+- Use `gemma4` (Q4) instead of `gemma4:e2b` (Q2) — higher quantization = better instruction following
 - Add `--max-turns 15` to give the agent more attempts
 - Use `--no-stream` for debugging (full response visible at once)
+- Add `--permission-policy autonomous` if the agent needs write access
 
 ---
 
@@ -280,7 +304,7 @@ The `--provider gemma` flag selects this config from `agent_runtime.py`:
     "model": "gemma4",
     "model_env": "GEMMA_MODEL",
     "manifest": "GEMINI.md",
-    "cache_headers": {},
+    "cache_headers": {"Bypass-Tunnel-Reminder": "true"},
 }
 ```
 
@@ -289,6 +313,10 @@ Key design decisions:
 - **`base_url_env`/`model_env`** — env var overrides for tunnel URL and model variants, without touching code
 - **`api_key_default: "ollama"`** — Ollama ignores auth, but the OpenAI Python client requires a non-empty API key
 - **OpenAI-compatible API** — Ollama exposes `/v1/chat/completions` that the existing OpenAI client speaks natively
+- **`Bypass-Tunnel-Reminder` header** — prevents tunnel intermediaries from injecting HTML into API responses
+- **Tool name aliasing** — `run_agent` (what Gemma often generates) is automatically resolved to `delegate_to_agent`
+- **Multi-format tool call parsing** — handles 5 different XML/JSON formats Gemma may produce
+- **JSON repair** — automatic fallback for malformed JSON with unescaped quotes in string values
 
 Context compaction (`compactor.py`) is also configured for Gemma 4's context windows (128K for 12B variants, 256K for 27B variants).
 
