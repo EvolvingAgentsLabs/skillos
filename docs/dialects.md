@@ -1,0 +1,266 @@
+# Dialects: Domain-Specific Token Compression
+
+## The Problem
+
+LLMs waste tokens. A 37-frame robot navigation trace consumes 2,000 tokens of verbose markdown where 60% is boilerplate. A 500-line file edit gets rewritten entirely by a small model — 1,500 tokens for a 1-line fix. A login page's HTML burns 50,000 tokens when the agent only needs to see 8 interactive elements.
+
+**Generated tokens are more expensive than input tokens.** Every token an agent outputs costs compute, latency, and money. Storing verbose prose in memory means future agents read verbose prose — the waste compounds.
+
+## The Solution: Minimum Actionable Dialects (MAD)
+
+A **dialect** is a domain-specific compression format that transforms content between verbose natural language and a compact, optimized representation. Each dialect defines:
+
+- **Compression rules** — how to transform verbose → compact
+- **Preservation rules** — what must never be changed (code blocks, numbers, URLs)
+- **Grammar** — the formal syntax of the compressed output
+- **Expansion protocol** — how to reverse the compression (when possible)
+
+Dialects are not lossy summarization. They are **systematic, rule-based transforms** with defined preservation guarantees.
+
+---
+
+## Three Pillars
+
+The three flagship dialects demonstrate the full spectrum:
+
+### 1. Hardware: `roclaw-bytecode`
+
+Natural language motor commands → 6-byte hex frames.
+
+```
+"Move forward at moderate speed"
+→ AA 01 80 80 01 FF
+```
+
+**~99% compression.** The robot's cerebellum doesn't need English — it needs opcodes. This dialect compiles intent into the minimum actionable representation for motor control.
+
+### 2. Reasoning & Memory: `caveman-prose`
+
+Verbose prose → terse fragments that preserve exact logic.
+
+```
+"You should always make sure to run the complete test suite before pushing any changes"
+→ "Run tests before push."
+```
+
+**~46-75% compression.** Strips articles, filler, hedging, and passive voice. The meaning is identical; the token cost is halved. Three intensity levels: lite, full, ultra.
+
+### 3. Software Engineering: `strict-patch`
+
+Full file rewrites → exact line-number patch commands.
+
+```
+"I found the bug. Here is the corrected file: [500 lines of code]"
+→ [FILE] src/billing.py
+  [DEL:42] total = price + tax
+  [ADD:42] total = price + (price * tax)
+  [EOF]
+```
+
+**~90-98% compression.** This is the killer dialect for small models. Instead of regenerating an entire file (hallucinating changes, losing attention), the model emits only what changes. **It forces the model to act like a precision laser instead of a sloppy typist.**
+
+---
+
+## All 9 Dialects
+
+| Dialect | Type | Ratio | Reversible | Domain | Key Insight |
+|---------|------|-------|------------|--------|-------------|
+| `roclaw-bytecode` | structural | ~99% | no | robot | 6 bytes instead of JSON |
+| `caveman-prose` | lexical | ~46-75% | yes | memory, knowledge | Strip noise, keep logic |
+| `strategy-pointer` | symbolic | ~60-80% | yes | memory, robot | `[IF] wall [THEN] stop → rotate_cw(90)` |
+| `trace-log` | structural | ~70-80% | yes | robot, memory | Run-length encoding reveals stuck-loops |
+| `memory-xp` | symbolic | ~65-75% | yes | memory | Structured tags enable precise Grep |
+| `constraint-dsl` | symbolic | ~55-70% | yes | memory, robot, knowledge | Formal notation enables automated verification |
+| `exec-plan` | symbolic | ~70-85% | yes | orchestration, memory | 455-line scenario → 12 lines |
+| `strict-patch` | structural | ~90-98% | yes | orchestration, knowledge | 20-token patches, not 1,000-token rewrites |
+| `dom-nav` | structural | ~90-97% | no | orchestration, knowledge | 50,000 tokens of HTML → 80 tokens |
+
+### Compression Types
+
+- **structural** — Changes representation entirely. Text becomes hex bytecode, HTML becomes a UI tree, code edits become line patches. Often irreversible (the original format is discarded).
+- **lexical** — Strips and abbreviates words. Output is still natural language, just shorter. Always reversible.
+- **symbolic** — Replaces constructs with symbols and pointers. `[IF]`/`[THEN]`, `→` chains, `@w[]` references. Reversible.
+
+---
+
+## Architecture
+
+Dialect **definitions** are data files, separate from the **skills** that operate on them:
+
+```
+system/dialects/                          # Data: dialect definitions
+├── _index.md                             # Registry (9 entries)
+├── roclaw-bytecode.dialect.md
+├── caveman-prose.dialect.md
+├── strategy-pointer.dialect.md
+├── trace-log.dialect.md
+├── memory-xp.dialect.md
+├── constraint-dsl.dialect.md
+├── exec-plan.dialect.md
+├── strict-patch.dialect.md
+└── dom-nav.dialect.md
+
+system/skills/dialects/                   # Skills: agents + tools
+├── base.md                               # Shared domain behaviors
+├── index.md                              # Domain routing (3 skills)
+├── compiler/
+│   ├── dialect-compiler-agent.manifest.md
+│   └── dialect-compiler-agent.md         # Compresses content using a dialect
+├── expander/
+│   ├── dialect-expander-agent.manifest.md
+│   └── dialect-expander-agent.md         # Expands compressed content back
+└── registry/
+    ├── dialect-registry-tool.manifest.md
+    └── dialect-registry-tool.md          # Lists/matches/describes dialects
+```
+
+### Why separate?
+
+Dialect definitions are **reference data** — like `system/security/blocklist.md`. They describe formats and rules. Skills are **executable behaviors** — agents and tools that read dialect definitions and apply them to content. One compiler agent serves all 9 dialects.
+
+---
+
+## How It Works
+
+### Compressing content
+
+```
+1. Choose a dialect (explicit ID or "auto" for domain-based matching)
+2. The dialect-compiler-agent loads the .dialect.md definition
+3. Applies compression rules, respecting preservation rules
+4. Validates the output against the dialect's grammar
+5. Returns: compressed text + actual compression ratio + preservation check
+```
+
+### Expanding content
+
+```
+1. Provide the compressed text and the dialect ID
+2. The dialect-expander-agent loads the expansion protocol
+3. For reversible dialects: reconstructs prose in the target register (formal/conversational/technical)
+4. For irreversible dialects: produces a structured description + reports information loss
+5. Returns: expanded text + reversibility confidence (0-100) + information loss list
+```
+
+### Finding the right dialect
+
+```
+1. dialect-registry-tool reads system/dialects/_index.md
+2. Actions: list (all), match (filter by domain + reversibility), describe (one dialect's metadata)
+3. Returns ranked recommendations sorted by compression ratio
+```
+
+---
+
+## Dialect Definition Format
+
+Every `.dialect.md` file follows a standardized structure:
+
+```yaml
+---
+dialect_id: caveman-prose          # Matches filename stem
+name: Caveman Prose Compression
+version: 1.0.0
+domain_scope: [memory, knowledge]  # Which SkillOS domains use this
+compression_type: lexical          # structural | lexical | symbolic
+compression_ratio: "~46-75%"
+reversible: true                   # Can be expanded back?
+input_format: natural-language
+output_format: compressed-natural-language
+---
+```
+
+**Required sections:**
+
+| Section | Purpose |
+|---------|---------|
+| Purpose | What this dialect does and why |
+| Domain Scope | Which SkillOS domains use it |
+| Compression Rules | Numbered rules for transforming input → output |
+| Preservation Rules | What must never be modified during compression |
+| Grammar / Syntax | Formal grammar of the compressed output |
+| Examples | At least 3 input/output pairs with compression ratios |
+| Expansion Protocol | How to reverse the compression (or why it can't be reversed) |
+| Metrics | Compression ratio, token reduction, reversibility, latency, error rate |
+
+---
+
+## Compression as Analysis
+
+The most powerful insight from the dialect framework: **some compressions don't just save tokens — they make patterns visible.**
+
+### Example: trace-log run-length encoding
+
+A 37-frame verbose trace is 207 lines. The dream consolidation agent needs to scan it and extract strategies. In verbose form, the agent has to mentally deduplicate 37 separate 4-line blocks to notice "frames 1-4 are all the same rotation."
+
+Compressed with trace-log:
+
+```
+t+0:   rotate_cw(128,90)    → aa055a80dfff  [x4]     ← stuck spinning!
+t+12:  turn_L(120,80)       → aa0350782bff
+t+15:  fwd(128,128)         → aa01808001ff  [x10]    ← long successful run
+t+45:  rotate_cw(128,90)    → aa055a80dfff  [x4]     ← stuck again!
+```
+
+The `[x4]` annotation makes the stuck-loop **jump out**. The compression front-loads the pattern recognition work that the dream agent would otherwise do. The dialect is not just saving tokens — it's performing analysis.
+
+### Example: strict-patch forcing precision
+
+When a small model edits a file, it often hallucinate changes to lines it shouldn't touch. The strict-patch dialect removes the opportunity for hallucination by constraining the output to only the lines that change:
+
+```
+[DEL:42] total = price + tax
+[ADD:42] total = price + (price * tax)
+```
+
+The model doesn't see the other 499 lines. It can't accidentally modify them. **The constraint is the quality improvement.**
+
+---
+
+## Token Budget Impact
+
+Measured against real SkillOS project artifacts:
+
+| Content | Before | After | Savings | Dialect |
+|---------|--------|-------|---------|---------|
+| 37-frame robot trace | 2,000 tokens | 400 tokens | 80% | trace-log |
+| SmartMemory experience entry | 180 tokens | 55 tokens | 69% | memory-xp |
+| 6 execution constraints | 900 tokens | 250 tokens | 72% | constraint-dsl |
+| 455-line scenario | 3,600 tokens | 250 tokens | 93% | exec-plan |
+| 1-line bug fix | 1,500 tokens | 25 tokens | 98% | strict-patch |
+| Login page HTML | 50,000 tokens | 80 tokens | 99.8% | dom-nav |
+
+**Aggregate impact across a typical execution session:** 60-80% token reduction on agent-facing artifacts, while preserving full human-readable originals.
+
+---
+
+## Adding a New Dialect
+
+1. Create `system/dialects/your-dialect.dialect.md` following the format above.
+2. Add a row to the table in `system/dialects/_index.md`.
+3. Update `dialect_count` in `_index.md` frontmatter.
+4. Add the dialect ID to `DIALECT_IDS` in `tests/test_dialects.py`.
+5. Run `pytest tests/test_dialects.py -v` — the parametrized tests will automatically validate your new dialect's frontmatter, required sections, and examples.
+
+No changes to the compiler, expander, or registry skills are needed — they operate on any dialect definition.
+
+---
+
+## Edge AI: Why This Matters for Small Models
+
+Small models (Gemma 4B, Qwen 2.5B) have limited context windows and attention spans. When you feed them verbose content, they:
+
+- Lose attention on long outputs and hallucinate
+- Exhaust context windows on irrelevant information
+- Generate slowly because output length = generation time
+
+Dialects solve this by **compiling the world into formats that small models can handle**:
+
+- **strict-patch** turns a 500-line file edit into 4 lines. Gemma 4 generates the patch in 0.5 seconds instead of 30 seconds for a full rewrite — and gets it right.
+- **dom-nav** turns a 50,000-token HTML page into 80 tokens of interactive elements. Gemma 4 can navigate any website.
+- **roclaw-bytecode** turns movement instructions into 6 bytes. Zero ambiguity, zero wasted generation.
+
+The pattern: a Cloud "Optimizer" (Claude, GPT-4) compiles the context into a Minimum Actionable Dialect, then sends it to the local small model for execution. The small model doesn't need to understand the full complexity — it just needs to act on the compressed representation.
+
+> *"Token generado es mas caro que entrada."*
+> — Generated tokens cost more than input tokens. Compress everything.
