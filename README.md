@@ -70,6 +70,7 @@ pip install openai python-dotenv
 OPENROUTER_API_KEY=... python agent_runtime.py "Your goal here"            # Qwen (default)
 GEMINI_API_KEY=... python agent_runtime.py --provider gemini "Your goal"   # Gemini
 python agent_runtime.py --provider gemma "Your goal"                        # Gemma 4 (Ollama)
+python agent_runtime.py --sandbox e2b "Your goal"                           # E2B cloud sandbox
 python agent_runtime.py interactive                                          # Interactive mode
 ```
 
@@ -133,6 +134,7 @@ project/        scaffold/       project-scaffold-tool
 - **Robot Integration** — SkillOS as Prefrontal Cortex for the RoClaw physical robot
 - **Multi-Provider** — Works with Claude Code, Qwen, Gemini, or local Ollama
 - **Dynamic Agents** — New agents created as markdown at runtime, no restarts needed
+- **Execution Sandboxing** — Path traversal prevention, restricted `exec()`, optional E2B cloud sandbox
 
 ---
 
