@@ -256,3 +256,32 @@ class TestGeminiManifestLoader:
         mod = load_qwen_module()
         for provider, cfg in mod.AgentRuntime.PROVIDER_CONFIGS.items():
             assert "manifest" in cfg, f"Provider '{provider}' missing 'manifest' key"
+
+
+# ── Gemma provider config tests ──────────────────────────────────
+
+class TestGemmaProviderConfig:
+    """Verify the gemma provider is correctly configured in PROVIDER_CONFIGS."""
+
+    @pytest.fixture(scope="class")
+    def gemma_cfg(self):
+        mod = load_qwen_module()
+        return mod.AgentRuntime.PROVIDER_CONFIGS
+
+    def test_gemma_provider_exists(self, gemma_cfg):
+        assert "gemma" in gemma_cfg, "PROVIDER_CONFIGS must include 'gemma'"
+
+    def test_gemma_uses_gemini_manifest(self, gemma_cfg):
+        assert gemma_cfg["gemma"]["manifest"] == "GEMINI.md"
+
+    def test_gemma_has_base_url_env_key(self, gemma_cfg):
+        assert gemma_cfg["gemma"]["base_url_env"] == "OLLAMA_BASE_URL"
+
+    def test_gemma_has_model_env_key(self, gemma_cfg):
+        assert gemma_cfg["gemma"]["model_env"] == "GEMMA_MODEL"
+
+    def test_gemma_default_model(self, gemma_cfg):
+        assert gemma_cfg["gemma"]["model"] == "gemma4"
+
+    def test_gemma_api_key_default(self, gemma_cfg):
+        assert gemma_cfg["gemma"]["api_key_default"] == "ollama"

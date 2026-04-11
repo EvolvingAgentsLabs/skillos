@@ -69,10 +69,20 @@ pip install openai python-dotenv
 
 OPENROUTER_API_KEY=... python agent_runtime.py "Your goal here"            # Qwen (default)
 GEMINI_API_KEY=... python agent_runtime.py --provider gemini "Your goal"   # Gemini
+python agent_runtime.py --provider gemma "Your goal"                        # Gemma 4 (Ollama)
 python agent_runtime.py interactive                                          # Interactive mode
 ```
 
-See [docs/runtimes.md](docs/runtimes.md) for full setup, environment variables, and a runtime comparison table.
+**Gemma 4 on a free Colab GPU** — no local GPU needed:
+
+```bash
+# 1. Open notebooks/skillos_gemma4_colab.ipynb in Google Colab (T4 GPU)
+# 2. Run all cells — you'll get a Cloudflare tunnel URL
+# 3. On your local machine:
+OLLAMA_BASE_URL=https://xxx.trycloudflare.com/v1 python agent_runtime.py --provider gemma "Your goal"
+```
+
+See [docs/tutorial-gemma4-colab.md](docs/tutorial-gemma4-colab.md) for the full walkthrough, and [docs/runtimes.md](docs/runtimes.md) for setup, environment variables, and a runtime comparison table.
 
 ---
 
@@ -138,6 +148,7 @@ project/        scaffold/       project-scaffold-tool
 | [docs/robot.md](docs/robot.md) | RoClaw physical robot integration, Cognitive Trinity |
 | [docs/security.md](docs/security.md) | Skill package security scanning and threat model |
 | [docs/tutorial-echo-q.md](docs/tutorial-echo-q.md) | Step-by-step: Operation Echo-Q quantum computing scenario |
+| [docs/tutorial-gemma4-colab.md](docs/tutorial-gemma4-colab.md) | Run SkillOS with Gemma 4 on a free Colab T4 GPU |
 
 ---
 

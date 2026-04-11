@@ -64,11 +64,11 @@ For tighter control, use `permission_policy.py` to define ALLOW/DENY/PROMPT rule
 
 ---
 
-## Runtime 2: Qwen / Gemini (Multi-Provider)
+## Runtime 2: Qwen / Gemini / Gemma (Multi-Provider)
 
 **Best for:** Lightweight use, learning, resource-constrained environments, free-tier access.
 
-`agent_runtime.py` is a provider-agnostic agent runtime that supports Qwen (via OpenRouter) and Gemini (Google AI). It interprets `QWEN.md` as the system manifest and implements the same agent delegation model as Claude Code.
+`agent_runtime.py` is a provider-agnostic agent runtime that supports Qwen (via OpenRouter), Gemini (Google AI), and Gemma 4 (via Ollama). It interprets the provider's manifest and implements the same agent delegation model as Claude Code.
 
 ### Setup
 
@@ -104,20 +104,47 @@ python agent_runtime.py interactive
 python agent_runtime.py --provider gemini test
 ```
 
-### Local Deployment with Ollama
+### Gemma 4 via Ollama
 
-Run SkillOS fully offline using a local Qwen model:
+Run SkillOS locally (or via a free Colab GPU tunnel) using Google's Gemma 4:
 
 ```bash
-# Install Ollama
+# Install Ollama (macOS/Linux)
 curl -fsSL https://ollama.ai/install.sh | sh
 
-# Pull model
-ollama pull qwen:4b
+# Pull default model (~9.6 GB)
+ollama pull gemma4
 
-# Update base_url in agent_runtime.py to:
-# base_url = "http://localhost:11434/v1"
+# Run with Gemma
+python agent_runtime.py --provider gemma "Your goal here"
+
+# Interactive mode
+python agent_runtime.py --provider gemma interactive
+
+# Test connectivity
+python agent_runtime.py --provider gemma test
 ```
+
+**Model variants** (set via `GEMMA_MODEL` env var):
+
+| Tag | Params | VRAM | Context |
+|-----|--------|------|---------|
+| `gemma4` | 12B (Q4) | ~9.6 GB | 128K |
+| `gemma4:e2b` | 12B (Q2) | ~7.2 GB | 128K |
+| `gemma4:26b` | 27B (Q4) | ~18 GB | 256K |
+| `gemma4:31b` | 27B (Q8) | ~20 GB | 256K |
+
+**Remote tunnel (Colab + Cloudflare):**
+
+```bash
+# On your local machine, point to the Cloudflare tunnel URL:
+OLLAMA_BASE_URL=https://xxx.trycloudflare.com/v1 python agent_runtime.py --provider gemma "Say hello"
+
+# Override model variant:
+GEMMA_MODEL=gemma4:e2b python agent_runtime.py --provider gemma interactive
+```
+
+See `notebooks/skillos_gemma4_colab.ipynb` for a self-contained Colab notebook that sets up Ollama + Gemma 4 + Cloudflare tunnel on a free T4 GPU, and [docs/tutorial-gemma4-colab.md](tutorial-gemma4-colab.md) for the full walkthrough.
 
 ### Native Tools Available
 
@@ -181,16 +208,16 @@ curl -s -X POST http://localhost:8430/tool/robot.go_to \
 
 ## Runtime Comparison
 
-| Feature | Claude Code | Qwen/Gemini | Local Ollama |
-|---------|-------------|-------------|--------------|
+| Feature | Claude Code | Qwen/Gemini | Gemma (Ollama) |
+|---------|-------------|-------------|----------------|
 | Full tool access | Yes | Yes (Python) | Yes (Python) |
-| Agent sub-spawning | Yes (native) | Yes (delegate_to_agent) | Yes |
+| Agent sub-spawning | Yes (native) | Yes (delegate_to_agent) | Yes (delegate_to_agent) |
 | Robot integration | Yes | Yes | Yes |
 | Dream consolidation | Yes | Yes (native tools) | Yes |
-| Cost | Claude pricing | OpenRouter / Google AI | Free |
-| Offline use | No | No | Yes |
-| Context window | Large | Provider-dependent | Model-dependent |
-| LLM-powered compaction | N/A | Yes (compactor.py) | Yes |
+| Cost | Claude pricing | OpenRouter / Google AI | Free (local or Colab) |
+| Offline use | No | No | Yes (local Ollama) |
+| Context window | Large | Provider-dependent | 128K–256K |
+| LLM-powered compaction | N/A | Yes (compactor.py) | Yes (compactor.py) |
 
 ---
 
@@ -206,6 +233,8 @@ OPENROUTER_API_KEY=sk-or-...
 # Gemini
 GEMINI_API_KEY=AI...
 
-# Local Ollama
-OLLAMA_HOST=http://localhost:11434
+# Gemma 4 via Ollama
+OLLAMA_BASE_URL=https://xxx.trycloudflare.com/v1 # omit for local Ollama (defaults to localhost:11434)
+OLLAMA_API_KEY=ollama                            # Ollama ignores auth; placeholder for OpenAI client
+GEMMA_MODEL=gemma4                               # override: gemma4:e2b, gemma4:26b, gemma4:31b
 ```
