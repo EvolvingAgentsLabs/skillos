@@ -1,8 +1,8 @@
 ---
 type: skill-index
-version: 1.0.0
-total_skills: 20
-last_updated: "2026-04-05"
+version: 1.1.0
+total_skills: 22
+last_updated: "2026-04-08"
 ---
 
 # SkillOS Skill Index
@@ -30,6 +30,7 @@ Top-level routing table for the hierarchical skill system.
 | validation | 1 | system/skills/validation/index.md | health checks, spec integrity, preflight | system/skills/validation/base.md |
 | recovery | 1 | system/skills/recovery/index.md | error handling, retry, circuit breaker | system/skills/recovery/base.md |
 | project | 2 | system/skills/project/index.md | scaffolding, package install, new project | system/skills/project/base.md |
+| **planning** | **2** | **system/skills/planning/index.md** | **goal decomposition, subgoal generation, HWM hierarchical planning** | **system/skills/planning/base.md** |
 
 ## Quick Skill Lookup
 
@@ -54,6 +55,8 @@ Top-level routing table for the hierarchical skill system.
 | error-recovery-agent | recovery/error | error-recovery-agent | low |
 | project-scaffold-tool | project/scaffold | _(tool)_ | low |
 | skill-package-manager-tool | project/packages | _(tool)_ | low |
+| **hwm-planner-agent** | **planning/hwm** | **hwm-planner-agent** | **medium** |
+| **flat-planner-agent** | **planning/flat** | **flat-planner-agent** | **low** |
 
 ## Token Budget Guidance
 
