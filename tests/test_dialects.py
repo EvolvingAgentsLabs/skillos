@@ -16,7 +16,17 @@ SKILLS_DIR = os.path.join(SKILLOS_ROOT, "system", "skills")
 DIALECTS_SKILLS_DIR = os.path.join(SKILLS_DIR, "dialects")
 
 # All built-in dialect IDs
-DIALECT_IDS = ["roclaw-bytecode", "caveman-prose", "strategy-pointer"]
+DIALECT_IDS = [
+    "roclaw-bytecode",
+    "caveman-prose",
+    "strategy-pointer",
+    "trace-log",
+    "memory-xp",
+    "constraint-dsl",
+    "exec-plan",
+    "strict-patch",
+    "dom-nav",
+]
 
 VALID_COMPRESSION_TYPES = {"structural", "lexical", "symbolic"}
 
