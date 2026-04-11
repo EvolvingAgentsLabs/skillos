@@ -310,7 +310,7 @@ Do not use tool calls - just provide your expert response directly.
     @staticmethod
     def _find_agent(agent_name: str) -> dict:
         """Built-in agent lookup across standard directories (fallback for GEMINI manifests)."""
-        for agents_dir in [".claude/agents", "system/agents"]:
+        for agents_dir in ["components/agents", ".claude/agents", "system/agents"]:
             if not os.path.isdir(agents_dir):
                 continue
             for fname in os.listdir(agents_dir):
