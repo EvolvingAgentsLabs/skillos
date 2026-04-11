@@ -21,6 +21,12 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "gemini-2.5-flash": 1_048_576,
     "gemini-2.5-pro": 1_048_576,
     "gemini-2.0-flash": 1_048_576,
+    # Gemma 4 via Ollama
+    "gemma4": 128_000,
+    "gemma4:e2b": 128_000,
+    "gemma4:e4b": 128_000,
+    "gemma4:26b": 256_000,
+    "gemma4:31b": 256_000,
 }
 
 DEFAULT_COMPACTION_RATIO = 0.70   # compact at 70 % of context window

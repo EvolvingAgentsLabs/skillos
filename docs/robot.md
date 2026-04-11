@@ -1,18 +1,13 @@
-#  Physical Agents (robots/environmentalbots) Integration — Cognitive Trinity
+# Physical Robot Integration — RoClaw
 
-SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, providing high-level planning, reasoning, and dynamic agent creation. Together with RoClaw and evolving-memory, it forms a three-part cognitive architecture called the **Cognitive Trinity**.
-
----
-
-## The Cognitive Trinity
+SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, providing high-level planning, reasoning, and dynamic agent creation. Together with RoClaw, it forms a two-component cognitive architecture:
 
 | Component | Brain Region | Role | Repository |
 |-----------|-------------|------|------------|
-| **SkillOS** | Prefrontal Cortex | Planning, reasoning, dynamic agent creation | [skillos](https://github.com/EvolvingAgentsLabs/skillos) |
-| **RoClaw** | Cerebellum | VLM motor control, reactive navigation | [RoClaw](https://github.com/EvolvingAgentsLabs/RoClaw) |
-| **evolving-memory** | Hippocampus | Dream consolidation, strategy learning | [evolving-memory](https://github.com/EvolvingAgentsLabs/evolving-memory) |
+| **SkillOS** | Prefrontal Cortex | Planning, reasoning, dynamic agent creation, dream consolidation | [skillos](https://github.com/EvolvingAgentsLabs/skillos) |
+| **RoClaw** | Cerebellum | VLM motor control, reactive navigation, trace emitter | [RoClaw](https://github.com/EvolvingAgentsLabs/RoClaw) |
 
-Each component communicates over HTTP. No component is aware of the others' internals — only interfaces.
+SkillOS communicates with RoClaw over HTTP via `roclaw_bridge.py`. Dream consolidation and strategy memory are stored as local `.md` trace files in `projects/RoClaw/memory/`.
 
 ---
 
@@ -21,27 +16,24 @@ Each component communicates over HTTP. No component is aware of the others' inte
 ```mermaid
 flowchart TD
     SK["SkillOS\nPrefrontal Cortex\n(Planning + Agent Creation)"]
-    EM["evolving-memory :8420\nHippocampus\n(Dream Consolidation)"]
     BR["roclaw_bridge.py :8430\n(HTTP ↔ WebSocket translator)"]
     TS["RoClaw run_sim3d.ts --serve\nMuJoCo 3D simulation"]
     GW["OpenClaw Gateway\nReal hardware"]
     MK["Mock mode\n(no hardware needed)"]
 
-    SK --"REST :8420"--> EM
     SK --"HTTP POST :8430"--> BR
     BR --"--tool-server (WebSocket)"--> TS
     BR --"--gateway"--> GW
     BR --"--simulate"--> MK
-    EM --"dream results"--> SK
 ```
 
-**roclaw_bridge.py** is the translation layer — it accepts HTTP REST calls from SkillOS (or any runtime) and forwards them as WebSocket tool invocations to the robot backend. This means any runtime (Claude Code, Qwen, curl) can control the robot identically.
+**roclaw_bridge.py** is the translation layer — it accepts HTTP REST calls from SkillOS (or any runtime) and forwards them as WebSocket tool invocations to the robot backend. Any runtime (Claude Code, Qwen, curl) can control the robot identically.
 
 ---
 
 ## Robot Skills
 
-All robot skills live under `system/skills/robot/` and extend `robot/base.md`, which provides the Cognitive Trinity shared behaviors.
+All robot skills live under `system/skills/robot/` and extend `robot/base.md`, which provides shared cognitive behaviors.
 
 ### roclaw-navigation-agent
 
@@ -57,7 +49,7 @@ Invoke when: "go to [location]", "navigate to", "move to", "find path"
 - Dynamic re-routing when obstacles block the path
 - Recovery strategies for stuck states (stall detection)
 - Trace logging with fidelity tagging for dream consolidation
-- Querying evolving-memory for known routes before planning new ones
+- Querying local strategy memory before planning new routes
 
 **Example:**
 ```bash
@@ -87,7 +79,7 @@ skillos execute: "Describe what the robot sees and identify any obstacles"
 
 ### roclaw-dream-agent
 
-Bio-inspired dream consolidation cycle management.
+Bio-inspired dream consolidation cycle management. Reads local trace files and writes consolidated strategies and negative constraints back to `projects/RoClaw/memory/long_term/`.
 
 ```
 Domain: robot / family: dream
@@ -95,11 +87,11 @@ Invoke when: "dream consolidation", "learn from today", "consolidate navigation"
 ```
 
 **Capabilities:**
-- Triggering SWS (Slow-Wave Sleep) — trace curation and deduplication
-- Triggering REM — chunking traces into strategy patterns
-- Triggering Consolidation — wiring patterns into the knowledge graph
+- SWS (Slow-Wave Sleep) — trace curation and deduplication
+- REM phase — chunking traces into reusable strategy patterns
+- Consolidation — writing patterns to `strategies.md` and `negative_constraints.md`
 - Extracting Negative Constraints from failed navigation attempts
-- Evolving navigation strategies based on consolidated experience
+- Evolving navigation strategies based on accumulated experience
 
 **Example:**
 ```bash
@@ -112,14 +104,14 @@ skillos execute: "Trigger dream consolidation for today's navigation sessions"
 
 ### roclaw-tool
 
-HTTP bridge to RoClaw's 10 robot tools.
+HTTP bridge to RoClaw's robot tools.
 
 ```
 Domain: robot / family: tools
 Maps to: HTTP POST to roclaw_bridge.py :8430
 ```
 
-**10 Available Robot Tools:**
+**Available Robot Tools:**
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
@@ -128,33 +120,19 @@ Maps to: HTTP POST to roclaw_bridge.py :8430
 | `robot.describe_scene` | VLM description of current camera feed | — |
 | `robot.stop` | Immediate halt | — |
 | `robot.status` | Current pose, battery, stall state | — |
-| `robot.read_memory` | Query evolving-memory for strategies | `query: string` |
-| `robot.record_observation` | Log an observation to memory | `observation: string` |
+| `robot.read_memory` | Query local strategy memory | `query: string` |
+| `robot.record_observation` | Log an observation to local memory | `observation: string` |
 | `robot.analyze_scene` | Deep scene analysis with object detection | — |
 | `robot.get_map` | Return the current semantic map | — |
 | `robot.telemetry` | Live telemetry: pose (x, y, heading), wheel velocities | — |
 
-### evolving-memory-tool
-
-REST bridge to the evolving-memory API on `:8420`.
-
-```
-Domain: robot / family: tools
-Maps to: HTTP to evolving-memory :8420
-```
-
-| Operation | Endpoint | Description |
-|-----------|----------|-------------|
-| Query strategies | `GET /query` | Find best matching strategy for a goal |
-| Log trace | `POST /traces` | Record an execution trace |
-| Trigger dream | `POST /dream/run` | Start consolidation cycle |
-| Get stats | `GET /stats` | Nodes, traces, edges, constraints |
+`robot.read_memory` and `robot.record_observation` read from and write to `projects/RoClaw/memory/` — no external server required.
 
 ---
 
 ## Trace Fidelity
 
-All robot actions are tagged with a fidelity level. The dream engine weights consolidation by fidelity — real-world experiences matter more than simulated ones.
+All robot actions are tagged with a fidelity level. The dream agent weights consolidation by fidelity — real-world experiences matter more than simulated ones.
 
 | Fidelity Tag | Weight | Source |
 |-------------|--------|--------|
@@ -222,7 +200,7 @@ curl -s -X POST http://localhost:8430/tool/robot.describe_scene
 
 ## Dream Consolidation Cycle
 
-The dream cycle runs after navigation sessions to consolidate experiences into reusable strategies:
+The dream cycle runs after navigation sessions to consolidate experiences into reusable strategies. Results are written to local `.md` files — no external server required.
 
 ```
 Execution traces logged (fidelity-tagged)
@@ -236,11 +214,11 @@ REM Phase — Rapid Eye Movement
   Identify common sub-sequences
           ↓
 Consolidation Phase
-  Wire patterns into knowledge graph
-  Extract Negative Constraints from failures
+  Write patterns → projects/RoClaw/memory/long_term/strategies.md
+  Extract Negative Constraints → negative_constraints.md
   Update strategy confidence scores
           ↓
-Next navigation queries evolving-memory first
+Next navigation reads local strategy memory first
   → Uses learned strategies instead of replanning from scratch
 ```
 
@@ -252,11 +230,6 @@ skillos execute: "Trigger dream consolidation for robotics domain"
 
 # Via Qwen runtime
 python agent_runtime.py "trigger dream consolidation"
-
-# Direct API call
-curl -X POST http://localhost:8420/dream/run \
-  -H "Content-Type: application/json" \
-  -d '{"domain": "robotics"}'
 ```
 
 ---
@@ -270,7 +243,7 @@ The key advantage of SkillOS over a static robot controller is **runtime agent c
 3. Creates a new recovery skill as markdown: `RugRecoveryTool.md`
 4. Executes the recovery strategy using the new skill
 5. Logs the experience for dream consolidation
-6. Next time: the strategy is in memory and doesn't need to be re-invented
+6. Next time: the strategy is in local memory and doesn't need to be re-invented
 
 The robot gains new capabilities **at runtime** — no firmware update, no redeployment.
 
@@ -286,9 +259,9 @@ skillos execute: "Run the RoClaw Integration scenario"
 
 This scenario demonstrates:
 1. Boot SkillOS with robot connection
-2. Query evolving-memory for known routes
+2. Query local strategy memory for known routes
 3. Navigate to target location
 4. Describe and map the scene
 5. Log trace with fidelity tagging
 6. Trigger dream consolidation
-7. Verify knowledge graph was updated
+7. Verify strategy memory was updated

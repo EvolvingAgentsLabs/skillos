@@ -54,16 +54,28 @@ class AgentRuntime:
             "manifest": "GEMINI.md",
             "cache_headers": {},
         },
+        "gemma": {
+            "base_url": "http://localhost:11434/v1",
+            "base_url_env": "OLLAMA_BASE_URL",
+            "api_key_env": "OLLAMA_API_KEY",
+            "api_key_default": "ollama",
+            "model": "gemma4",
+            "model_env": "GEMMA_MODEL",
+            "manifest": "GEMINI.md",
+            "cache_headers": {"Bypass-Tunnel-Reminder": "true"},
+        },
     }
 
     def __init__(self, manifest_path: str | None = None, permission_policy: PermissionPolicy | None = None, provider: str = "qwen", stream: bool = True):
         cfg = self.PROVIDER_CONFIGS[provider]
+        resolved_base_url = os.getenv(cfg.get("base_url_env", ""), "") or cfg["base_url"]
+        api_key_default = cfg.get("api_key_default", "")
         self.client = OpenAI(
-            base_url=cfg["base_url"],
-            api_key=os.getenv(cfg["api_key_env"], ""),
+            base_url=resolved_base_url,
+            api_key=os.getenv(cfg["api_key_env"], api_key_default),
             default_headers=cfg.get("cache_headers", {}),
         )
-        self.model = cfg["model"]
+        self.model = os.getenv(cfg.get("model_env", ""), "") or cfg["model"]
         self.provider_name = provider
         self.use_streaming = stream
         self.tools = {}
@@ -298,7 +310,7 @@ Do not use tool calls - just provide your expert response directly.
     @staticmethod
     def _find_agent(agent_name: str) -> dict:
         """Built-in agent lookup across standard directories (fallback for GEMINI manifests)."""
-        for agents_dir in [".claude/agents", "system/agents"]:
+        for agents_dir in ["components/agents", ".claude/agents", "system/agents"]:
             if not os.path.isdir(agents_dir):
                 continue
             for fname in os.listdir(agents_dir):
@@ -429,6 +441,192 @@ Do not use tool calls - just provide your expert response directly.
         match = re.search(f"<{tag}>(.*?)</{tag}>", text, re.DOTALL)
         return match.group(1).strip() if match else None
 
+    # Alias map for tool names the model might use vs what the runtime registers
+    _TOOL_ALIASES = {
+        "run_agent": "delegate_to_agent",
+    }
+
+    @staticmethod
+    def _extract_json_object(text: str) -> str:
+        """Extract the first complete JSON object from text, ignoring trailing garbage.
+
+        Models sometimes append non-JSON text (e.g. ``<channel|>...``) after the
+        closing brace. This uses a simple brace/bracket counter that respects
+        quoted strings to find where the JSON object ends.
+        """
+        start = text.find("{")
+        if start == -1:
+            return text
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(text)):
+            c = text[i]
+            if escape:
+                escape = False
+                continue
+            if c == "\\":
+                escape = True
+                continue
+            if c == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if c in "{[":
+                depth += 1
+            elif c in "}]":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+        return text  # fallback: return as-is
+
+    @staticmethod
+    def _repair_json_args(raw: str) -> dict | None:
+        """Attempt to repair JSON with unescaped double quotes inside string values.
+
+        LLMs (especially Gemma) often produce JSON like:
+            {"path": "f.md", "content": "text with "quotes" inside"}
+        which is invalid because the inner quotes aren't escaped.
+
+        Strategy: parse key-by-key using the known structure. For each
+        ``"key": "value"`` pair, the value's opening quote is right after
+        ``": "`` and its closing quote is found by scanning backwards from
+        the next ``", "`` or ``"}`` boundary.
+        """
+        raw = raw.strip()
+        if not raw.startswith("{") or not raw.endswith("}"):
+            return None
+        inner = raw[1:-1].strip()  # strip outer braces
+
+        result = {}
+        while inner:
+            # Match key
+            km = re.match(r'"([^"]+)"\s*:\s*', inner)
+            if not km:
+                break
+            key = km.group(1)
+            inner = inner[km.end():]
+
+            if not inner:
+                break
+
+            if inner[0] == '"':
+                # String value — find where it truly ends.
+                # Look for the pattern: ", "next_key" or end of object "
+                inner = inner[1:]  # skip opening quote
+                # Try to find: "next comma + space + quote + key + quote + colon"
+                # Pattern: '", "' followed by a key name
+                next_key = re.search(r'",\s*"[^"]+"\s*:', inner)
+                if next_key:
+                    value = inner[:next_key.start()]
+                    inner = inner[next_key.start() + 2:]  # skip '",'
+                    inner = inner.strip()
+                else:
+                    # Last value — everything up to final quote
+                    if inner.endswith('"'):
+                        value = inner[:-1]
+                    else:
+                        value = inner
+                    inner = ""
+                result[key] = value
+            elif inner[0] == '{':
+                # Nested object — use brace counting
+                depth, i = 0, 0
+                for i, c in enumerate(inner):
+                    if c == '{': depth += 1
+                    elif c == '}': depth -= 1
+                    if depth == 0: break
+                try:
+                    result[key] = json.loads(inner[:i+1])
+                except json.JSONDecodeError:
+                    result[key] = inner[:i+1]
+                inner = inner[i+1:].lstrip().lstrip(",").strip()
+            elif inner[0] == '[':
+                depth, i = 0, 0
+                for i, c in enumerate(inner):
+                    if c == '[': depth += 1
+                    elif c == ']': depth -= 1
+                    if depth == 0: break
+                try:
+                    result[key] = json.loads(inner[:i+1])
+                except json.JSONDecodeError:
+                    result[key] = inner[:i+1]
+                inner = inner[i+1:].lstrip().lstrip(",").strip()
+            else:
+                # Number, bool, null — read until comma or end
+                vm = re.match(r'([^,}]+)', inner)
+                if vm:
+                    raw_val = vm.group(1).strip()
+                    try:
+                        result[key] = json.loads(raw_val)
+                    except json.JSONDecodeError:
+                        result[key] = raw_val
+                    inner = inner[vm.end():].lstrip().lstrip(",").strip()
+
+        return result if result else None
+
+    @staticmethod
+    def _infer_tool_from_args(json_str: str) -> str | None:
+        """Infer tool name from JSON argument keys when model omits the name."""
+        try:
+            args = json.loads(json_str)
+        except json.JSONDecodeError:
+            return None
+        keys = set(args.keys())
+        if "agent_name" in keys:
+            return "delegate_to_agent"
+        if "path" in keys and "content" in keys:
+            return "write_file"
+        if "url" in keys:
+            return "web_fetch"
+        if "prompt" in keys:
+            return "call_llm"
+        if "pattern" in keys:
+            return "memory_search"
+        if "type" in keys and "key" in keys and "value" in keys:
+            return "memory_store"
+        if "type" in keys and "key" in keys:
+            return "memory_recall"
+        if "path" in keys:
+            return "read_file"
+        if "query" in keys:
+            return "call_llm"
+        return None
+
+    def _parse_json_array_tools(self, response: str) -> list[tuple[str, str]]:
+        """Parse JSON array tool calls from response (Format D).
+
+        Handles both bare JSON arrays and ```json code blocks containing arrays like:
+          [{"tool_name": "write_file", "parameters": {"path": "...", "content": "..."}}]
+        Also handles variants with "tool_call" or "name" instead of "tool_name".
+        """
+        results = []
+        # Extract JSON from ```json code blocks or bare arrays
+        candidates = re.findall(r"```json\s*\n(.*?)```", response, re.DOTALL)
+        if not candidates:
+            # Try bare JSON arrays
+            candidates = re.findall(r"(\[[\s\S]*?\])", response)
+
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate.strip())
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(parsed, list):
+                continue
+            for item in parsed:
+                if not isinstance(item, dict):
+                    continue
+                # Extract tool name from various key conventions
+                name = item.get("tool_name") or item.get("tool_call") or item.get("name") or ""
+                params = item.get("parameters") or item.get("params") or item.get("arguments") or {}
+                if not name and params:
+                    name = self._infer_tool_from_args(json.dumps(params))
+                if name:
+                    results.append((name, json.dumps(params)))
+        return results
+
     def run_goal(self, goal, max_turns=10):
         """Execute a goal using the general workflow system.
 
@@ -484,16 +682,59 @@ Do not use tool calls - just provide your expert response directly.
 
             messages.append({"role": "assistant", "content": response})
 
-            # Check for tool calls in the response
+            # Check for tool calls in the response — support multiple formats:
+            #   Format A: <tool_call name="tool_name">{"arg": "val"}</tool_call>
+            #   Format A2: <tool_call name="tool_name">{"arg": "val"} (unclosed tag)
+            #   Format B: <tool_call>\ntool_name\n{"arg": "val"}\n</tool_call>
+            #   Format C: <tool_call>\n{"arg": "val"}\n</tool_call>  (infer tool from args)
+            #   Format D: JSON array [{"tool_name":"x","parameters":{...}}] (in code block or bare)
             tool_calls = re.findall(r"<tool_call name=\"(.*?)\">(.*?)</tool_call>", response, re.DOTALL)
+            # Format A2: unclosed <tool_call name="..."> — match to next tag or end
+            if not tool_calls:
+                for m in re.finditer(
+                    r'<tool_call name="(.*?)">(.*?)(?=<tool_call|<final_answer|$)',
+                    response, re.DOTALL,
+                ):
+                    name, body = m.group(1).strip(), m.group(2).strip()
+                    # Remove trailing </tool_call> if present (partial overlap with Format A)
+                    body = re.sub(r"</tool_call>\s*$", "", body).strip()
+                    if name and body:
+                        tool_calls.append((name, body))
+            if not tool_calls:
+                for m in re.finditer(r"<tool_call>(.*?)</tool_call>", response, re.DOTALL):
+                    body = m.group(1).strip()
+                    # Try to parse the whole body as JSON (Format C)
+                    tool_name = self._infer_tool_from_args(body)
+                    if tool_name:
+                        tool_calls.append((tool_name, body))
+                    else:
+                        # Format B: first line is tool name, rest is JSON args
+                        lines = body.split("\n", 1)
+                        if len(lines) == 2 and not lines[0].strip().startswith("{"):
+                            tool_calls.append((lines[0].strip(), lines[1].strip()))
+            # Format D: JSON array of tool calls (sometimes in ```json blocks)
+            if not tool_calls:
+                tool_calls = self._parse_json_array_tools(response)
 
             # Process tool calls first (if any), then check for final answer
             if tool_calls:
                 for tool_name, args_str in tool_calls:
+                    # Resolve tool name aliases (e.g. run_agent → delegate_to_agent)
+                    tool_name = self._TOOL_ALIASES.get(tool_name, tool_name)
                     print(f"\n--- Executing Tool: {tool_name} ---")
                     try:
-                        # Parse JSON arguments
-                        args = json.loads(args_str.strip())
+                        # Parse JSON arguments — strip trailing garbage after the JSON object
+                        clean_args = self._extract_json_object(args_str.strip())
+                        try:
+                            args = json.loads(clean_args)
+                        except json.JSONDecodeError:
+                            # Fallback: repair JSON with unescaped quotes
+                            args = self._repair_json_args(clean_args)
+                            if args is None:
+                                raise json.JSONDecodeError(
+                                    "Repair failed", clean_args, 0
+                                )
+                            print(f"   (repaired malformed JSON)")
 
                         # Permission policy check
                         input_preview = args_str.strip()[:120]
@@ -550,8 +791,15 @@ Do not use tool calls - just provide your expert response directly.
                 print("\n" + "="*20 + " GOAL ACHIEVED " + "="*20)
                 return final_answer
 
-            # If no tool calls and no final answer, prompt the agent
+            # If no tool calls and no final answer, prompt the agent once;
+            # if it responds without tags again, treat that as the final answer.
             if not tool_calls and "final_answer" not in response.lower():
+                prev_role = messages[-2]["role"] if len(messages) >= 2 else ""
+                prev_content = messages[-2].get("content", "") if len(messages) >= 2 else ""
+                if prev_role == "user" and "provide a final_answer" in prev_content:
+                    # Model failed to use tags twice — treat response as final answer
+                    print("\n" + "="*20 + " GOAL ACHIEVED " + "="*20)
+                    return response
                 messages.append({
                     "role": "user",
                     "content": "Please either make a tool call or provide a final_answer."
