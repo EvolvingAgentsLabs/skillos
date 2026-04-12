@@ -226,6 +226,17 @@ skillos execute: "Run the Project Aorta scenario"
 
 **Results (Opus 4.6, 2026-04-12):** Vision and mathematical framework stages produce publication-grade outputs. Three specialized agents created dynamically as markdown at runtime.
 
+### Dialect-Enhanced Variants (A/B Token Comparison)
+
+Both validated scenarios have dialect-enhanced variants for measuring token compression on internal artifacts:
+
+```bash
+skillos execute: "Run the Operation Echo-Q Dialects scenario"   # formal-proof + constraint-dsl
+skillos execute: "Run the Project Aorta Dialects scenario"      # caveman-prose + formal-proof + system-dynamics
+```
+
+These use identical agent pipelines but compress wiki derivations, constraints, and state tracking with SkillOS dialects. Expected 40-60% token reduction on internal artifacts. Final deliverables (code, whitepapers) remain verbose for human consumption.
+
 ---
 
 ## Example Commands

@@ -237,6 +237,63 @@ skillos execute: "Run the Operation Echo-Q scenario"
 
 ---
 
+### Operation_Echo_Q_Dialects
+
+**File:** `scenarios/Operation_Echo_Q_Dialects.md`
+**Mode:** EXECUTION
+**Variant of:** Operation_Echo_Q (dialect-enhanced for A/B token comparison)
+
+Dialect-enhanced version of Operation Echo-Q. Same 4-agent quantum cepstral analysis pipeline, but internal artifacts use SkillOS dialect compression: wiki derivations in `formal-proof` notation, constraints in `constraint-dsl` notation, state tracking in `exec-plan`. Code and whitepaper remain verbose for human consumption.
+
+**Dialects used:**
+- `formal-proof` — GIVEN:/DERIVE:/QED notation for wiki derivation sections
+- `constraint-dsl` — C[N][H/M/L] format for mathematical invariants
+- `exec-plan` — Pipeline state tracking
+
+**What it demonstrates:**
+- Full dialect pipeline integration with existing complex scenarios
+- A/B token comparison vs original (expected 40-60% reduction on internal artifacts)
+- Dialect notation preserves logical structure while compressing prose
+- Human-renderer-agent expansion at egress for final deliverables
+
+**Run it:**
+```bash
+skillos execute: "Run the Operation Echo-Q Dialects scenario"
+```
+
+**Expected outputs:** Same as Operation_Echo_Q but with dialect-compressed internal artifacts
+
+---
+
+### ProjectAorta_Dialects
+
+**File:** `scenarios/ProjectAorta_Dialects.md`
+**Mode:** EXECUTION
+**Variant of:** ProjectAortaScenario (dialect-enhanced for A/B token comparison)
+
+Dialect-enhanced version of Project Aorta. Same 3-agent cognitive pipeline, but with dialect compression: vision document in `caveman-prose`, mathematical framework in `formal-proof` + `system-dynamics`, code remains verbose.
+
+**Dialects used:**
+- `caveman-prose` — Compressed narrative for vision document (~50% reduction)
+- `formal-proof` — GIVEN:/DERIVE:/QED for mathematical derivations
+- `system-dynamics` — Stock-flow notation for hemodynamic models
+- `exec-plan` — Pipeline state tracking
+
+**What it demonstrates:**
+- Multi-dialect pipeline (different dialects per stage)
+- caveman-prose for narrative compression
+- system-dynamics for domain-specific modeling
+- A/B token comparison vs original
+
+**Run it:**
+```bash
+skillos execute: "Run the Project Aorta Dialects scenario"
+```
+
+**Expected outputs:** Same as ProjectAorta but with dialect-compressed internal artifacts. Use `human-renderer-agent` to expand for reading.
+
+---
+
 ### KnowledgeBase_Research_Task
 
 **File:** `scenarios/KnowledgeBase_Research_Task.md`
