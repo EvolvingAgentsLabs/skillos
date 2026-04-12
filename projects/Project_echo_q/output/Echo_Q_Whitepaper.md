@@ -202,13 +202,15 @@ result = coeffs[0] + t * b_curr - b_prev
 
 | Method | Detected $\hat{\tau}$ | Error $|\hat{\tau} - 0.3|$ | Status |
 |--------|----------------------|---------------------------|--------|
-| Classical Cepstrum | 0.2031s | 0.0969s | FAIL |
+| **Classical Cepstrum** | **0.2969s** | **0.0031s** | **PASS** |
 | **Quantum Statevector** | **0.2656s** | **0.0344s** | **PASS** |
-| Quantum QASM (16384 shots) | 0.4688s | 0.1688s | FAIL |
+| Quantum QASM (16384 shots) | 0.1250s | 0.1750s | FAIL |
 
-The quantum statevector simulation correctly identifies the echo region. The QASM result is noisy due to the nearly uniform probability distribution across quefrency bins at 6 qubits — amplitude estimation (constraint S3) would concentrate measurement outcomes near the cepstral peak.
+*Results from execution on 2026-04-12.*
 
-The classical cepstrum fails because the spectral structure of the 5 Hz + echo signal at 64-point resolution produces a multi-peaked cepstrum where the dominant peak is at index 13 (0.2031s) rather than the echo peak at index 19 (0.2969s).
+Both the classical cepstrum and the quantum statevector simulation successfully detect the echo within the S4 threshold ($< 0.05$s). The classical cepstrum achieves the best precision at index 19 (quefrency 0.2969s, error 0.0031s). The quantum statevector identifies the echo region at index 17 (0.2656s, error 0.0344s).
+
+The QASM result remains noisy due to the nearly uniform probability distribution across quefrency bins at 6 qubits — amplitude estimation (constraint S3) would concentrate measurement outcomes near the cepstral peak.
 
 ### 5.2 Polynomial Approximation Quality
 

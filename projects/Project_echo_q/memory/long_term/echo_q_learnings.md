@@ -1,5 +1,6 @@
 ---
-timestamp: "2026-04-06T00:10:00Z"
+timestamp: "2026-04-12T12:00:00Z"
+previous_run: "2026-04-06T00:10:00Z"
 scenario: operation-echo-q
 domain: quantum-computing
 confidence: high
@@ -42,3 +43,9 @@ confidence: high
 1. Cross-referencing errors against constraints is highly effective: the constraint names map directly to fix strategies
 2. Wiki pages provide the mathematical context needed for principled error recovery (not just pattern matching)
 3. Two cycles sufficient for convergence — first cycle identified the issues, second cycle fixed them
+
+## Re-Execution Insights (2026-04-12)
+1. **Stability**: Once code is fixed, re-execution succeeds in Cycle 1 with no error recovery needed
+2. **Classical cepstrum non-determinism**: At 64-point resolution, indices 13 and 19 have near-identical cepstral magnitudes (0.172452). The dominant peak can flip between runs due to floating-point precision. This is a fundamental resolution limitation, not a bug
+3. **Quantum statevector stability**: Quantum results are deterministic — same detected tau (0.2656s) across runs
+4. **Environment note**: Qiskit 2.2.3 on Python 3.9 shows deprecation warnings; plan upgrade to Python 3.10+ before Qiskit 2.3.0 removes 3.9 support

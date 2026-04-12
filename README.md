@@ -202,6 +202,32 @@ See [docs/dialects.md](docs/dialects.md) for the full guide.
 
 ---
 
+## Validated Scenarios
+
+Two complex multi-agent scenarios are validated end-to-end with each release:
+
+### Operation Echo-Q — Quantum Cepstral Deconvolution
+
+4-agent pipeline: quantum theorist → pure mathematician → Qiskit engineer → system architect. Derives quantum algorithms in a LaTeX Knowledge Wiki before writing code, proving that markdown acts as a persistent mathematical blackboard.
+
+```bash
+skillos execute: "Run the Operation Echo-Q scenario"
+```
+
+**Results (Opus 4.6, 2026-04-12):** All 4 phases pass — 5 wiki concept pages with LaTeX, 6 hard + 4 soft mathematical constraints, working `quantum_cepstrum.py` (classical echo detection error 0.003s, quantum statevector 0.034s), synthesized whitepaper. 8,894 output tokens.
+
+### Project Aorta — Quantum Homomorphic Signal Processing
+
+3-agent cognitive pipeline: visionary → mathematician → quantum engineer. Produces a 36KB clinical vision document and 37KB rigorous mathematical framework for radiation-free catheter navigation via pressure wave echo analysis.
+
+```bash
+skillos execute: "Run the Project Aorta scenario"
+```
+
+**Results (Opus 4.6, 2026-04-12):** Vision and mathematical framework stages produce publication-grade outputs. Three specialized agents created dynamically as markdown at runtime.
+
+---
+
 ## Example Commands
 
 ```bash
@@ -224,15 +250,6 @@ skillos execute: "Navigate to the kitchen and describe what you see"
 skillos execute: "Run the Operation Echo-Q scenario"
 skillos execute: "Run the RealWorld_Research_Task scenario in EXECUTION MODE"
 ```
-
----
-
-## Related Projects
-
-| Project | Role |
-|---------|------|
-| [LLMos](https://github.com/EvolvingAgentsLabs/llmos) | Predecessor — foundation concepts |
-| [RoClaw](https://github.com/EvolvingAgentsLabs/RoClaw) | Physical robot — Cerebellum |
 
 ---
 

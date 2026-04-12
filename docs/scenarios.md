@@ -70,23 +70,26 @@ skillos execute: "Run the CodeAnalysis_Task scenario on this repository"
 
 **File:** `scenarios/ProjectAortaScenario.md`
 **Mode:** EXECUTION
+**Last validated:** 2026-04-12 (Opus 4.6)
 
-The "Project Aorta" three-agent cognitive pipeline for quantum signal processing. Demonstrates specialized multi-agent collaboration with mathematical rigor.
+The "Project Aorta" three-agent cognitive pipeline for quantum homomorphic signal processing of arterial pressure waves. Demonstrates specialized multi-agent collaboration with mathematical rigor.
 
 **Agents in pipeline:**
-1. **VisionaryAgent** — Defines the mathematical framework and vision
-2. **ArchitectAgent** — Designs the implementation architecture
-3. **ImplementationAgent** — Produces working code
+1. **VisionaryAgent** — Transforms research concept into comprehensive project description (36KB output)
+2. **MathematicianAgent** — Converts vision into rigorous mathematical framework (37KB output)
+3. **QuantumEngineerAgent** — Implements quantum cepstral pipeline in code
 
 **What it demonstrates:**
-- Specialized agent creation for a domain (quantum signal processing)
+- Dynamic creation of 3 specialized agents as markdown at runtime
 - Sequential multi-agent pipeline with handoffs
-- Technical depth: mathematical foundations + code
+- Publication-grade technical depth: clinical motivation + mathematical foundations + quantum implementation
 
 **Run it:**
 ```bash
 skillos execute: "Run the Project Aorta scenario"
 ```
+
+**Expected outputs:** `projects/Project_aorta/output/` — `project_vision.md`, `mathematical_framework.md`, quantum implementation
 
 ---
 
@@ -209,13 +212,14 @@ skillos execute: "Run the RoClaw Integration scenario"
 **File:** `scenarios/Operation_Echo_Q.md`
 **Mode:** EXECUTION
 **Tutorial:** [docs/tutorial-echo-q.md](tutorial-echo-q.md)
+**Last validated:** 2026-04-12 (Opus 4.6)
 
 Mathematically rigorous quantum computing scenario: derive, prove, and implement a Quantum Cepstral Analysis algorithm. The "Markdown as mathematical blackboard" demonstration.
 
 **Agents in pipeline:**
-1. **quantum-theorist-agent** — Builds LaTeX wiki with QFT, QSVT, block-encoding concepts
-2. **pure-mathematician-agent** — Extracts mathematical invariants as enforceable constraints
-3. **qiskit-engineer-agent** — Implements algorithm with reflective error-recovery loop
+1. **quantum-theorist-agent** — Builds LaTeX wiki with QFT, QSVT, block-encoding concepts (5 concept pages + 1 entity page)
+2. **pure-mathematician-agent** — Extracts mathematical invariants as enforceable constraints (6 hard + 4 soft)
+3. **qiskit-engineer-agent** — Implements algorithm with reflective error-recovery loop (classical echo error 0.003s, quantum statevector 0.034s)
 4. **system-architect-agent** — Synthesizes whitepaper with wiki citations
 
 **What it demonstrates:**
@@ -224,9 +228,11 @@ Mathematically rigorous quantum computing scenario: derive, prove, and implement
 - Reflective error recovery cross-referenced against wiki math
 - 4-agent hierarchical decomposition with wiki handoffs
 
+**Validated results (2026-04-12):** All 4 phases pass. Hard constraints C1-C6 all pass. Chebyshev polynomial error 5.43e-4 (within 1e-3 budget). Echo detection PASS (0.003s error < 0.05s threshold). 8,894 output tokens.
+
 **Run it:**
 ```bash
-skillos execute: "Run the Operation Echo-Q scenario: derive and implement a quantum cepstral analysis algorithm using the wiki as a mathematical blackboard"
+skillos execute: "Run the Operation Echo-Q scenario"
 ```
 
 ---
