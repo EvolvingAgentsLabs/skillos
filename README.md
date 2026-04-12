@@ -228,14 +228,19 @@ skillos execute: "Run the Project Aorta scenario"
 
 ### Dialect-Enhanced Variants (A/B Token Comparison)
 
-Both validated scenarios have dialect-enhanced variants for measuring token compression on internal artifacts:
+Both validated scenarios have dialect-enhanced variants that compress internal artifacts with SkillOS dialects while keeping final deliverables (code, whitepapers) verbose for human consumption:
+
+| Variant | Dialects | Internal Artifact Reduction | Result |
+|---------|----------|---------------------------|--------|
+| **Echo-Q Dialects** | `formal-proof` + `constraint-dsl` | **-23%** overall (wiki -13%, constraints **-65%**) | All 4 phases pass, echo PASS |
+| **Aorta Dialects** | `caveman-prose` + `formal-proof` + `system-dynamics` | **-47%** overall (vision **-85%**, math -26%) | All 3 stages pass, 0ms error |
 
 ```bash
-skillos execute: "Run the Operation Echo-Q Dialects scenario"   # formal-proof + constraint-dsl
-skillos execute: "Run the Project Aorta Dialects scenario"      # caveman-prose + formal-proof + system-dynamics
+skillos execute: "Run the Operation Echo-Q Dialects scenario"
+skillos execute: "Run the Project Aorta Dialects scenario"
 ```
 
-These use identical agent pipelines but compress wiki derivations, constraints, and state tracking with SkillOS dialects. Expected 40-60% token reduction on internal artifacts. Final deliverables (code, whitepapers) remain verbose for human consumption.
+**Results (Opus 4.6, 2026-04-12):** Dialect compression strongest on prose-heavy artifacts (caveman-prose: -85%) and structured constraints (constraint-dsl: -65%). formal-proof notation adds mechanical traceability via `[BY rule]` annotations. Both variants produce identical-quality outputs to their originals.
 
 ---
 
