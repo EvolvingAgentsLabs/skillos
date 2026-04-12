@@ -173,10 +173,10 @@ All verification is automated (`ast.parse()` + regex + exact answer checks) — 
 
 ```bash
 # Run benchmarks
-python3 benchmark_patch.py        # Code editing: strict-patch
-python3 benchmark_math.py         # Math: formal-proof
-python3 benchmark_physiology.py   # Physiology: system-dynamics
-python3 benchmark_dialects.py     # Analytical: mixed dialects
+python3 benchmarks/benchmark_patch.py        # Code editing: strict-patch
+python3 benchmarks/benchmark_math.py         # Math: formal-proof
+python3 benchmarks/benchmark_physiology.py   # Physiology: system-dynamics
+python3 benchmarks/benchmark_dialects.py     # Analytical: mixed dialects
 ```
 
 **Why it matters for small models:** Gemma 4B generates a strict-patch in 0.5s instead of 30s for a full rewrite — and gets it right. A 50,000-token HTML page becomes 80 tokens of interactive elements. The dialect removes the cognitive load, letting small models punch above their weight.

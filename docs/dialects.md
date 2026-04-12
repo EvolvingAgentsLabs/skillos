@@ -282,10 +282,10 @@ Four automated benchmarks compare SkillOS dialects against plain Claude Code on 
 
 | # | Script | Task | Dialect | Turns |
 |---|--------|------|---------|-------|
-| 1 | `benchmark_dialects.py` | Cascade failure analysis | mixed (6 dialects) | 1 vs 8 |
-| 2 | `benchmark_patch.py` | Fix 2 bugs in 993-line Python service | `strict-patch` | 1 vs 1 |
-| 3 | `benchmark_math.py` | K_{3,4} spanning trees (Matrix Tree Theorem) | `formal-proof` | 1 vs 1+1 |
-| 4 | `benchmark_physiology.py` | Mitral regurgitation hemodynamics | `system-dynamics` | 1 vs 1+1 |
+| 1 | `benchmarks/benchmark_dialects.py` | Cascade failure analysis | mixed (6 dialects) | 1 vs 8 |
+| 2 | `benchmarks/benchmark_patch.py` | Fix 2 bugs in 993-line Python service | `strict-patch` | 1 vs 1 |
+| 3 | `benchmarks/benchmark_math.py` | K_{3,4} spanning trees (Matrix Tree Theorem) | `formal-proof` | 1 vs 1+1 |
+| 4 | `benchmarks/benchmark_physiology.py` | Mitral regurgitation hemodynamics | `system-dynamics` | 1 vs 1+1 |
 
 Benchmarks 3 and 4 include a **Language Facade renderer** step (dialect → English) to demonstrate the full ingress/egress pattern.
 
@@ -349,10 +349,10 @@ The baseline benchmark using a cascade failure analysis. Both approaches scored 
 ```bash
 # Run all benchmarks
 cd skillos
-python3 benchmark_patch.py        # ~2 min
-python3 benchmark_math.py         # ~2 min
-python3 benchmark_physiology.py   # ~1 min
-python3 benchmark_dialects.py     # ~3 min
+python3 benchmarks/benchmark_patch.py        # ~2 min
+python3 benchmarks/benchmark_math.py         # ~2 min
+python3 benchmarks/benchmark_physiology.py   # ~1 min
+python3 benchmarks/benchmark_dialects.py     # ~3 min
 
 # Reports written to:
 # projects/Project_patch_benchmark/output/benchmark_patch_report.md

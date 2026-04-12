@@ -10,7 +10,7 @@ Then scores both outputs via an independent judge (from temp dir)
 and generates a markdown comparison report.
 
 Usage:
-    cd skillos && python3 benchmark_dialects.py
+    cd skillos && python3 benchmarks/benchmark_dialects.py
 """
 
 import json
@@ -21,7 +21,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-SKILLOS_DIR = Path(__file__).resolve().parent
+SKILLOS_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = SKILLOS_DIR / "projects" / "Project_dialect_benchmark" / "output"
 
 # ── Problem Statement (shared by both runs) ──────────────────────────────────
