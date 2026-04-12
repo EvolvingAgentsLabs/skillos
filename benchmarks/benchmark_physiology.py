@@ -15,7 +15,7 @@ Correct answers:
   - Severity:             Severe
 
 Usage:
-    cd skillos && python3 benchmark_physiology.py
+    cd skillos && python3 benchmarks/benchmark_physiology.py
 """
 
 import json
@@ -28,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-SKILLOS_DIR = Path(__file__).resolve().parent
+SKILLOS_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = SKILLOS_DIR / "projects" / "Project_patch_benchmark" / "output"
 
 # Expected answers

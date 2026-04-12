@@ -11,7 +11,7 @@ SkillOS formal-proof dialect forces step-by-step symbolic derivation.
 Correct answer: 432 spanning trees (3^3 x 4^2 = 27 x 16 = 432).
 
 Usage:
-    cd skillos && python3 benchmark_math.py
+    cd skillos && python3 benchmarks/benchmark_math.py
 """
 
 import json
@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-SKILLOS_DIR = Path(__file__).resolve().parent
+SKILLOS_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = SKILLOS_DIR / "projects" / "Project_patch_benchmark" / "output"
 
 CORRECT_ANSWER = 432

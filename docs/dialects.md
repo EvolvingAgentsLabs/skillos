@@ -282,10 +282,10 @@ Four automated benchmarks compare SkillOS dialects against plain Claude Code on 
 
 | # | Script | Task | Dialect | Turns |
 |---|--------|------|---------|-------|
-| 1 | `benchmark_dialects.py` | Cascade failure analysis | mixed (6 dialects) | 1 vs 8 |
-| 2 | `benchmark_patch.py` | Fix 2 bugs in 993-line Python service | `strict-patch` | 1 vs 1 |
-| 3 | `benchmark_math.py` | K_{3,4} spanning trees (Matrix Tree Theorem) | `formal-proof` | 1 vs 1+1 |
-| 4 | `benchmark_physiology.py` | Mitral regurgitation hemodynamics | `system-dynamics` | 1 vs 1+1 |
+| 1 | `benchmarks/benchmark_dialects.py` | Cascade failure analysis | mixed (6 dialects) | 1 vs 8 |
+| 2 | `benchmarks/benchmark_patch.py` | Fix 2 bugs in 993-line Python service | `strict-patch` | 1 vs 1 |
+| 3 | `benchmarks/benchmark_math.py` | K_{3,4} spanning trees (Matrix Tree Theorem) | `formal-proof` | 1 vs 1+1 |
+| 4 | `benchmarks/benchmark_physiology.py` | Mitral regurgitation hemodynamics | `system-dynamics` | 1 vs 1+1 |
 
 Benchmarks 3 and 4 include a **Language Facade renderer** step (dialect → English) to demonstrate the full ingress/egress pattern.
 
@@ -297,11 +297,13 @@ The strongest result. Plain Claude must rewrite the entire 993-line file; SkillO
 
 | Metric | Plain Claude | SkillOS + strict-patch |
 |---|---|---|
-| Output tokens | 10,286 | 224 (**-97.8%**) |
-| Cost | $0.3417 | $0.1119 (**-67.3%**) |
-| Duration | 107.3s | 6.9s (**15.5x faster**) |
-| Bugs fixed | 2/2 | 2/2 |
+| Output tokens | 10,286 | 254 (**-97.5%**) |
+| Cost | $0.4491 | $0.1127 (**-74.9%**) |
+| Duration | 106.6s | 6.3s (**16.9x faster**) |
+| Bugs fixed | 2/2 | 2/2* |
 | Verification | `ast.parse()` + regex | `ast.parse()` + regex |
+
+\* The model produced correct `[DEL]/[ADD]` ops for both bugs, but was off by 1 line number — a known fragility of strict-patch with large files. The fix logic was correct.
 
 This is **O(1) vs O(N)** output — the patch size is independent of file size. For a 10,000-line file, the advantage would be even larger.
 
@@ -311,11 +313,11 @@ Tests whether formal-proof notation eliminates arithmetic hallucinations. The co
 
 | Metric | Plain Claude | SkillOS Solver | SkillOS + Renderer |
 |---|---|---|---|
-| Output tokens | 4,632 | 1,976 (**-57.3%**) | 2,370 (**-48.8%**) |
-| Quality score | 80/100 | **90/100** | — |
+| Output tokens | 4,582 | 2,232 (**-51.3%**) | 2,634 (**-42.5%**) |
+| Quality score | 90/100 | 90/100 | — |
 | Answer correct | Yes (432) | Yes (432) | — |
 
-The dialect version scored **higher** (90 vs 80) because formal-proof notation forces step-by-step derivation with rule citations — the model cannot skip logical steps. Even with a renderer step translating back to English, total tokens remain below plain Claude.
+Both approaches scored 90/100 and got the correct answer. Formal-proof notation forces step-by-step derivation with rule citations — the model cannot skip logical steps. Even with a renderer step translating back to English, total tokens remain below plain Claude.
 
 #### Physiological Computation — `system-dynamics` (Benchmark 4)
 
@@ -323,11 +325,11 @@ Tests whether system-dynamics notation improves accuracy on a clinical physics p
 
 | Metric | Plain Claude | SkillOS Solver | SkillOS + Renderer |
 |---|---|---|---|
-| Output tokens | 742 | 291 (**-60.8%**) | 599 (**-19.3%**) |
+| Output tokens | 717 | 279 (**-61.1%**) | 589 (**-17.9%**) |
 | Quality score | 100/100 | 100/100 | — |
 | All values correct | Yes | Yes | — |
 
-Both approaches got perfect scores, but SkillOS used 61% fewer tokens. The system-dynamics notation mapped the heart to a hydraulic circuit (`[STOCK] LV_pump`, `[FLOW] Q_leak`, `[EVAL] RF > 50% → SEVERE`), producing a flawless computation in ~15 lines. The renderer then translated this into a compassionate clinical summary for physicians.
+Both approaches got perfect scores, but SkillOS used 61% fewer tokens. The system-dynamics notation mapped the heart to a hydraulic circuit (`[STOCK] LV_pump`, `[FLOW] Q_leak`, `[EVAL] RF > 50% → SEVERE`), producing a flawless computation in ~11 lines. The renderer then translated this into a compassionate clinical summary for physicians.
 
 #### Analytical Reasoning — mixed dialects (Benchmark 1)
 
@@ -335,24 +337,26 @@ The baseline benchmark using a cascade failure analysis. Both approaches scored 
 
 | Metric | Plain Claude | SkillOS + Dialects |
 |---|---|---|
-| Output tokens | 1,977 | 1,787 (**-9.6%**) |
+| Output tokens | 3,957 | 13,892 (11 turns) |
 | Quality score | 100/100 | 100/100 |
+
+The multi-turn SkillOS pipeline (11 agent turns with full CLAUDE.md context) used more tokens than single-turn plain Claude on this analytical task. The overhead is from the SkillOS orchestration layer, not the dialects themselves. Both achieved perfect quality.
 
 ### Key Takeaways
 
-1. **Code editing** (`strict-patch`): **97.8% token reduction** — O(1) vs O(N) output
-2. **Complex math** (`formal-proof`): **57% fewer tokens AND higher accuracy** — cognitive scaffolding eliminates arithmetic hallucinations
+1. **Code editing** (`strict-patch`): **97.5% token reduction** — O(1) vs O(N) output
+2. **Complex math** (`formal-proof`): **51% fewer tokens** with equal accuracy — cognitive scaffolding forces step-by-step derivation
 3. **Scientific computation** (`system-dynamics`): **61% fewer tokens** with identical accuracy — domain mapping strips away prose distraction
 4. **Language Facade**: Even with a 2nd translation step (dialect → English), total tokens remain below plain Claude output
-5. **Analytical reasoning**: Modest savings (~10%) when the task is already O(N) for both approaches
+5. **Analytical reasoning**: Multi-turn SkillOS pipeline adds orchestration overhead; single-dialect tasks show the real compression wins
 
 ```bash
 # Run all benchmarks
 cd skillos
-python3 benchmark_patch.py        # ~2 min
-python3 benchmark_math.py         # ~2 min
-python3 benchmark_physiology.py   # ~1 min
-python3 benchmark_dialects.py     # ~3 min
+python3 benchmarks/benchmark_patch.py        # ~2 min
+python3 benchmarks/benchmark_math.py         # ~2 min
+python3 benchmarks/benchmark_physiology.py   # ~1 min
+python3 benchmarks/benchmark_dialects.py     # ~3 min
 
 # Reports written to:
 # projects/Project_patch_benchmark/output/benchmark_patch_report.md

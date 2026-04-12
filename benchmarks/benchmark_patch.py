@@ -11,7 +11,7 @@ This is O(1) vs O(N) output — where dialects genuinely shine.
 Quality verification is fully automated: ast.parse() + regex checks. No LLM judge.
 
 Usage:
-    cd skillos && python3 benchmark_patch.py
+    cd skillos && python3 benchmarks/benchmark_patch.py
 """
 
 import ast
@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-SKILLOS_DIR = Path(__file__).resolve().parent
+SKILLOS_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = SKILLOS_DIR / "projects" / "Project_patch_benchmark" / "output"
 
 # ── The Buggy File (~500 lines) ─────────────────────────────────────────────

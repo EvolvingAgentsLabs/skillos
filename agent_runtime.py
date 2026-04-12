@@ -36,6 +36,15 @@ _RETRY_BASE_DELAY = 1.0    # seconds
 _RETRY_MAX_DELAY = 30.0    # seconds
 
 
+def _parse_frontmatter(content: str) -> dict:
+    """Extract YAML frontmatter from a markdown string."""
+    match = re.match(r"^---\n(.*?\n)---", content, re.DOTALL)
+    if not match:
+        return {}
+    import yaml
+    return yaml.safe_load(match.group(1)) or {}
+
+
 class AgentRuntime:
     PROVIDER_CONFIGS = {
         "qwen": {
@@ -351,6 +360,137 @@ Do not use tool calls - just provide your expert response directly.
                                         "found": True,
                                     }
         return {"found": False}
+
+    # ── AOT Dialect Injection + Pipeline Execution ────────────────────
+
+    @staticmethod
+    def _load_dialect_grammars(dialect_ids: list[str], dialects_dir: str = "system/dialects") -> dict[str, str]:
+        """Read dialect files and extract Grammar/Syntax section + first Example.
+
+        Returns a dict mapping dialect_id -> compact grammar string.
+        """
+        grammars: dict[str, str] = {}
+        for did in dialect_ids:
+            path = os.path.join(dialects_dir, f"{did}.dialect.md")
+            if not os.path.isfile(path):
+                continue
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            # Extract Grammar / Syntax section
+            grammar_match = re.search(
+                r"## Grammar / Syntax\n(.*?)(?=\n## |\Z)", content, re.DOTALL
+            )
+            grammar = grammar_match.group(1).strip() if grammar_match else ""
+            # Extract first Example
+            example_match = re.search(
+                r"### Example 1[^\n]*\n(.*?)(?=\n### |\n## |\Z)", content, re.DOTALL
+            )
+            example = example_match.group(1).strip() if example_match else ""
+            snippet = f"### {did} grammar\n{grammar}"
+            if example:
+                snippet += f"\n\n**Example**:\n{example}"
+            grammars[did] = snippet
+        return grammars
+
+    def load_scenario(self, scenario_path: str) -> dict:
+        """Parse a scenario file and inject dialect grammars into self.system_prompt.
+
+        Returns the parsed frontmatter dict (includes requires_dialects, pipeline, etc.).
+        """
+        with open(scenario_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        fm = _parse_frontmatter(content)
+        dialect_ids = fm.get("requires_dialects", [])
+        if dialect_ids:
+            grammars = self._load_dialect_grammars(dialect_ids)
+            if grammars:
+                injection = "\n\n---\n## Dialect Grammars (AOT Injected)\n\n"
+                injection += "\n\n".join(grammars.values())
+                self.system_prompt += injection
+                print(f"  AOT injected {len(grammars)} dialect grammars into system prompt")
+        return fm
+
+    def run_pipeline(self, scenario_path: str, problem_context: str, max_turns_per_step: int = 1) -> str:
+        """Execute a scenario pipeline deterministically.
+
+        Parses pipeline from scenario YAML, pre-loads all required dialect grammars,
+        then executes each step sequentially — one LLM call per step — chaining outputs.
+        """
+        with open(scenario_path, "r", encoding="utf-8") as f:
+            scenario_content = f.read()
+        fm = _parse_frontmatter(scenario_content)
+
+        pipeline = fm.get("pipeline", [])
+        if not pipeline:
+            raise ValueError(f"Scenario {scenario_path} has no pipeline field")
+
+        dialect_ids = fm.get("requires_dialects", [])
+        grammars = self._load_dialect_grammars(dialect_ids) if dialect_ids else {}
+
+        print(f"\n{'='*60}")
+        print(f"  Pipeline Execution: {len(pipeline)} steps, {len(grammars)} dialects loaded")
+        print(f"{'='*60}")
+
+        prior_outputs: list[str] = []
+        results: list[str] = []
+
+        for step in pipeline:
+            step_num = step["step"]
+            deliverable = step["deliverable"]
+            dialect = step["dialect"]
+            model_override = step.get("model")
+
+            print(f"\n--- Pipeline Step {step_num}: {deliverable} ({dialect}) ---")
+
+            # Build step prompt
+            grammar_block = grammars.get(dialect, f"Use {dialect} dialect notation.")
+            prior_context = ""
+            if prior_outputs:
+                prior_context = "\n\n## Prior Step Outputs\n\n" + "\n\n---\n\n".join(prior_outputs)
+
+            step_prompt = (
+                f"## Dialect Grammar\n\n{grammar_block}\n\n"
+                f"## Task\n\nProduce: {deliverable}\n"
+                f"Use {dialect} dialect notation ONLY. No prose.\n\n"
+                f"## Problem Context\n\n{problem_context}"
+                f"{prior_context}"
+            )
+
+            messages = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": step_prompt},
+            ]
+
+            # Use model override if specified
+            if model_override:
+                response = self._call_with_model_override(messages, model_override)
+            elif self.use_streaming:
+                response = self._call_llm_stream(messages)
+            else:
+                response = self._call_llm(messages)
+
+            step_output = f"### Step {step_num}: {deliverable}\n\n{response}"
+            prior_outputs.append(step_output)
+            results.append(step_output)
+            print(f"  Step {step_num} complete ({len(response)} chars)")
+
+        final = "\n\n---\n\n".join(results)
+        print(f"\n{'='*60}")
+        print(f"  Pipeline complete: {len(results)} deliverables, {len(final)} chars total")
+        print(f"{'='*60}")
+        return final
+
+    def _call_with_model_override(self, messages: list[dict], model: str) -> str:
+        """Call LLM with a temporary model override for per-step provider routing."""
+        original_model = self.model
+        self.model = model
+        try:
+            if self.use_streaming:
+                return self._call_llm_stream(messages)
+            else:
+                return self._call_llm(messages)
+        finally:
+            self.model = original_model
 
     def _build_messages(self, conversation: list[dict]) -> list[dict]:
         """Prepend system prompt at call time — never stored in conversation list."""
@@ -894,13 +1034,14 @@ QwenRuntime = AgentRuntime
 if __name__ == "__main__":
     import sys
 
-    # Parse CLI flags: --permission-policy, --provider, --manifest, --max-turns, --no-stream, --sandbox
+    # Parse CLI flags: --permission-policy, --provider, --manifest, --max-turns, --no-stream, --sandbox, --scenario
     policy_arg = None
     provider_arg = "qwen"
     manifest_arg = None  # None = auto-select from provider config
     max_turns_arg = 10
     stream_arg = True
     sandbox_arg = "local"
+    scenario_arg = None
     filtered_args = []
     i = 1
     while i < len(sys.argv):
@@ -922,6 +1063,9 @@ if __name__ == "__main__":
         elif sys.argv[i] == "--sandbox" and i + 1 < len(sys.argv):
             sandbox_arg = sys.argv[i + 1]
             i += 2
+        elif sys.argv[i] == "--scenario" and i + 1 < len(sys.argv):
+            scenario_arg = sys.argv[i + 1]
+            i += 2
         else:
             filtered_args.append(sys.argv[i])
             i += 1
@@ -936,6 +1080,20 @@ if __name__ == "__main__":
 
     policy = get_policy(policy_arg) if policy_arg else SKILLOS_DEFAULT_POLICY
     runtime = AgentRuntime(manifest_path=manifest_arg, permission_policy=policy, provider=provider_arg, stream=stream_arg, sandbox_mode=sandbox_arg)
+
+    # Pipeline mode: --scenario takes precedence
+    if scenario_arg:
+        problem_context = " ".join(filtered_args) if filtered_args else ""
+        if not problem_context:
+            print("Usage: python agent_runtime.py --scenario <path> \"problem context\"")
+            sys.exit(1)
+        fm = runtime.load_scenario(scenario_arg)
+        if fm.get("pipeline"):
+            result = runtime.run_pipeline(scenario_arg, problem_context)
+        else:
+            result = runtime.run_goal(problem_context, max_turns=max_turns_arg)
+        print(f"\nResult: {result}")
+        sys.exit(0)
 
     # Parse command line arguments
     if len(filtered_args) > 0:

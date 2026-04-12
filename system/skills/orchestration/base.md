@@ -37,3 +37,12 @@ When the orchestration layer touches content that will be stored or passed betwe
 2. Between agents: prefer dialect-compressed forms (exec-plan, strategy-pointer, constraint-dsl)
 3. At egress: delegate to human-renderer-agent to expand internal output to readable prose
 4. Memory writes: always store in the most compressed applicable dialect
+
+## Pipeline Execution Mode
+When a scenario includes `pipeline:` and `requires_dialects:` in its YAML frontmatter:
+
+1. **AOT Dialect Loading** — batch-read all dialect files from `requires_dialects` before execution starts, or use SystemAgent's inlined Quick Grammar Reference for the 6 core dialects (formal-proof, system-dynamics, boolean-logic, constraint-dsl, exec-plan, data-flow)
+2. **Deterministic Execution** — follow pipeline steps in declared order; do not deliberate about which dialect to use — each step declares its dialect
+3. **Output Chaining** — pass each step's output as context to subsequent steps via state files in `projects/[Project]/state/`
+4. **Per-Step Reporting** — log each pipeline step's status (started, completed, failed) and output summary to `history.md`
+5. **Skip Routing** — bypass Hierarchical Skill Routing and intent-compiler for pipeline-declared dialects

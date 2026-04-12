@@ -10,7 +10,7 @@ Then scores both outputs via an independent judge (from temp dir)
 and generates a markdown comparison report.
 
 Usage:
-    cd skillos && python3 benchmark_dialects.py
+    cd skillos && python3 benchmarks/benchmark_dialects.py
 """
 
 import json
@@ -21,7 +21,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-SKILLOS_DIR = Path(__file__).resolve().parent
+SKILLOS_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = SKILLOS_DIR / "projects" / "Project_dialect_benchmark" / "output"
 
 # ── Problem Statement (shared by both runs) ──────────────────────────────────
@@ -48,7 +48,10 @@ Specifically:
 # ── SkillOS prompt wraps the problem in a scenario execution ─────────────────
 
 SKILLOS_PROMPT = """\
-Execute the Dialect Benchmark scenario from scenarios/Dialect_Benchmark.md.
+Execute the Dialect Benchmark scenario from scenarios/Dialect_Benchmark.md using Pipeline Execution Mode.
+
+The scenario declares requires_dialects and a pipeline in its YAML frontmatter.
+Use the pipeline steps directly — no need to discover or route dialects dynamically.
 
 The scenario analyzes this microservice architecture for design flaws:
 
@@ -60,14 +63,15 @@ Under load, Service C response times increase from 200ms to 8 seconds.
 Service A has a 30-second timeout for requests to Service B.
 There is no circuit breaker.
 
-For each deliverable, use the dialect specified in the scenario:
-1. Root cause diagnosis — formal-proof dialect (GIVEN:/DERIVE:/QED with [BY rule])
-2. System dynamics model — system-dynamics dialect ([STOCK], [FLOW], [FB+], [FB-])
-3. Retry condition — boolean-logic dialect (explicit parenthesization, boolean operators)
-4. Resource exhaustion proof — formal-proof dialect (step-by-step numeric derivation)
-5. Fix constraints — constraint-dsl dialect (C[N][severity] with thresholds)
-6. Implementation plan — exec-plan dialect (@plan, P[N], dep=, verify:, success:)
+Pipeline (from scenario YAML):
+1. Root cause diagnosis — formal-proof (GIVEN:/DERIVE:/QED with [BY rule])
+2. System dynamics model — system-dynamics ([STOCK], [FLOW], [FB+], [FB-])
+3. Retry condition — boolean-logic (explicit parenthesization, boolean operators)
+4. Resource exhaustion proof — formal-proof (step-by-step numeric derivation)
+5. Fix constraints — constraint-dsl (C[N][severity] with thresholds)
+6. Implementation plan — exec-plan (@plan, P[N], dep=, verify:, success:)
 
+Use the Quick Grammar Reference from system-agent.md — do NOT Read dialect files.
 Produce all 6 deliverables using the correct dialect notation. Do NOT write prose — use the compressed dialect forms only."""
 
 # ── Quality Rubric ───────────────────────────────────────────────────────────

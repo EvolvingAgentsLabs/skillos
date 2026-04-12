@@ -1,6 +1,6 @@
 # Math Benchmark Report: Formal Proof Dialect
 
-**Generated**: 2026-04-12 16:40
+**Generated**: 2026-04-12 18:27
 **Task**: Calculate spanning trees of K_{3,4} via Matrix Tree Theorem
 **Correct Answer**: 432
 
@@ -8,10 +8,10 @@
 
 | Metric | Plain Claude | SkillOS Solver | SkillOS Solver+Renderer |
 |---|---|---|---|
-| Output tokens | 4,632 | 1,976 | 2,370 |
-| Token reduction | baseline | **-57.3%** | **-48.8%** |
-| Cost (USD) | $0.1783 | $0.0706 | $0.1126 |
-| Duration (s) | 58.9 | 29.3 | 40.7 |
+| Output tokens | 4,582 | 2,232 | 2,634 |
+| Token reduction | baseline | **-51.3%** | **-42.5%** |
+| Cost (USD) | $0.2885 | $0.0770 | $0.1208 |
+| Duration (s) | 71.5 | 33.0 | 42.6 |
 | Turns | 1 | 1 | 2 |
 
 ## Quality Verification (Automated)
@@ -20,15 +20,15 @@
 |---|---|---|
 | Answer = 432 (50) | YES | YES |
 | Laplacian matrix (10) | No | No |
-| Cofactor/minor (10) | No | Yes |
+| Cofactor/minor (10) | Yes | Yes |
 | Determinant calc (10) | Yes | Yes |
 | Intermediate 27x16 (20) | Yes | Yes |
-| **Total score** | **80/100** | **90/100** |
+| **Total score** | **90/100** | **90/100** |
 
 ## Key Findings
 
-- **Token reduction (solver only)**: 57.3% fewer output tokens
-- **Token reduction (with renderer)**: 48.8% fewer even with English translation step
+- **Token reduction (solver only)**: 51.3% fewer output tokens
+- **Token reduction (with renderer)**: 42.5% fewer even with English translation step
 - **Math accuracy**: Plain CORRECT, SkillOS CORRECT
 - **Cognitive Scaffolding**: Formal-proof notation forces step-by-step computation, maintaining arithmetic accuracy
 
@@ -37,174 +37,100 @@
 ### Plain Claude
 
 <details>
-<summary>Click to expand (4,632 tokens)</summary>
+<summary>Click to expand (4,582 tokens)</summary>
 
-Let me work through the Gaussian elimination by hand with exact arithmetic.
+Let me redo my Schur complement calculation carefully — I made an error. Let me recompute by hand.
 
-### Step-by-step Gaussian elimination on L₁₁
+---
 
-Starting matrix:
+## Corrected Step 3: Compute det(L₁₁) carefully
 
-```
-     c1   c2   c3   c4   c5   c6
-R1 [  4    0   -1   -1   -1   -1 ]
-R2 [  0    4   -1   -1   -1   -1 ]
-R3 [ -1   -1    3    0    0    0 ]
-R4 [ -1   -1    0    3    0    0 ]
-R5 [ -1   -1    0    0    3    0 ]
-R6 [ -1   -1    0    0    0    3 ]
-```
-
-**Pivot on R1, c1 (pivot = 4):**
-
-Eliminate entries in column 1. Only R3–R6 have nonzero entries (-1) in column 1.
-
-- R3 → R3 + (1/4)R1
-- R4 → R4 + (1/4)R1
-- R5 → R5 + (1/4)R1
-- R6 → R6 + (1/4)R1
+The 6×6 cofactor matrix L₁₁ (deleting row/column of a₁):
 
 ```
-R3: [0, -1,    3-1/4,  0-1/4,  0-1/4,  0-1/4] = [0, -1,  11/4, -1/4, -1/4, -1/4]
-R4: [0, -1,   0-1/4,  3-1/4,  0-1/4,  0-1/4] = [0, -1, -1/4,  11/4, -1/4, -1/4]
-R5: [0, -1,   0-1/4,  0-1/4,  3-1/4,  0-1/4] = [0, -1, -1/4, -1/4,  11/4, -1/4]
-R6: [0, -1,   0-1/4,  0-1/4,  0-1/4,  3-1/4] = [0, -1, -1/4, -1/4, -1/4,  11/4]
+        a2  a3  b1  b2  b3  b4
+    ┌                            ┐
+a2  │  4   0  -1  -1  -1  -1    │
+a3  │  0   4  -1  -1  -1  -1    │
+b1  │ -1  -1   3   0   0   0    │
+b2  │ -1  -1   0   3   0   0    │
+b3  │ -1  -1   0   0   3   0    │
+b4  │ -1  -1   0   0   0   3    │
+    └                            ┘
 ```
 
-After step 1:
+### Block structure:
+
+- **P** = `[[4,0],[0,4]]` = 4I₂ (2×2, top-left)
+- **Q** = 2×4 matrix, all entries -1
+- **R** = 4×2 matrix, all entries -1
+- **S** = 3I₄ (4×4, bottom-right)
+
+**Schur complement** = S - R P⁻¹ Q
+
+**R P⁻¹:** Each entry of R is -1, P⁻¹ = (1/4)I₂, so R P⁻¹ is 4×2 with all entries -1/4.
+
+**(R P⁻¹) Q:** This is a 4×4 matrix. Entry (i,j):
+
+$$\sum_{k=1}^{2} (RP^{-1})_{ik} \cdot Q_{kj} = (-\tfrac{1}{4})(-1) + (-\tfrac{1}{4})(-1) = \tfrac{1}{4} + \tfrac{1}{4} = \tfrac{1}{2}$$
+
+So R P⁻¹ Q = (1/2) J₄ — this part was correct.
+
+**Schur complement** = 3I₄ - (1/2)J₄:
 
 ```
-R1 [  4    0    -1     -1     -1     -1   ]
-R2 [  0    4    -1     -1     -1     -1   ]
-R3 [  0   -1   11/4   -1/4   -1/4   -1/4 ]
-R4 [  0   -1   -1/4   11/4   -1/4   -1/4 ]
-R5 [  0   -1   -1/4   -1/4   11/4   -1/4 ]
-R6 [  0   -1   -1/4   -1/4   -1/4   11/4 ]
+┌                          ┐
+│  5/2   -1/2  -1/2  -1/2  │
+│ -1/2    5/2  -1/2  -1/2  │
+│ -1/2   -1/2   5/2  -1/2  │
+│ -1/2   -1/2  -1/2   5/2  │
+└                          ┘
 ```
 
-**Pivot on R2, c2 (pivot = 4):**
+Wait — that's wrong! 3 - 1/2 = **5/2** on diagonal, and 0 - 1/2 = **-1/2** off diagonal. That's what I had. Let me recompute the determinant more carefully.
 
-Eliminate column 2 in R3–R6 (each has -1 in column 2).
+### det(3I₄ - (1/2)J₄) = det((1/2)(6I₄ - J₄))
 
-- R3 → R3 + (1/4)R2
-- R4 → R4 + (1/4)R2
-- R5 → R5 + (1/4)R2
-- R6 → R6 + (1/4)R2
+Factor out 1/2 from each of 4 rows: (1/2)⁴ · det(6I₄ - J₄)
 
-```
-R3: [0, 0, 11/4-1/4, -1/4-1/4, -1/4-1/4, -1/4-1/4] = [0, 0, 10/4, -2/4, -2/4, -2/4]
-   = [0, 0, 5/2, -1/2, -1/2, -1/2]
+**Eigenvalues of J₄** (the 4×4 all-ones matrix): 4 (multiplicity 1) and 0 (multiplicity 3).
 
-R4: [0, 0, -1/4-1/4, 11/4-1/4, -1/4-1/4, -1/4-1/4] = [0, 0, -1/2, 5/2, -1/2, -1/2]
-R5: [0, 0, -1/2, -1/2, 5/2, -1/2]
-R6: [0, 0, -1/2, -1/2, -1/2, 5/2]
-```
+**Eigenvalues of 6I₄ - J₄**: 6 - 4 = **2** (multiplicity 1) and 6 - 0 = **6** (multiplicity 3).
 
-After step 2, the lower-right 4×4 block is:
+$$\det(6I_4 - J_4) = 2 \times 6^3 = 2 \times 216 = 432$$
 
-```
-     c3     c4     c5     c6
-R3 [ 5/2   -1/2   -1/2   -1/2 ]
-R4 [-1/2    5/2   -1/2   -1/2 ]
-R5 [-1/2   -1/2    5/2   -1/2 ]
-R6 [-1/2   -1/2   -1/2    5/2 ]
-```
+$$\det(S - RP^{-1}Q) = \frac{1}{16} \times 432 = 27$$
 
-**Pivot on R3, c3 (pivot = 5/2):**
+### Final answer:
 
-Eliminate column 3 in R4–R6. Each has -1/2, so multiplier = (-1/2)/(5/2) = -1/5.
+$$\det(L_{11}) = \det(P) \times \det(S - RP^{-1}Q) = 16 \times 27 = 432$$
 
-- R4 → R4 + (1/5)R3
-- R5 → R5 + (1/5)R3
-- R6 → R6 + (1/5)R3
+---
 
-For R4:
-- c4: 5/2 + (1/5)(-1/2) = 5/2 - 1/10 = 24/10 = **12/5**
-- c5: -1/2 + (1/5)(-1/2) = -1/2 - 1/10 = -6/10 = **-3/5**
-- c6: -1/2 + (1/5)(-1/2) = **-3/5**
+I see my earlier error: I incorrectly wrote 3I₄ - (1/2)J₄ = (1/2)(5I₄ - J₄). The correct factorization is (1/2)(6I₄ - J₄).
 
-By symmetry, R5 and R6 have the same pattern:
+## Step 4: Verification
 
-```
-     c4     c5     c6
-R4 [12/5   -3/5   -3/5 ]
-R5 [-3/5   12/5   -3/5 ]
-R6 [-3/5   -3/5   12/5 ]
-```
+The known formula for the number of spanning trees of K_{m,n} is:
 
-**Pivot on R4, c4 (pivot = 12/5):**
+$$\tau(K_{m,n}) = m^{n-1} \cdot n^{m-1}$$
 
-Multiplier for R5, R6: (-3/5)/(12/5) = -3/12 = -1/4.
+For K_{3,4}:
 
-- R5 → R5 + (1/4)R4
-- R6 → R6 + (1/4)R4
+$$\tau = 3^{4-1} \cdot 4^{3-1} = 3^3 \cdot 4^2 = 27 \cdot 16 = 432$$
 
-For R5:
-- c5: 12/5 + (1/4)(-3/5) = 12/5 - 3/20 = 48/20 - 3/20 = **45/20 = 9/4**
-- c6: -3/5 + (1/4)(-3/5) = -3/5 - 3/20 = -12/20 - 3/20 = **-15/20 = -3/4**
+This matches our Matrix Tree Theorem computation exactly.
 
-For R6:
-- c5: -3/5 + (1/4)(-3/5) = **-3/4**
-- c6: 12/5 + (1/4)(-3/5) = **9/4**
+---
 
-Remaining 2×2 block:
-
-```
-     c5     c6
-R5 [ 9/4   -3/4 ]
-R6 [-3/4    9/4 ]
-```
-
-**Pivot on R5, c5 (pivot = 9/4):**
-
-Multiplier for R6: (-3/4)/(9/4) = -1/3.
-
-- R6 → R6 + (1/3)R5
-
-R6, c6: 9/4 + (1/3)(-3/4) = 9/4 - 3/12 = 9/4 - 1/4 = **8/4 = 2**
-
-**Final pivot:** R6, c6 = **2**.
-
-### Collecting the determinant
-
-The determinant is the product of all pivots:
-
-```
-det(L₁₁) = 4 × 4 × 5/2 × 12/5 × 9/4 × 2
-```
-
-Let me compute step by step:
-
-| Step | Multiplication | Running product |
-|------|---------------|-----------------|
-| 4 × 4 | | **16** |
-| × 5/2 | 16 × 5/2 | **40** |
-| × 12/5 | 40 × 12/5 | **96** |
-| × 9/4 | 96 × 9/4 | **216** |
-| × 2 | 216 × 2 | **432** |
-
-## 4. Final Answer
-
-$$\boxed{t(K_{3,4}) = 432}$$
-
-### Verification via the known formula
-
-For complete bipartite graphs, there is a closed-form result:
-
-$$t(K_{m,n}) = m^{n-1} \cdot n^{m-1}$$
-
-With m = 3, n = 4:
-
-$$t(K_{3,4}) = 3^{4-1} \cdot 4^{3-1} = 3^3 \cdot 4^2 = 27 \cdot 16 = 432 \checkmark$$
-
-The Matrix Tree Theorem computation agrees exactly with the formula. **The number of spanning trees of K_{3,4} is 432.**
+## **The number of spanning trees in K_{3,4} is 432.**
 
 </details>
 
 ### SkillOS Solver (formal-proof dialect)
 
 <details>
-<summary>Click to expand (1,976 tokens)</summary>
+<summary>Click to expand (2,232 tokens)</summary>
 
 
 
@@ -224,73 +150,83 @@ DERIVE:
        ⎢ -1  -1  -1   0   3   0   0 ⎥
        ⎢ -1  -1  -1   0   0   3   0 ⎥
        ⎣ -1  -1  -1   0   0   0   3 ⎦
-       [BY definition: L_{ii} = deg(i), L_{ij} = -1 if {i,j} ∈ E, else 0]
+       rows/cols indexed (a1,a2,a3,b1,b2,b3,b4)
+       BY definition (L = D - A, L_{ii} = deg(i), L_{ij} = -1 if ij ∈ E, 0 otherwise)
 
-  D2: L_{11} := L with row 1 and column 1 deleted =
+  D2: τ(K_{3,4}) = det(L_{11})
+       where L_{11} is L with row 1 and column 1 deleted
+       BY matrix_tree_theorem
+
+  D3: L_{11} =
        ⎡  4   0  -1  -1  -1  -1 ⎤
        ⎢  0   4  -1  -1  -1  -1 ⎥
        ⎢ -1  -1   3   0   0   0 ⎥
        ⎢ -1  -1   0   3   0   0 ⎥
        ⎢ -1  -1   0   0   3   0 ⎥
        ⎣ -1  -1   0   0   0   3 ⎦
-       [BY definition: cofactor matrix deletion of row 1, column 1]
-
-  D3: τ(K_{3,4}) = det(L_{11})
-       [BY matrix_tree_theorem]
+       rows/cols indexed (a2,a3,b1,b2,b3,b4)
+       BY definition (delete row 1, column 1 from D1)
 
   D4: R3 ← R3 + (1/4)R1, R4 ← R4 + (1/4)R1, R5 ← R5 + (1/4)R1, R6 ← R6 + (1/4)R1
-       ⎡  4    0   -1    -1    -1    -1   ⎤
-       ⎢  0    4   -1    -1    -1    -1   ⎥
-       ⎢  0   -1   11/4  -1/4  -1/4  -1/4 ⎥
-       ⎢  0   -1   -1/4  11/4  -1/4  -1/4 ⎥
-       ⎢  0   -1   -1/4  -1/4  11/4  -1/4 ⎥
-       ⎣  0   -1   -1/4  -1/4  -1/4  11/4 ⎦
-       [BY cofactor_expansion: row reduction preserves determinant]
+       ⎡  4     0    -1    -1    -1    -1   ⎤
+       ⎢  0     4    -1    -1    -1    -1   ⎥
+       ⎢  0    -1   11/4  -1/4  -1/4  -1/4 ⎥
+       ⎢  0    -1   -1/4  11/4  -1/4  -1/4 ⎥
+       ⎢  0    -1   -1/4  -1/4  11/4  -1/4 ⎥
+       ⎣  0    -1   -1/4  -1/4  -1/4  11/4 ⎦
+       det unchanged (row operations adding multiple of one row to another)
+       BY cofactor_expansion (Gaussian elimination preserving determinant)
 
   D5: R3 ← R3 + (1/4)R2, R4 ← R4 + (1/4)R2, R5 ← R5 + (1/4)R2, R6 ← R6 + (1/4)R2
-       ⎡  4   0    -1     -1     -1     -1    ⎤
-       ⎢  0   4    -1     -1     -1     -1    ⎥
-       ⎢  0   0    10/4   -2/4   -2/4   -2/4  ⎥
-       ⎢  0   0    -2/4   10/4   -2/4   -2/4  ⎥
-       ⎢  0   0    -2/4   -2/4   10/4   -2/4  ⎥
-       ⎣  0   0    -2/4   -2/4   -2/4   10/4  ⎦
-       [BY cofactor_expansion: row reduction preserves determinant]
+       ⎡  4    0     -1      -1      -1      -1    ⎤
+       ⎢  0    4     -1      -1      -1      -1    ⎥
+       ⎢  0    0    10/4    -2/4    -2/4    -2/4   ⎥
+       ⎢  0    0    -2/4    10/4    -2/4    -2/4   ⎥
+       ⎢  0    0    -2/4    -2/4    10/4    -2/4   ⎥
+       ⎣  0    0    -2/4    -2/4    -2/4    10/4   ⎦
+       i.e.,
+       ⎡  4    0     -1      -1      -1      -1   ⎤
+       ⎢  0    4     -1      -1      -1      -1   ⎥
+       ⎢  0    0     5/2    -1/2    -1/2    -1/2  ⎥
+       ⎢  0    0    -1/2     5/2    -1/2    -1/2  ⎥
+       ⎢  0    0    -1/2    -1/2     5/2    -1/2  ⎥
+       ⎣  0    0    -1/2    -1/2    -1/2     5/2  ⎦
+       BY arithmetic
 
-  D6: Simplify lower-right 4×4 block: entries = 5/2 on diagonal, -1/2 off diagonal
-       M = ⎡  5/2  -1/2  -1/2  -1/2 ⎤
-           ⎢ -1/2   5/2  -1/2  -1/2 ⎥
-           ⎢ -1/2  -1/2   5/2  -1/2 ⎥
-           ⎣ -1/2  -1/2  -1/2   5/2 ⎦
-       [BY arithmetic: 10/4 = 5/2, -2/4 = -1/2]
+  D6: det(L_{11}) = 4 · 4 · det(M)
+       where M =
+       ⎡  5/2   -1/2   -1/2   -1/2 ⎤
+       ⎢ -1/2    5/2   -1/2   -1/2 ⎥
+       ⎢ -1/2   -1/2    5/2   -1/2 ⎥
+       ⎣ -1/2   -1/2   -1/2    5/2 ⎦
+       BY cofactor_expansion (block upper-triangular: det = product of diagonal block dets)
 
-  D7: M = (1/2)(3·I₄ + J₄) where J₄ = all-ones 4×4 matrix, I₄ = identity
-       Equivalently: M = (3/2)I₄ + (1/2)J₄ — verify: diagonal = 3/2 + 1/2·1 ≠ 5/2 ✗
-       Correction: M = 3I₄ - (1/2)J₄ + … 
-       Direct: M = aI₄ + bJ₄ where a + b = 5/2 (diagonal), b = -1/2 (off-diagonal)
-       ⟹ a = 3, b = -1/2
-       M = 3I₄ + (-1/2)J₄
-       [BY arithmetic]
-
-  D8: Eigenvalues of J₄: λ = 4 (multiplicity 1), λ = 0 (multiplicity 3)
-       Eigenvalues of M = 3I₄ - (1/2)J₄:
+  D7: M = (1/2)(5I_4 - J_4 + I_4) is not the clearest form; instead:
+       M = 3I_4 - (1/2)J_4 + (-1/2)I_4 ... 
+       Rewrite: M = (1/2)(5I_4 - 𝟏𝟏ᵀ + I_4) — use direct eigenvalue approach:
+       M has the form aI + bJ where a = 3, b = -1/2, and J = 𝟏𝟏ᵀ (rank-1)?
+       No: M = (5/2)I_4 + (-1/2)(J_4 - I_4) = (5/2)I_4 - (1/2)J_4 + (1/2)I_4 = 3I_4 - (1/2)J_4
+       where J_4 is the 4×4 all-ones matrix.
+       Eigenvalues of J_4: λ = 4 (multiplicity 1), λ = 0 (multiplicity 3)
+       Eigenvalues of M = 3I - (1/2)J_4:
          λ₁ = 3 - (1/2)(4) = 3 - 2 = 1    (multiplicity 1)
          λ₂ = 3 - (1/2)(0) = 3              (multiplicity 3)
-       [BY arithmetic: eigenvalues of aI + bJ are a + bn for J-eigval n]
+       BY definition (eigenvalues of aI + bJ_n)
 
-  D9: det(M) = 1 · 3³ = 27
-       [BY arithmetic: determinant = product of eigenvalues]
+  D8: det(M) = λ₁ · λ₂³ = 1 · 3³ = 1 · 27 = 27
+       BY arithmetic
 
-  D10: det(L_{11}) = det(upper-left 2×2 block of triangular form) · det(M)
-        = 4 · 4 · det(M)
-        = 16 · 27
-        = 432
-       [BY arithmetic: det of block upper-triangular = product of block determinants]
+  D9: det(L_{11}) = 4 · 4 · 27 = 432
+       BY substitution (D6, D8)
 
-  D11: Verification by known formula: τ(K_{m,n}) = m^{n-1} · n^{m-1}
-        τ(K_{3,4}) = 3^{4-1} · 4^{3-1} = 3³ · 4² = 27 · 16 = 432
-       [BY substitution: standard bipartite spanning tree formula]
+  D10: τ(K_{3,4}) = 432
+       BY substitution (D2, D9)
 
-QED: τ(K_{3,4}) = det(L_{11}) = 432
+  D11: Verification via formula τ(K_{m,n}) = m^{n-1} · n^{m-1}:
+       τ(K_{3,4}) = 3^{4-1} · 4^{3-1} = 3³ · 4² = 27 · 16 = 432 ✓
+       BY arithmetic
+
+QED: The number of spanning trees in K_{3,4} is 432.
 ```
 
 </details>
@@ -298,10 +234,10 @@ QED: τ(K_{3,4}) = det(L_{11}) = 432
 ### SkillOS Renderer (English translation)
 
 <details>
-<summary>Click to expand (394 tokens)</summary>
+<summary>Click to expand (402 tokens)</summary>
 
-The complete bipartite graph K_{3,4} has 7 vertices split into two groups: A = {a1, a2, a3} and B = {b1, b2, b3, b4}, where every vertex in A is connected to every vertex in B. This gives each A-vertex a degree of 4 and each B-vertex a degree of 3. To count the graph's spanning trees, the proof constructs the 7×7 Laplacian matrix L(K_{3,4}) — with degrees on the diagonal and −1 for each edge — then deletes row 1 and column 1 to form the 6×6 cofactor matrix L_{11}. By the Matrix Tree Theorem, the number of spanning trees equals det(L_{11}).
+The complete bipartite graph K_{3,4} has 7 vertices split into two groups: A = {a1, a2, a3} and B = {b1, b2, b3, b4}, where every vertex in A connects to every vertex in B. This gives each A-vertex a degree of 4 and each B-vertex a degree of 3. To count the graph's spanning trees, the proof constructs the 7×7 Laplacian matrix L = D − A (degree matrix minus adjacency matrix), then applies Kirchhoff's matrix tree theorem: the number of spanning trees equals the determinant of any cofactor of L — here, the 6×6 submatrix L_{11} obtained by deleting the first row and column.
 
-The determinant is computed through row reduction. Two rounds of elimination zero out the first two columns of the bottom four rows, producing a block upper-triangular matrix: a 2×2 diagonal block with entries 4 and 4, and a 4×4 block M with 5/2 on the diagonal and −1/2 off-diagonal. Decomposing M as 3I₄ + (−1/2)J₄ reveals its eigenvalues — 1 (multiplicity 1) and 3 (multiplicity 3) — giving det(M) = 1 · 3³ = 27. Multiplying the block determinants yields 4 · 4 · 27 = 432, confirmed by the known formula τ(K_{m,n}) = m^{n−1} · n^{m−1} = 3³ · 4² = 432.
+The proof evaluates det(L_{11}) through Gaussian elimination, using row operations to reduce it to a block upper-triangular form, factoring out the diagonal blocks to get det(L_{11}) = 4 · 4 · det(M), where M is a 4×4 matrix of the form 3I₄ − (1/2)J₄. Since J₄ (the all-ones matrix) has eigenvalues 4 and 0 with multiplicities 1 and 3, M has eigenvalues 1 and 3 with the same multiplicities, giving det(M) = 1 · 27 = 27. Thus τ(K_{3,4}) = 4 · 4 · 27 = 432, confirmed by the closed-form formula τ(K_{m,n}) = m^{n−1} · n^{m−1} = 3³ · 4² = 432.
 
 </details>
