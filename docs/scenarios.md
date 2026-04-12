@@ -237,6 +237,69 @@ skillos execute: "Run the Operation Echo-Q scenario"
 
 ---
 
+### Operation_Echo_Q_Dialects
+
+**File:** `scenarios/Operation_Echo_Q_Dialects.md`
+**Mode:** EXECUTION
+**Variant of:** Operation_Echo_Q (dialect-enhanced for A/B token comparison)
+**Last validated:** 2026-04-12 (Opus 4.6)
+
+Dialect-enhanced version of Operation Echo-Q. Same 4-agent quantum cepstral analysis pipeline, but internal artifacts use SkillOS dialect compression: wiki derivations in `formal-proof` notation, constraints in `constraint-dsl` notation, state tracking in `exec-plan`. Code and whitepaper remain verbose for human consumption.
+
+**Dialects used:**
+- `formal-proof` — GIVEN:/DERIVE:/QED notation for wiki derivation sections (13 proof blocks across 5 pages)
+- `constraint-dsl` — C[N][H/M/L] format for mathematical invariants
+- `exec-plan` — Pipeline state tracking
+
+**What it demonstrates:**
+- Full dialect pipeline integration with existing complex scenarios
+- A/B token comparison vs original with measured compression
+- Dialect notation preserves logical structure while compressing prose
+- Human-renderer-agent expansion at egress for final deliverables
+
+**Validated results (2026-04-12):** All 4 phases pass. Wiki concepts: 26,621 → 23,146 bytes (-13%, ~50% in derivation sections). Constraints: 5,119 → 1,796 bytes (**-65%**). Echo detection PASS (classical 0.003s, quantum 0.034s). 6/6 hard constraints pass. Internal artifacts: **-23%** overall.
+
+**Run it:**
+```bash
+skillos execute: "Run the Operation Echo-Q Dialects scenario"
+```
+
+**Expected outputs:** `projects/Project_echo_q_dialects/` — dialect-compressed wiki, constraint-dsl state, whitepaper with expanded prose, working quantum code
+
+---
+
+### ProjectAorta_Dialects
+
+**File:** `scenarios/ProjectAorta_Dialects.md`
+**Mode:** EXECUTION
+**Variant of:** ProjectAortaScenario (dialect-enhanced for A/B token comparison)
+**Last validated:** 2026-04-12 (Opus 4.6)
+
+Dialect-enhanced version of Project Aorta. Same 3-agent cognitive pipeline, but with dialect compression: vision document in `caveman-prose`, mathematical framework in `formal-proof` + `system-dynamics`, code remains verbose.
+
+**Dialects used:**
+- `caveman-prose` — Compressed narrative for vision document
+- `formal-proof` — GIVEN:/DERIVE:/QED for mathematical derivations
+- `system-dynamics` — Stock-flow notation ([STOCK], [FLOW], [FB+], [FB-]) for hemodynamic models
+- `exec-plan` — Pipeline state tracking
+
+**What it demonstrates:**
+- Multi-dialect pipeline (different dialects per stage)
+- caveman-prose for narrative compression
+- system-dynamics for domain-specific modeling
+- A/B token comparison vs original with measured compression
+
+**Validated results (2026-04-12):** All 3 stages pass. Vision: 36,187 → 5,424 bytes (**-85%** via caveman-prose). Math framework: 37,410 → 27,622 bytes (**-26%** via formal-proof + system-dynamics). Echo delay detected at 50.000ms (0.000ms error). Clinical threshold PASS. Total pipeline: **-47%**.
+
+**Run it:**
+```bash
+skillos execute: "Run the Project Aorta Dialects scenario"
+```
+
+**Expected outputs:** `projects/Project_aorta_dialects/` — caveman-prose vision, formal-proof + system-dynamics math framework, working quantum code, exec-plan pipeline state. Use `human-renderer-agent` to expand compressed outputs for reading.
+
+---
+
 ### KnowledgeBase_Research_Task
 
 **File:** `scenarios/KnowledgeBase_Research_Task.md`

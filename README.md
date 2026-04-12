@@ -226,6 +226,22 @@ skillos execute: "Run the Project Aorta scenario"
 
 **Results (Opus 4.6, 2026-04-12):** Vision and mathematical framework stages produce publication-grade outputs. Three specialized agents created dynamically as markdown at runtime.
 
+### Dialect-Enhanced Variants (A/B Token Comparison)
+
+Both validated scenarios have dialect-enhanced variants that compress internal artifacts with SkillOS dialects while keeping final deliverables (code, whitepapers) verbose for human consumption:
+
+| Variant | Dialects | Internal Artifact Reduction | Result |
+|---------|----------|---------------------------|--------|
+| **Echo-Q Dialects** | `formal-proof` + `constraint-dsl` | **-23%** overall (wiki -13%, constraints **-65%**) | All 4 phases pass, echo PASS |
+| **Aorta Dialects** | `caveman-prose` + `formal-proof` + `system-dynamics` | **-47%** overall (vision **-85%**, math -26%) | All 3 stages pass, 0ms error |
+
+```bash
+skillos execute: "Run the Operation Echo-Q Dialects scenario"
+skillos execute: "Run the Project Aorta Dialects scenario"
+```
+
+**Results (Opus 4.6, 2026-04-12):** Dialect compression strongest on prose-heavy artifacts (caveman-prose: -85%) and structured constraints (constraint-dsl: -65%). formal-proof notation adds mechanical traceability via `[BY rule]` annotations. Both variants produce identical-quality outputs to their originals.
+
 ---
 
 ## Example Commands

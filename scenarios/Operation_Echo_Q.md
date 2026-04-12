@@ -8,6 +8,10 @@ description: >
   recovery against Qiskit validation.
 delegation_pattern: hierarchical_decomposition_with_reflective_loop
 error_recovery: strict_mathematical_validation
+requires_dialects:
+  - formal-proof
+  - constraint-dsl
+  - exec-plan
 agents_required:
   - quantum-theorist-agent (created dynamically)
   - pure-mathematician-agent (created dynamically)
@@ -94,7 +98,7 @@ Quantum gates must be unitary: $U^\dagger U = I$. The $\log(\cdot)$ function is:
 ### Instructions
 
 1. Initialize the wiki from `templates/wiki/_schema.template.md`, customized for quantum computing
-2. Research and compile the following concept pages in `wiki/concepts/`:
+2. Research and compile the following concept pages in `wiki/concepts/`. Use `formal-proof` notation (GIVEN:/DERIVE:/QED with [BY rule] annotations) for derivation sections within wiki pages — this compresses LaTeX reasoning into structured proof blocks:
 
 | Wiki Page | Content |
 |---|---|
@@ -158,7 +162,7 @@ last_updated: [ISO timestamp]
 
 1. Read all wiki concept pages from Phase 1
 2. Identify every physical law and mathematical constraint
-3. Write `state/constraints.md` with the following invariants:
+3. Write `state/constraints.md` using `constraint-dsl` notation (C[N][H/M/L] format for hard constraints, S[N][H/M/L] for soft constraints) with the following invariants:
 
 ```markdown
 # Mathematical Invariants — Operation Echo-Q

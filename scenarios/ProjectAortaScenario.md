@@ -3,6 +3,10 @@ name: project-aorta-scenario
 description: Three-agent cognitive pipeline for quantum homomorphic signal processing of arterial pressure waves
 version: v1
 delegation_pattern: sequential_pipeline
+requires_dialects:
+  - formal-proof
+  - system-dynamics
+  - exec-plan
 agents_required:
   - visionary-agent (created dynamically)
   - mathematician-agent (created dynamically)
@@ -25,11 +29,12 @@ Recreate a biomedical engineering project that originally aimed to navigate arte
 **Input**: Research concept about quantum arterial navigation
 **Output**: `project_vision.md` - Detailed narrative with scientific context
 
-### Stage 2: Mathematical Formalization (MathematicianAgent) 
+### Stage 2: Mathematical Formalization (MathematicianAgent)
 **Agent**: `mathematician-agent`
 **Goal**: Convert the project description into rigorous mathematical framework
 **Input**: Project vision document
 **Output**: `mathematical_framework.md` - Formal equations and analytical procedures
+**Dialect hint**: Include `formal-proof` derivation blocks (GIVEN:/DERIVE:/QED) alongside prose explanations. Use `system-dynamics` stock-flow notation ([STOCK], [FLOW], [FB+], [FB-]) for hemodynamic models.
 
 ### Stage 3: Quantum Implementation (QuantumEngineerAgent)
 **Agent**: `quantum-engineer-agent` 
@@ -52,6 +57,7 @@ Recreate a biomedical engineering project that originally aimed to navigate arte
 3. **Stage 2: Mathematical Formalization**
    - Invoke mathematician-agent with project vision
    - Develop formal mathematical framework
+   - Track pipeline progress using `exec-plan` notation in state files
    - Save to projects/Project_aorta/output/mathematical_framework.md
 
 4. **Stage 3: Quantum Implementation**

@@ -272,6 +272,20 @@ Measured against real SkillOS project artifacts:
 
 **Aggregate impact across a typical execution session:** 60-80% token reduction on agent-facing artifacts, while preserving full human-readable originals.
 
+### End-to-End Scenario Results (validated 2026-04-12)
+
+Dialect compression measured across complete multi-agent scenario pipelines (A/B comparison with dialect-free originals):
+
+| Scenario | Artifact | Dialect | Original | Compressed | Reduction |
+|----------|----------|---------|----------|------------|-----------|
+| Echo-Q | Wiki concepts (5 pages) | `formal-proof` | 26,621 B | 23,146 B | -13% (~50% in derivations) |
+| Echo-Q | Constraints | `constraint-dsl` | 5,119 B | 1,796 B | **-65%** |
+| Aorta | Vision document | `caveman-prose` | 36,187 B | 5,424 B | **-85%** |
+| Aorta | Math framework | `formal-proof` + `system-dynamics` | 37,410 B | 27,622 B | **-26%** |
+| Aorta | Pipeline state | `exec-plan` | 511 B | 1,094 B | +114% (richer tracing) |
+
+Both dialect variants produce identical-quality outputs: Echo-Q echo detection PASS (0.034s error), Aorta echo detection PASS (0.000ms error). See `scenarios/Operation_Echo_Q_Dialects.md` and `scenarios/ProjectAorta_Dialects.md`.
+
 ---
 
 ## Benchmarks: Measured Performance
