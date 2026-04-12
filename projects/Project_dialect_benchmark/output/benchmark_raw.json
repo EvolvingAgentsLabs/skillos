@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-04-12T15:10:55.449448",
+  "plain": {
+    "input_tokens": 3,
+    "cache_creation_input_tokens": 1840,
+    "cache_read_input_tokens": 18679,
+    "output_tokens": 4181,
+    "total_cost_usd": 0.1253795,
+    "duration_ms": 90089,
+    "num_turns": 1
+  },
+  "plain_text_len": 12501,
+  "plain_scores": {
+    "feedback_loop": 25,
+    "retry_condition": 20,
+    "logical_derivation": 20,
+    "constraints": 15,
+    "execution_plan": 10,
+    "system_model": 10,
+    "notes": "Feedback loop: Explicitly identified R1 as a positive/reinforcing feedback loop with the exact cycle (queue up -> latency up -> timeouts up -> retries up -> queue up), plus R2 and missing balancing loop B1. Retry condition: Boolean expressions with explicit parenthesization for current and corrected predicates, clear precedence. Logical derivation: Every step cites premises (thread pool size, timeout values, retry counts) with no logical jumps, from amplification through thread hold time to exhaustion and zombie waste, concluding with QED. Constraints: Formal table with IDs, specific numeric thresholds (error_rate > theta, P_b x 0.8, timeout < 6s), and severity levels (hard vs soft). Execution plan: Three phases with explicit dependency graph, verification criteria for each phase (e.g., circuit opens within 10s, thread pool below 80%), and parallel/sequential ordering. System model: Correct stocks, flows, feedback loops with proper polarity labels (reinforcing R1/R2, missing balancing B1), plus phase portrait showing bistability.",
+    "total": 100
+  },
+  "skillos": {
+    "input_tokens": 5,
+    "cache_creation_input_tokens": 28197,
+    "cache_read_input_tokens": 83765,
+    "output_tokens": 3778,
+    "total_cost_usd": 0.31258874999999997,
+    "duration_ms": 80892,
+    "num_turns": 8
+  },
+  "skillos_text_len": 7801,
+  "skillos_scores": {
+    "feedback_loop": 25,
+    "retry_condition": 20,
+    "logical_derivation": 20,
+    "constraints": 15,
+    "execution_plan": 10,
+    "system_model": 10,
+    "notes": "Feedback loop: Explicitly identified as reinforcing (FB+) with full cycle retries\u2192load\u2192timeouts\u2192retries in both the formal proof and system dynamics model. Retry condition: Boolean expression with explicit parenthesization showing exactly when retries fire, including simplification given no circuit breaker. Logical derivation: Every step in the resource exhaustion proof cites a rule (modus_ponens, transitivity, conjunction_introduction, etc.) with no logical jumps; numeric values derived step-by-step. Constraints: Formal constraint notation with numeric thresholds (50% fail rate, 5 consecutive failures, 20% retry budget, 80% thread util) and severity levels (H/M/L). Execution plan: Phases (P1-P6) with explicit dependencies (dep=P1, dep=P1,P2,P3, etc.) and verification criteria for each phase. System model: Correct identification of stocks (active_connections, pending_retries, available_threads, request_queue), flows with polarity, and feedback loops with proper polarity labels (FB+, FB-).",
+    "total": 100
+  }
+}
