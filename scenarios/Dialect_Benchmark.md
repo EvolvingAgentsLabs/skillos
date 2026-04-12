@@ -7,6 +7,31 @@ description: >
   to demonstrate token compression and reasoning quality gains.
 delegation_pattern: sequential
 error_recovery: per_stage
+requires_dialects:
+  - formal-proof
+  - system-dynamics
+  - boolean-logic
+  - constraint-dsl
+  - exec-plan
+pipeline:
+  - step: 1
+    deliverable: "Root cause diagnosis"
+    dialect: formal-proof
+  - step: 2
+    deliverable: "System dynamics model"
+    dialect: system-dynamics
+  - step: 3
+    deliverable: "Retry condition"
+    dialect: boolean-logic
+  - step: 4
+    deliverable: "Resource exhaustion proof"
+    dialect: formal-proof
+  - step: 5
+    deliverable: "Fix constraints"
+    dialect: constraint-dsl
+  - step: 6
+    deliverable: "Implementation plan"
+    dialect: exec-plan
 ---
 
 # Dialect Benchmark: Microservice Cascade Failure Analysis
