@@ -1,8 +1,8 @@
 ---
 type: skill-index
 version: 1.0.0
-total_skills: 23
-last_updated: "2026-04-11"
+total_skills: 25
+last_updated: "2026-04-12"
 ---
 
 # SkillOS Skill Index
@@ -23,7 +23,7 @@ Top-level routing table for the hierarchical skill system.
 
 | Domain | Skills | index path | Use when | Base behaviors |
 |--------|--------|------------|----------|----------------|
-| orchestration | 1 | system/skills/orchestration/index.md | goal execution, workflow, task coordination | system/skills/orchestration/base.md |
+| orchestration | 3 | system/skills/orchestration/index.md | goal execution, workflow, task coordination, language facade | system/skills/orchestration/base.md |
 | memory | 4 | system/skills/memory/index.md | history, learning, patterns, logs, traces | system/skills/memory/base.md |
 | knowledge | 5 | system/skills/knowledge/index.md | build wiki, ingest sources, Q&A, lint KB, search | system/skills/knowledge/base.md |
 | robot | 5 | system/skills/robot/index.md | physical robot, navigation, camera, dreams | system/skills/robot/base.md |
@@ -37,6 +37,8 @@ Top-level routing table for the hierarchical skill system.
 | Skill | Domain/Family | subagent_type | Token Cost |
 |-------|---------------|---------------|-----------|
 | system-agent | orchestration/core | system-agent | high |
+| intent-compiler-agent | orchestration/ingress | intent-compiler-agent | medium |
+| human-renderer-agent | orchestration/egress | human-renderer-agent | medium |
 | memory-analysis-agent | memory/analysis | memory-analysis-agent | low |
 | memory-consolidation-agent | memory/consolidation | memory-consolidation-agent | medium |
 | query-memory-tool | memory/query | _(tool)_ | low |

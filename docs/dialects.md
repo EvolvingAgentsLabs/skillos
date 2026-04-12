@@ -61,7 +61,7 @@ Full file rewrites → exact line-number patch commands.
 
 ---
 
-## All 9 Dialects
+## All 14 Dialects
 
 | Dialect | Type | Ratio | Reversible | Domain | Key Insight |
 |---------|------|-------|------------|--------|-------------|
@@ -74,6 +74,11 @@ Full file rewrites → exact line-number patch commands.
 | `exec-plan` | symbolic | ~70-85% | yes | orchestration, memory | 455-line scenario → 12 lines |
 | `strict-patch` | structural | ~90-98% | yes | orchestration, knowledge | 20-token patches, not 1,000-token rewrites |
 | `dom-nav` | structural | ~90-97% | no | orchestration, knowledge | 50,000 tokens of HTML → 80 tokens |
+| `formal-proof` | symbolic | ~60-75% | yes | knowledge, memory | Forces step-by-step reasoning with rule citations |
+| `system-dynamics` | symbolic | ~55-70% | yes | knowledge, orchestration | Makes feedback loops and causal chains explicit |
+| `boolean-logic` | symbolic | ~50-65% | yes | knowledge, orchestration, memory | Eliminates conditional ambiguity with formal operators |
+| `data-flow` | structural | ~65-80% | yes | orchestration, knowledge | DAG notation reveals parallelization opportunities |
+| `smiles-chem` | structural | ~80-95% | yes | knowledge | Activates chemical domain knowledge via SMILES strings |
 
 ### Compression Types
 
@@ -89,7 +94,7 @@ Dialect **definitions** are data files, separate from the **skills** that operat
 
 ```
 system/dialects/                          # Data: dialect definitions
-├── _index.md                             # Registry (9 entries)
+├── _index.md                             # Registry (14 entries)
 ├── roclaw-bytecode.dialect.md
 ├── caveman-prose.dialect.md
 ├── strategy-pointer.dialect.md
@@ -98,7 +103,12 @@ system/dialects/                          # Data: dialect definitions
 ├── constraint-dsl.dialect.md
 ├── exec-plan.dialect.md
 ├── strict-patch.dialect.md
-└── dom-nav.dialect.md
+├── dom-nav.dialect.md
+├── formal-proof.dialect.md               # Cognitive scaffolding
+├── system-dynamics.dialect.md            # Cognitive scaffolding
+├── boolean-logic.dialect.md              # Cognitive scaffolding
+├── data-flow.dialect.md                  # Cognitive scaffolding
+└── smiles-chem.dialect.md                # Cognitive scaffolding
 
 system/skills/dialects/                   # Skills: agents + tools
 ├── base.md                               # Shared domain behaviors
@@ -112,11 +122,19 @@ system/skills/dialects/                   # Skills: agents + tools
 └── registry/
     ├── dialect-registry-tool.manifest.md
     └── dialect-registry-tool.md          # Lists/matches/describes dialects
+
+system/skills/orchestration/              # Language Facade agents
+├── ingress/
+│   ├── intent-compiler-agent.manifest.md
+│   └── intent-compiler-agent.md          # Compiles user input → internal dialect
+└── egress/
+    ├── human-renderer-agent.manifest.md
+    └── human-renderer-agent.md           # Expands internal dialect → user prose
 ```
 
 ### Why separate?
 
-Dialect definitions are **reference data** — like `system/security/blocklist.md`. They describe formats and rules. Skills are **executable behaviors** — agents and tools that read dialect definitions and apply them to content. One compiler agent serves all 9 dialects.
+Dialect definitions are **reference data** — like `system/security/blocklist.md`. They describe formats and rules. Skills are **executable behaviors** — agents and tools that read dialect definitions and apply them to content. One compiler agent serves all 14 dialects.
 
 ---
 
@@ -182,6 +200,28 @@ output_format: compressed-natural-language
 | Examples | At least 3 input/output pairs with compression ratios |
 | Expansion Protocol | How to reverse the compression (or why it can't be reversed) |
 | Metrics | Compression ratio, token reduction, reversibility, latency, error rate |
+
+---
+
+## Language Facade
+
+The **Language Facade** is an ingress/egress boundary pattern that ensures agents never process verbose natural language internally. Two orchestration agents form the boundary:
+
+- **intent-compiler-agent** (ingress): Intercepts user input, classifies intent domain, selects the optimal dialect, and compiles the input before passing to downstream agents. A user goal like "fetch news from 3 sources, summarize, and merge into a briefing" becomes `[SRC] techcrunch | ars | hn [PAR] → [OP] summarize [JOIN] → [SINK] briefing.md` in data-flow dialect.
+
+- **human-renderer-agent** (egress): Takes compressed dialect output from internal agents and expands it back into human-readable prose in the appropriate register (formal, conversational, or technical). Users never see raw `GIVEN:`/`DERIVE:`/`QED` notation.
+
+The pattern ensures: **humans speak human, agents speak dialect, and the facade translates at the boundary.**
+
+---
+
+## Cognitive Scaffolding
+
+The 5 cognitive scaffolding dialects (`formal-proof`, `system-dynamics`, `boolean-logic`, `data-flow`, `smiles-chem`) represent a key insight: **dialects don't just compress tokens — they improve reasoning quality** by forcing the LLM into domain-specific formal languages.
+
+When an LLM writes in formal-proof notation, it must cite an inference rule for every derivation step — it cannot skip logical steps. When it writes in boolean-logic, it must commit to explicit operator precedence — "if X and Y or Z" becomes unambiguously `(X ∧ Y) ∨ Z` or `X ∧ (Y ∨ Z)`. When it writes SMILES strings, it activates chemical domain knowledge from training data that verbose prose descriptions cannot reach.
+
+**The notation IS the reasoning scaffold.** These dialects adopt existing formal notations (mathematical proofs, stock-flow diagrams, boolean algebra, DAGs, SMILES) because LLMs have seen millions of examples of rigorous reasoning in these formats. Using the format activates higher-quality latent space representations.
 
 ---
 

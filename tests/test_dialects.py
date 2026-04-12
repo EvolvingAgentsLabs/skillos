@@ -26,6 +26,11 @@ DIALECT_IDS = [
     "exec-plan",
     "strict-patch",
     "dom-nav",
+    "formal-proof",
+    "system-dynamics",
+    "boolean-logic",
+    "data-flow",
+    "smiles-chem",
 ]
 
 VALID_COMPRESSION_TYPES = {"structural", "lexical", "symbolic"}
@@ -350,10 +355,10 @@ class TestSkillIndexUpdated:
         assert "dialect-expander-agent" in content
         assert "dialect-registry-tool" in content
 
-    def test_total_skills_at_least_23(self):
+    def test_total_skills_at_least_25(self):
         fm = _parse_frontmatter_from_file(self.SKILL_INDEX_PATH)
-        assert fm["total_skills"] >= 23, (
-            f"total_skills is {fm['total_skills']}, expected >= 23"
+        assert fm["total_skills"] >= 25, (
+            f"total_skills is {fm['total_skills']}, expected >= 25"
         )
 
     def test_dialects_index_path_correct(self):
@@ -381,9 +386,136 @@ class TestDialectsDirectoryStructure:
         "system/skills/dialects/compiler",
         "system/skills/dialects/expander",
         "system/skills/dialects/registry",
+        "system/skills/orchestration/ingress",
+        "system/skills/orchestration/egress",
     ])
     def expected_dir(self, request):
         return os.path.join(SKILLOS_ROOT, request.param)
 
     def test_directory_exists(self, expected_dir):
         assert os.path.isdir(expected_dir), f"Directory missing: {expected_dir}"
+
+
+# ---------------------------------------------------------------------------
+# 12. TestIntentCompilerManifest
+# ---------------------------------------------------------------------------
+class TestIntentCompilerManifest:
+    MANIFEST_PATH = os.path.join(
+        SKILLS_DIR, "orchestration", "ingress", "intent-compiler-agent.manifest.md"
+    )
+
+    def test_manifest_exists(self):
+        assert os.path.isfile(self.MANIFEST_PATH)
+
+    def test_manifest_fields(self):
+        fm = _parse_frontmatter_from_file(self.MANIFEST_PATH)
+        assert fm["domain"] == "orchestration"
+        assert fm["family"] == "ingress"
+        assert fm["extends"] == "orchestration/base"
+        assert fm["type"] == "agent"
+        assert "full_spec" in fm
+        assert fm["full_spec"].endswith("intent-compiler-agent.md")
+
+    def test_manifest_subagent_type(self):
+        fm = _parse_frontmatter_from_file(self.MANIFEST_PATH)
+        assert fm["subagent_type"] == "intent-compiler-agent"
+
+
+# ---------------------------------------------------------------------------
+# 13. TestIntentCompilerSpec
+# ---------------------------------------------------------------------------
+class TestIntentCompilerSpec:
+    SPEC_PATH = os.path.join(
+        SKILLS_DIR, "orchestration", "ingress", "intent-compiler-agent.md"
+    )
+
+    def test_spec_exists(self):
+        assert os.path.isfile(self.SPEC_PATH)
+
+    def test_spec_has_input_output_sections(self):
+        content = _read_file(self.SPEC_PATH)
+        assert "## Input Specification" in content
+        assert "## Output Specification" in content
+        assert "## Execution Logic" in content
+
+    def test_spec_extends_base(self):
+        fm = _parse_frontmatter_from_file(self.SPEC_PATH)
+        assert fm.get("extends") == "orchestration/base"
+
+    def test_spec_references_dialect_compiler(self):
+        content = _read_file(self.SPEC_PATH)
+        assert "dialect-compiler-agent" in content
+
+
+# ---------------------------------------------------------------------------
+# 14. TestHumanRendererManifest
+# ---------------------------------------------------------------------------
+class TestHumanRendererManifest:
+    MANIFEST_PATH = os.path.join(
+        SKILLS_DIR, "orchestration", "egress", "human-renderer-agent.manifest.md"
+    )
+
+    def test_manifest_exists(self):
+        assert os.path.isfile(self.MANIFEST_PATH)
+
+    def test_manifest_fields(self):
+        fm = _parse_frontmatter_from_file(self.MANIFEST_PATH)
+        assert fm["domain"] == "orchestration"
+        assert fm["family"] == "egress"
+        assert fm["extends"] == "orchestration/base"
+        assert fm["type"] == "agent"
+        assert fm["full_spec"].endswith("human-renderer-agent.md")
+
+    def test_manifest_subagent_type(self):
+        fm = _parse_frontmatter_from_file(self.MANIFEST_PATH)
+        assert fm["subagent_type"] == "human-renderer-agent"
+
+
+# ---------------------------------------------------------------------------
+# 15. TestHumanRendererSpec
+# ---------------------------------------------------------------------------
+class TestHumanRendererSpec:
+    SPEC_PATH = os.path.join(
+        SKILLS_DIR, "orchestration", "egress", "human-renderer-agent.md"
+    )
+
+    def test_spec_exists(self):
+        assert os.path.isfile(self.SPEC_PATH)
+
+    def test_spec_has_input_output_sections(self):
+        content = _read_file(self.SPEC_PATH)
+        assert "## Input Specification" in content
+        assert "## Output Specification" in content
+        assert "## Execution Logic" in content
+
+    def test_spec_extends_base(self):
+        fm = _parse_frontmatter_from_file(self.SPEC_PATH)
+        assert fm.get("extends") == "orchestration/base"
+
+    def test_spec_references_dialect_expander(self):
+        content = _read_file(self.SPEC_PATH)
+        assert "dialect-expander-agent" in content
+
+
+# ---------------------------------------------------------------------------
+# 16. TestOrchestrationFacadeSkills
+# ---------------------------------------------------------------------------
+ORCHESTRATION_SKILLS_DIR = os.path.join(SKILLS_DIR, "orchestration")
+
+
+class TestOrchestrationFacadeSkills:
+    """Verify orchestration/index.md lists facade agents."""
+
+    def test_orchestration_index_skill_count(self):
+        fm = _parse_frontmatter_from_file(
+            os.path.join(ORCHESTRATION_SKILLS_DIR, "index.md")
+        )
+        assert fm.get("skill_count") == 3
+
+    def test_orchestration_index_lists_intent_compiler(self):
+        content = _read_file(os.path.join(ORCHESTRATION_SKILLS_DIR, "index.md"))
+        assert "intent-compiler-agent" in content
+
+    def test_orchestration_index_lists_human_renderer(self):
+        content = _read_file(os.path.join(ORCHESTRATION_SKILLS_DIR, "index.md"))
+        assert "human-renderer-agent" in content
