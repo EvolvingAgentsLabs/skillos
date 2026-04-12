@@ -1,20 +1,21 @@
 # Validation Result — Operation Echo-Q
 
 **Status: PASS**
-**Date**: 2026-04-06
-**Reflective Loop Cycles**: 2 (Cycle 1 failed, Cycle 2 succeeded)
+**Date**: 2026-04-12 (re-execution)
+**Previous run**: 2026-04-06
+**Reflective Loop Cycles**: 1 (Cycle 1 succeeded — no error recovery needed)
 
-## Echo Detection Results
+## Echo Detection Results (2026-04-12 Run)
 
 | Method | Detected tau | Error | Threshold | Status |
 |--------|-------------|-------|-----------|--------|
-| Classical Cepstrum | 0.2031s | 0.0969s | 0.05s | FAIL |
+| Classical Cepstrum | 0.2969s | 0.0031s | 0.05s | **PASS** |
 | Quantum Statevector | 0.2656s | 0.0344s | 0.05s | **PASS** |
-| Quantum QASM (16384 shots) | 0.4688s | 0.1688s | 0.05s | FAIL |
+| Quantum QASM (16384 shots) | 0.1250s | 0.1750s | 0.05s | FAIL |
 
-**Best result**: Quantum Statevector with error 0.0344s (within S4 threshold)
+**Best result**: Classical Cepstrum with error 0.0031s; Quantum Statevector also passes with 0.0344s
 
-**Note**: The QASM measurement introduces shot noise that obscures the cepstral peak at this qubit count. The statevector simulation demonstrates the algorithm's correctness. With more qubits (higher resolution) or amplitude estimation (constraint S3), the QASM result would improve.
+**Note**: This re-execution succeeded on Cycle 1 (code was already fixed from the original run's error recovery). The classical cepstrum now correctly identifies the echo peak at index 19 (q=0.2969s). The QASM measurement remains noisy due to the nearly uniform probability distribution across quefrency bins at 6 qubits — amplitude estimation (constraint S3) would concentrate measurement outcomes.
 
 ## Constraint Verification
 
