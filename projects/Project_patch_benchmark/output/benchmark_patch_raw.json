@@ -1,13 +1,13 @@
 {
-  "timestamp": "2026-04-12T15:49:55.896553",
+  "timestamp": "2026-04-12T18:27:02.696192",
   "buggy_file_lines": 993,
   "plain": {
     "input_tokens": 3,
-    "cache_creation_input_tokens": 12031,
-    "cache_read_input_tokens": 18679,
+    "cache_creation_input_tokens": 30712,
+    "cache_read_input_tokens": 0,
     "output_tokens": 10286,
-    "total_cost_usd": 0.34169825,
-    "duration_ms": 107347,
+    "total_cost_usd": 0.449115,
+    "duration_ms": 106594,
     "num_turns": 1
   },
   "plain_text_len": 37605,
@@ -22,18 +22,25 @@
     "input_tokens": 3,
     "cache_creation_input_tokens": 15514,
     "cache_read_input_tokens": 18679,
-    "output_tokens": 224,
-    "total_cost_usd": 0.111917,
-    "duration_ms": 6935,
+    "output_tokens": 254,
+    "total_cost_usd": 0.112667,
+    "duration_ms": 6273,
     "num_turns": 1
   },
-  "skillos_text_len": 659,
+  "skillos_text_len": 723,
   "skillos_quality": {
-    "compiles": true,
-    "bug1_fixed": true,
-    "bug2_fixed": true,
-    "lines_changed": 9,
-    "errors": []
+    "compiles": false,
+    "bug1_fixed": false,
+    "bug2_fixed": false,
+    "lines_changed": 0,
+    "errors": [
+      "SyntaxError: invalid syntax. Perhaps you forgot a comma? (<unknown>, line 247)"
+    ]
   },
-  "patch_errors": []
+  "patch_errors": [
+    "DEL:247 content mismatch:\n  expected: 'cursor = conn.execute('\n  actual:   'f\"SELECT id, username, email, role, created_at FROM users \"'",
+    "DEL:248 content mismatch:\n  expected: 'f\"SELECT id, username, email, role, created_at FROM users \"'\n  actual:   'f\"WHERE (username LIKE \\'%{query}%\\' OR email LIKE \\'%{query}%\\') \"'",
+    "DEL:249 content mismatch:\n  expected: 'f\"WHERE (username LIKE \\'%{query}%\\' OR email LIKE \\'%{query}%\\') \"'\n  actual:   'f\"AND deleted_at IS NULL LIMIT {limit}\",'",
+    "DEL:250 content mismatch:\n  expected: 'f\"AND deleted_at IS NULL LIMIT {limit}\",'\n  actual:   ')'"
+  ]
 }

@@ -1,34 +1,34 @@
 # Patch Benchmark V2 Report
 
-**Generated**: 2026-04-12 15:49
+**Generated**: 2026-04-12 18:27
 **Task**: Fix 2 bugs in a ~993-line Python service using precision edits
 
 ## Summary
 
 | Metric | Plain Claude | SkillOS + strict-patch | Delta |
 |---|---|---|---|
-| Output tokens | 10,286 | 224 | **-97.8%** |
+| Output tokens | 10,286 | 254 | **-97.5%** |
 | Input tokens | 3 | 3 | — |
-| Cache creation | 12,031 | 15,514 | — |
-| Cost (USD) | $0.3417 | $0.1119 | $-0.2298 |
-| Duration (s) | 107.3 | 6.9 | — |
+| Cache creation | 30,712 | 15,514 | — |
+| Cost (USD) | $0.4491 | $0.1127 | $-0.3364 |
+| Duration (s) | 106.6 | 6.3 | — |
 | Turns | 1 | 1 | — |
 
 ## Quality Verification (Automated — no LLM judge)
 
 | Check | Plain Claude | SkillOS + strict-patch |
 |---|---|---|
-| Compiles (`ast.parse`) | Yes | Yes |
-| Bug 1 fixed (SQL injection) | Yes | Yes |
-| Bug 2 fixed (off-by-one) | Yes | Yes |
-| **Bugs fixed** | **2/2** | **2/2** |
-| Lines changed vs original | 10 | 9 |
+| Compiles (`ast.parse`) | Yes | No |
+| Bug 1 fixed (SQL injection) | Yes | No |
+| Bug 2 fixed (off-by-one) | Yes | No |
+| **Bugs fixed** | **2/2** | **0/2** |
+| Lines changed vs original | 10 | 0 |
 
 ## Key Findings
 
-- **Output token reduction**: 97.8% fewer tokens with SkillOS strict-patch
-- **Bugs fixed**: Plain 2/2, SkillOS 2/2
-- **Lines changed**: Plain 10 vs SkillOS 9 (strict-patch targets only bug lines)
+- **Output token reduction**: 97.5% fewer tokens with SkillOS strict-patch
+- **Bugs fixed**: Plain 2/2, SkillOS 0/2
+- **Lines changed**: Plain 10 vs SkillOS 0 (strict-patch targets only bug lines)
 - **Approach**: Plain Claude rewrites entire ~993-line file; SkillOS emits only patch ops for changed lines
 
 ## Errors
@@ -37,10 +37,21 @@
 None
 
 ### SkillOS + strict-patch
-None
+- SyntaxError: invalid syntax. Perhaps you forgot a comma? (<unknown>, line 247)
 
 ### Patch Application Errors
-None
+- DEL:247 content mismatch:
+  expected: 'cursor = conn.execute('
+  actual:   'f"SELECT id, username, email, role, created_at FROM users "'
+- DEL:248 content mismatch:
+  expected: 'f"SELECT id, username, email, role, created_at FROM users "'
+  actual:   'f"WHERE (username LIKE \'%{query}%\' OR email LIKE \'%{query}%\') "'
+- DEL:249 content mismatch:
+  expected: 'f"WHERE (username LIKE \'%{query}%\' OR email LIKE \'%{query}%\') "'
+  actual:   'f"AND deleted_at IS NULL LIMIT {limit}",'
+- DEL:250 content mismatch:
+  expected: 'f"AND deleted_at IS NULL LIMIT {limit}",'
+  actual:   ')'
 
 ## Raw Outputs
 
@@ -1054,18 +1065,21 @@ if __name__ == "__main__":
 ### SkillOS + strict-patch Output
 
 <details>
-<summary>Click to expand (224 output tokens)</summary>
+<summary>Click to expand (254 output tokens)</summary>
 
 ```
 [FILE] service.py
-[DEL:247]                 f"SELECT id, username, email, role, created_at FROM users "
-[ADD:247]                 "SELECT id, username, email, role, created_at FROM users "
-[DEL:248]                 f"WHERE (username LIKE '%{query}%' OR email LIKE '%{query}%') "
-[ADD:248]                 "WHERE (username LIKE '%' || ? || '%' OR email LIKE '%' || ? || '%') "
-[DEL:249]                 f"AND deleted_at IS NULL LIMIT {limit}",
-[ADD:249]                 "AND deleted_at IS NULL LIMIT ?",
-[ADD:250]                 (query, query, limit),
-[DEL:393]         offset = page * page_size
+[DEL:247] cursor = conn.execute(
+[DEL:248] f"SELECT id, username, email, role, created_at FROM users "
+[DEL:249] f"WHERE (username LIKE '%{query}%' OR email LIKE '%{query}%') "
+[DEL:250] f"AND deleted_at IS NULL LIMIT {limit}",
+[ADD:247]             search_pattern = f"%{query}%"
+[ADD:248]             cursor = conn.execute(
+[ADD:249]                 "SELECT id, username, email, role, created_at FROM users "
+[ADD:250]                 "WHERE (username LIKE ? OR email LIKE ?) "
+[ADD:251]                 "AND deleted_at IS NULL LIMIT ?",
+[ADD:252]                 (search_pattern, search_pattern, limit),
+[DEL:393] offset = page * page_size
 [ADD:393]         offset = (page - 1) * page_size
 [EOF]
 ```

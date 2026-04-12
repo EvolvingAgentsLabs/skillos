@@ -1,20 +1,20 @@
 # Dialect Benchmark Report
 
-**Generated**: 2026-04-12 15:10
+**Generated**: 2026-04-12 18:30
 **Task**: Microservice Cascade Failure Analysis
 
 ## Summary
 
 | Metric | Plain Claude | SkillOS + Dialects | Delta |
 |---|---|---|---|
-| Output tokens | 4,181 | 3,778 | +9.6% |
-| Input tokens | 3 | 5 | — |
-| Cache creation | 1,840 | 28,197 | — |
-| Cost (USD) | $0.1254 | $0.3126 | $+0.1872 |
-| Duration (s) | 90.1 | 80.9 | — |
-| Turns | 1 | 8 | — |
+| Output tokens | 3,957 | 13,892 | -251.1% |
+| Input tokens | 3 | 12 | — |
+| Cache creation | 20,519 | 44,525 | — |
+| Cost (USD) | $0.2272 | $0.7883 | $+0.5611 |
+| Duration (s) | 92.8 | 210.1 | — |
+| Turns | 1 | 11 | — |
 | **Quality score** | **100/100** | **100/100** | **+0** |
-| Token efficiency (quality/ktok) | 23.9 | 26.5 | +2.6 |
+| Token efficiency (quality/ktok) | 25.3 | 7.2 | -18.1 |
 
 ## Quality Breakdown
 
@@ -29,22 +29,22 @@
 
 ## Judge Notes
 
-**Plain Claude**: Feedback loop: Explicitly identified R1 as a positive/reinforcing feedback loop with the exact cycle (queue up -> latency up -> timeouts up -> retries up -> queue up), plus R2 and missing balancing loop B1. Retry condition: Boolean expressions with explicit parenthesization for current and corrected predicates, clear precedence. Logical derivation: Every step cites premises (thread pool size, timeout values, retry counts) with no logical jumps, from amplification through thread hold time to exhaustion and zombie waste, concluding with QED. Constraints: Formal table with IDs, specific numeric thresholds (error_rate > theta, P_b x 0.8, timeout < 6s), and severity levels (hard vs soft). Execution plan: Three phases with explicit dependency graph, verification criteria for each phase (e.g., circuit opens within 10s, thread pool below 80%), and parallel/sequential ordering. System model: Correct stocks, flows, feedback loops with proper polarity labels (reinforcing R1/R2, missing balancing B1), plus phase portrait showing bistability.
+**Plain Claude**: Feedback loop: Explicitly identified two reinforcing (positive) feedback loops (R1 'Retry Storm' and R2 'Thread Starvation') with the full causal chain of retries->load->timeouts->retries. Retry condition: Formal boolean expression with explicit parenthesization, clear definitions of is_retryable, RETRY(attempt), and EXECUTE_CALL predicates. Logical derivation: Complete step-by-step proof using Little's Law, quantified thread exhaustion with concrete numbers, factored in retry amplification, and arrived at a bounded time-to-exhaustion (~4s) with no logical jumps. Constraints: Seven formal constraints (C1-C7) with numeric thresholds (e.g., 0.75×T, 0.8×T_A, 50% failure rate), severity rationale, and formal expressions. Execution plan: Three phases with explicit dependency graph, verification criteria (chaos testing in 3.3), and clear ordering constraints. System model: Correct identification of 5 stocks, 5 flows, 2 reinforcing feedback loops with proper polarity, and explicit note of zero balancing loops.
 
-**SkillOS + Dialects**: Feedback loop: Explicitly identified as reinforcing (FB+) with full cycle retries→load→timeouts→retries in both the formal proof and system dynamics model. Retry condition: Boolean expression with explicit parenthesization showing exactly when retries fire, including simplification given no circuit breaker. Logical derivation: Every step in the resource exhaustion proof cites a rule (modus_ponens, transitivity, conjunction_introduction, etc.) with no logical jumps; numeric values derived step-by-step. Constraints: Formal constraint notation with numeric thresholds (50% fail rate, 5 consecutive failures, 20% retry budget, 80% thread util) and severity levels (H/M/L). Execution plan: Phases (P1-P6) with explicit dependencies (dep=P1, dep=P1,P2,P3, etc.) and verification criteria for each phase. System model: Correct identification of stocks (active_connections, pending_retries, available_threads, request_queue), flows with polarity, and feedback loops with proper polarity labels (FB+, FB-).
+**SkillOS + Dialects**: Feedback loop: Explicitly identified as [FB+] reinforcing loop with the full cycle (retries -> load -> timeouts -> retries) spelled out in Steps 1 and 2. Retry condition: Boolean expressions with explicit parenthesization in Step 3, showing exactly when retries fire including failed(), retriable(), and cancelled() predicates. Logical derivation: Step 4 provides a complete resource exhaustion proof where every step cites a rule or premise (config, retry_policy, gateway_timeout, Little's_law, arithmetic, thread_exhaustion), with no logical jumps. Constraints: Step 5 uses a formal constraint DSL with severity levels (H/M/L), numeric thresholds (50% failure threshold, 30s window, 20% retry budget, 5s timeouts, 80% queue depth, etc.). Execution plan: Step 6 has explicit phases (P[1]-P[6]) with dependency ordering (dep=P[1], dep=P[1]∧P[2], etc.), verification criteria for each phase, and rollback procedures. System model: Step 2 correctly identifies stocks (active_connections, pending_retries, available_threads, etc.), flows with proper directionality, feedback loops with polarity ([FB+] and [FB-]), delays, and external variables.
 
 ## Key Findings
 
-- **Output token reduction**: 9.6% fewer output tokens with SkillOS
+- **Output token reduction**: -251.1% fewer output tokens with SkillOS
 - **Quality delta**: +0 points (0% of scale)
-- **Token efficiency**: SkillOS achieves 26.5 quality per 1k output tokens vs 23.9 for plain (1.1x better)
+- **Token efficiency**: SkillOS achieves 7.2 quality per 1k output tokens vs 25.3 for plain (0.3x better)
 
 ## Raw Outputs
 
 ### Plain Claude Output
 
 <details>
-<summary>Click to expand (4,181 output tokens)</summary>
+<summary>Click to expand (3,957 output tokens)</summary>
 
 
 
@@ -52,537 +52,595 @@
 
 ## 1. Root Cause of Cascade Failures Under Load
 
-The root cause is a **retry amplification loop compounded by the absence of backpressure mechanisms**.
+The root cause is **retry amplification combined with timeout misalignment under latency degradation**, creating a positive feedback loop that drives the system toward resource exhaustion.
 
-Here's the precise causal chain:
+Here's the causal chain:
 
-**Trigger:** Service C latency increases from 200ms → 8s under load.
+1. **Load increases** → Service C latency rises from 200ms → 8,000ms
+2. **Service B's 10s timeout** still accommodates this (8s < 10s), so requests don't timeout — they **block for 8 seconds** holding threads/connections
+3. **Throughput collapses**: threads that previously freed in 200ms now hold for 8,000ms — a **40x reduction** in effective concurrency
+4. **Thread pool saturates** → new requests queue → Service B latency rises
+5. **Service A's 30s timeout** absorbs this silently, keeping connections open
+6. **When Service C occasionally exceeds 10s** (latency variance under load), Service B retries — injecting **up to 3 additional requests** into an already overloaded Service C
+7. **Retries increase load on Service C** → latency increases further → more timeouts → more retries
 
-**Amplification mechanism:**
-- Service B holds a thread/connection for each in-flight request to Service C
-- When Service C slows down, Service B's connection pool fills up
-- Service B retries failed/slow calls up to 3 times, **multiplying load on an already degraded Service C by up to 4x** (1 initial + 3 retries)
-- Each retry waits 2s backoff + up to 10s timeout = **12s per retry attempt**
-- Worst case per request: 1 initial (10s timeout) + 3 retries × (2s backoff + 10s timeout) = **46 seconds**
-- Service A's 30-second timeout expires before Service B completes its retry cycle
-- Service A may issue its own retries or accept new requests, creating **new** Service B calls that pile onto the existing ones
-- Service B accumulates zombie requests that have already timed out upstream but continue consuming resources
-
-**The root cause is not the latency increase itself — it's that the system treats a capacity problem (overloaded Service C) as a transient fault (retryable error).** Retries are the correct response to transient faults; they are the *worst possible response* to capacity saturation.
+The root cause is **not** a single component failure. It is the **emergent behavior** of the interaction between: slow responses (not failures), generous timeouts, aggressive retries, and no backpressure mechanism.
 
 ---
 
 ## 2. System Dynamics Model
 
-### Stocks (Accumulations)
-
-| Stock | Description |
-|---|---|
-| `S_a` | Active connections in Service A |
-| `S_b` | Active threads/connections in Service B |
-| `S_c_queue` | Pending requests in Service C's queue |
-| `S_d` | Active connections to Service D |
-| `S_b_retry` | Retry attempts queued in Service B |
-
-### Flows
-
 ```
-Inflow to S_b:        λ_incoming (request arrival rate from Service A)
-Outflow from S_b:     μ_b (Service B completion rate)
+STOCKS (accumulating quantities)
+├── S1: Service B active threads          (unit: count)
+├── S2: Service B retry queue depth       (unit: count)
+├── S3: Service C request queue depth     (unit: count)
+├── S4: Service A open connections        (unit: count)
+└── S5: Service C processing latency      (unit: ms)
 
-Inflow to S_c_queue:  λ_incoming × (1 + retry_multiplier)
-Outflow from S_c_queue: μ_c (Service C processing rate, degrades under load)
+FLOWS (rates of change)
+├── F1: Inbound request rate              → increases S1, S4
+├── F2: Thread release rate               → decreases S1
+│        = S1 / S5  (Little's Law)
+├── F3: Retry injection rate              → increases S1, S3
+│        = timeout_rate × retry_count
+├── F4: Service C processing rate         → decreases S3
+│        = f(S3) — degrades as queue grows
+└── F5: Connection drain rate             → decreases S4
+         = F2 (bounded by Service B throughput)
 
-Inflow to S_b_retry:  f(failure_rate_c) × retry_policy
-Outflow from S_b_retry: processed retries → flow back into S_c_queue
-```
+FEEDBACK LOOPS
+┌─────────────────────────────────────────────────────┐
+│  REINFORCING LOOP (R1) — "Retry Storm"              │
+│                                                     │
+│  S5 ↑ (latency up)                                  │
+│    → timeout_rate ↑                                  │
+│    → F3 ↑ (more retries)                             │
+│    → S3 ↑ (C's queue grows)                          │
+│    → S5 ↑ (latency up further)                       │
+│    → ... (positive feedback, amplifying)              │
+└─────────────────────────────────────────────────────┘
 
-### Feedback Loops
+┌─────────────────────────────────────────────────────┐
+│  REINFORCING LOOP (R2) — "Thread Starvation"        │
+│                                                     │
+│  S5 ↑ (latency up)                                  │
+│    → F2 ↓ (threads release slower)                   │
+│    → S1 ↑ (active threads accumulate)                │
+│    → S1 hits pool limit                              │
+│    → F2 → 0 (no new work processed)                  │
+│    → Service B becomes unresponsive                  │
+│    → S4 ↑ (Service A connections pile up)             │
+└─────────────────────────────────────────────────────┘
 
-**Reinforcing Loop R1 (Death Spiral):**
-```
-S_c_queue ↑ → C latency ↑ → C timeout rate ↑ → retries ↑ → S_c_queue ↑↑
-```
-This is a **positive feedback loop** — it is self-reinforcing and divergent.
-
-**Reinforcing Loop R2 (Upstream Amplification):**
-```
-B latency ↑ → S_a active connections ↑ → new requests to B (if A retries/accepts) ↑ → S_b ↑ → more calls to C ↑
-```
-
-**Missing Balancing Loop (what should exist but doesn't):**
-```
-S_c_queue ↑ → circuit breaker OPEN → retries STOP → S_c_queue ↓
-```
-This **balancing loop B1** does not exist in the current design. Without it, R1 runs unbounded.
-
-### Phase Portrait
-
-```
-                    ║
-    STABLE          ║         UNSTABLE (cascading failure)
-    (C < capacity)  ║         (C > capacity)
-                    ║
-  S_c_queue → 0    ║    S_c_queue → ∞
-  retries → 0      ║    retries → max
-  latency → 200ms  ║    latency → timeout
-                    ║
-────────────────────╬──────────────────────────
-                    ║
-              C_capacity threshold
+BALANCING LOOPS: NONE
+  — No circuit breaker (no mechanism to reduce F1 or F3)
+  — No backpressure (S4 grows unchecked until A's timeout)
+  — No load shedding (S3 grows unchecked)
 ```
 
-The system is **bistable**: it operates normally below the capacity threshold, but once crossed, the reinforcing loops drive it into a failure attractor with no mechanism to return.
+The critical insight: **both feedback loops are reinforcing (positive) with zero balancing (negative) loops**. This is an unconditionally unstable system under load.
 
 ---
 
-## 3. Retry Condition — Precise Boolean Logic
+## 3. Retry Condition — Formal Boolean Logic
 
-The current (flawed) retry logic:
+The retry predicate for Service B calling a downstream service (C or D):
 
 ```
 Let:
-  failed(call)     = call returned error OR call exceeded 10s timeout
-  attempt_count    = number of attempts made for this request (initial = 1)
-  MAX_ATTEMPTS     = 4  (1 initial + 3 retries)
+  responded     := downstream returned an HTTP response (any status)
+  timeout       := elapsed_time ≥ 10,000ms
+  status        := HTTP response status code
+  attempt       := current attempt number ∈ {1, 2, 3, 4}  (1 = initial)
+  is_retryable  := ¬responded ∧ timeout    // network timeout
+                 ∨  responded ∧ status ∈ {500, 502, 503, 504}  // server error
+                    // NOTE: the problem statement says "fails" — assuming
+                    // this means timeout OR server error
 
-RETRY(call) ≡ failed(call) ∧ (attempt_count < MAX_ATTEMPTS)
-```
-
-The **actual execution per downstream call** from Service B:
-
-```
-execute_with_retry(target_service):
-  for i in [1, 2, 3, 4]:
-    if i > 1: sleep(2)                    // 2s backoff (not exponential)
-    result = call(target_service, timeout=10s)
-    if ¬failed(result): return result
-  return FAILURE
-```
-
-**Critical ambiguity resolved:** Service B calls C and D **in parallel**, but retries each independently. The completion condition for Service B is:
-
-```
-B_success ≡ C_success ∧ D_success
+RETRY(attempt) :=
+    is_retryable
+  ∧ attempt < 4                              // max 3 retries = 4 total attempts
+  ∧ elapsed_since_first_attempt + backoff(attempt) < parent_timeout_remaining
 
 where:
-  C_success ≡ ∃ i ∈ [1..4] : ¬failed(C_call_i)
-  D_success ≡ ∃ j ∈ [1..4] : ¬failed(D_call_j)
+  backoff(n) := 2000ms × n                  // 2s, 4s, 6s (linear)
+  // OR 2000ms (constant) — ambiguity in spec; assuming constant 2s
+
+EXECUTE_CALL :=
+  attempt = 1
+  ∨ (RETRY(attempt) ∧ wait(backoff(attempt - 1)))
 ```
 
-**What's missing from the retry predicate (the flaw):**
+**Critical ambiguity exposed**: The spec says "2-second backoff" but doesn't specify if this is constant, linear, or exponential. Under the most charitable interpretation (constant 2s):
 
 ```
-// Current: retries on ANY failure regardless of cause
-RETRY_current(call) ≡ failed(call) ∧ (attempt_count < MAX_ATTEMPTS)
-
-// Correct: should distinguish transient from capacity failures
-RETRY_correct(call) ≡ failed(call)
-                     ∧ (attempt_count < MAX_ATTEMPTS)
-                     ∧ is_transient(failure_reason)
-                     ∧ ¬circuit_open(target_service)
-                     ∧ ¬upstream_deadline_exceeded()
+Worst-case timeline for ONE request to Service C:
+  Attempt 1: 0s     → waits up to 10s  → timeout at t=10s
+  Attempt 2: t=12s  → waits up to 10s  → timeout at t=22s
+  Attempt 3: t=24s  → waits up to 10s  → timeout at t=34s
+  Attempt 4: t=36s  → waits up to 10s  → timeout at t=46s
+  Total: up to 46 seconds for a single downstream call
 ```
+
+**This exceeds Service A's 30s timeout.** Service A will abandon the request while Service B is still retrying — creating **orphaned retry work** that consumes resources with no caller waiting for the result.
 
 ---
 
 ## 4. Proof of Resource Exhaustion
 
-**Given:**
-- Request arrival rate: λ requests/second
-- Service B thread pool size: `P_b` (finite)
-- Service C capacity threshold: `C_max` requests/second
+**Theorem**: Under sustained load where Service C latency ≥ 8s, the system reaches thread pool exhaustion in Service B within a bounded time.
 
-**Theorem:** When λ > C_max, the system exhausts Service B's thread pool in bounded time.
-
-**Proof:**
-
-**Step 1 — Effective load on Service C:**
-
-Under normal conditions (no failures), effective load on C = λ.
-
-When C degrades (response time → 8s, approaching timeout), failure rate → 1.0.
-
-Effective load with retries:
+**Given**:
 ```
-λ_eff = λ × (1 + E[retries_per_request])
+λ  = inbound request rate (requests/sec) to Service B
+T  = Service B thread pool size
+Lc = Service C latency under load = 8,000ms (given)
+Ld = Service D latency (assumed healthy) = 200ms
 ```
 
-When failure rate ≈ 1.0:
+**Since B calls C and D in parallel**, each request holds a thread for:
 ```
-E[retries_per_request] = 3
-λ_eff = 4λ
-```
-
-**This quadruples load on an already overloaded service.** ∎ (amplification proven)
-
-**Step 2 — Thread hold time in Service B:**
-
-Best case (call succeeds first try): ~200ms → thread held for 200ms
-Worst case (all retries exhaust): 10s + (2s + 10s) × 3 = **46s**
-
-Under degraded conditions, the expected thread hold time:
-```
-E[hold_time] = P(success_1st) × 10s          // timeout likely
-             + P(fail_1st ∧ success_2nd) × 22s
-             + P(fail_1st ∧ fail_2nd ∧ success_3rd) × 34s
-             + P(all_fail) × 46s
-
-When P(success) ≈ 0 (C is saturated):
-E[hold_time] ≈ 46s
+t_hold = max(Lc, Ld) = max(8000, 200) = 8,000ms
 ```
 
-**Step 3 — Thread pool exhaustion:**
-
-Threads occupied at time t:
+**By Little's Law**, the steady-state number of concurrent threads in use:
 ```
-occupied(t) = λ × E[hold_time]
+N = λ × t_hold = λ × 8.0
 ```
 
-Exhaustion when:
+**Thread exhaustion occurs when**:
 ```
-occupied(t) ≥ P_b
-λ × 46 ≥ P_b
-λ ≥ P_b / 46
-```
-
-For a typical thread pool of `P_b = 200`:
-```
-λ ≥ 200 / 46 ≈ 4.35 requests/second
+N ≥ T
+λ × 8.0 ≥ T
+λ ≥ T / 8.0
 ```
 
-**At merely ~5 requests/second, Service B's entire thread pool is consumed.** ∎
-
-**Step 4 — Cascade to Service A:**
-
-Once Service B's thread pool is exhausted:
-- New requests from A to B queue up or get connection refused
-- Service A's connections to B accumulate (A has 30s timeout)
-- Service A's own connection pool fills: `occupied_a(t) = λ × 30`
-- For `P_a = 500`: exhaustion at λ ≥ 500/30 ≈ **17 req/s**
-
-**Step 5 — Zombie request waste:**
-
-Service A times out at 30s. Service B continues retrying until 46s. For the last 16 seconds, Service B is doing work **for requests whose callers have already given up**. This waste:
+**Before load increase** (Lc = 200ms):
 ```
-waste_ratio = max(0, (46 - 30)) / 46 ≈ 34.8%
+N_normal = λ × 0.2
+Sustainable rate: λ_max = T / 0.2 = 5T
 ```
 
-Over one-third of Service B's capacity is wasted on zombie requests. ∎
+**After load increase** (Lc = 8,000ms):
+```
+N_loaded = λ × 8.0
+Sustainable rate: λ_max = T / 8.0 = 0.125T
+```
 
-**Conclusion:** The system reaches full resource exhaustion through three compounding mechanisms: retry amplification (4x load), thread hold time extension (200ms → 46s), and zombie request waste (34.8%). **Q.E.D.**
+**The sustainable request rate drops by a factor of 40.** If the system was running at even 5% of previous capacity (λ = 0.25T), it will exhaust threads:
+
+```
+N = 0.25T × 8.0 = 2T > T  ∎  (exhaustion by factor of 2)
+```
+
+**Now factor in retries.** When timeouts occur (Lc occasionally > 10s), each timed-out request spawns up to 3 retries. The effective load multiplier:
+
+```
+λ_effective = λ × (1 + P_timeout × 3)
+
+where P_timeout = P(Lc > 10,000ms)
+```
+
+Even with P_timeout = 0.1 (10% of requests timing out):
+```
+λ_effective = λ × 1.3
+```
+
+This **further accelerates** thread exhaustion and **increases load on Service C**, raising P_timeout, triggering the R1 reinforcing loop.
+
+**Time to exhaustion** (from onset of latency increase):
+```
+t_exhaust = T / (λ × 8.0 - T/t_drain)
+
+For typical values (T=200, λ=50 req/s):
+  Normal: N = 50 × 0.2 = 10 threads (healthy)
+  Loaded: N = 50 × 8.0 = 400 > 200 (exhaustion)
+  
+  Time to fill: T / λ = 200 / 50 = 4 seconds
+```
+
+**The system goes from healthy to fully exhausted in ~4 seconds.** ∎
 
 ---
 
 ## 5. Constraints for the Fix
 
-### Hard Constraints (must be satisfied)
+These are the invariants the fixed system must satisfy:
 
-| ID | Constraint | Rationale |
-|----|-----------|-----------|
-| **HC-1** | `λ_eff(C) ≤ C_max` at all times | Prevent overload amplification |
-| **HC-2** | `∀ request: total_time(B) < timeout(A)` | Eliminate zombie requests |
-| **HC-3** | Circuit breaker must open when `error_rate(C) > θ` for window `w` | Break reinforcing loop R1 |
-| **HC-4** | Retries must only fire for transient faults (5xx, network), not for timeouts under sustained load | Stop treating capacity problems as transient faults |
-| **HC-5** | `occupied(B) ≤ P_b × 0.8` under degraded conditions | Preserve headroom for recovery |
+| # | Constraint | Formal Expression | Rationale |
+|---|-----------|-------------------|-----------|
+| C1 | **Timeout alignment** | `T_A > T_B_total` where `T_B_total = T_downstream × (1 + retries) + backoff_sum` | Parent must never abandon while child retries |
+| C2 | **Retry budget cap** | `T_B_total ≤ T_A × 0.8` | Leave 20% headroom for processing + network |
+| C3 | **Circuit breaker exists** | `∃ CB: failure_rate > threshold → CB.open` | Provides the missing balancing feedback loop |
+| C4 | **Backpressure signal** | `S1 > 0.75×T → reject_new_requests(503)` | Prevents thread exhaustion; enables upstream shedding |
+| C5 | **Retry idempotency** | `∀ retry: effect(retry) = effect(original)` | Retries must be safe (Service D = payments!) |
+| C6 | **Monotonic degradation** | `∂(throughput)/∂(latency_C) ≤ 0, bounded` | System degrades gracefully, never catastrophically |
+| C7 | **No orphaned work** | `caller_cancelled → cancel(downstream_calls)` | Cooperative cancellation propagation |
 
-### Soft Constraints (should be satisfied)
-
-| ID | Constraint | Rationale |
-|----|-----------|-----------|
-| **SC-1** | Exponential backoff with jitter: `delay = min(base × 2^attempt + random(0, base), max_delay)` | Prevent retry synchronization (thundering herd) |
-| **SC-2** | Deadline propagation from A → B → C,D | Every service knows remaining time budget |
-| **SC-3** | Bulkhead isolation between C and D call paths | D failure shouldn't consume C's thread budget |
-| **SC-4** | Graceful degradation: if C is down, return partial response (D result + C fallback) | Preserve partial availability |
-
-### Derived Timeout Constraint (from HC-2)
-
-```
-timeout(A→B) = 30s
-
-Required: total_worst_case(B) < 30s
-
-total_worst_case(B) = max(
-  retry_time(C),   // C path
-  retry_time(D)    // D path, parallel
-)
-
-retry_time(X) = timeout(X) + retries × (backoff + timeout(X))
-
-For retry_time < 30s with 3 retries:
-  timeout(X) + 3 × (backoff + timeout(X)) < 30s
-  4 × timeout(X) + 3 × backoff < 30s
-
-With backoff = 2s:
-  4 × timeout(X) < 24s
-  timeout(X) < 6s
-
-∴ Service B timeout to downstream services must be < 6s (not 10s)
-```
-
-**The current 10s timeout violates HC-2.** Setting timeout to 5s gives:
-```
-worst_case = 5 + 3 × (2 + 5) = 26s < 30s ✓
-```
+**Critical constraint C5 deserves emphasis**: Service D is a **Payment Service**. Retrying payment calls without idempotency keys can cause **double charges**. This is not just a reliability issue — it's a correctness and financial liability issue.
 
 ---
 
 ## 6. Execution Plan
 
-### Phase 1: Stop the Bleeding (immediate, ~1-2 days)
+### Phase 1: Stop the Bleeding (Day 1-2)
 
 ```
-1.1  Reduce Service B downstream timeout: 10s → 5s
-     - Satisfies derived timeout constraint
-     - Worst case drops from 46s → 26s
-     - Eliminates zombie requests
+1.1  Add circuit breaker to Service B → Service C calls
+     - Pattern: Half-open/closed/open (standard Hystrix/resilience4j pattern)
+     - Thresholds: open after 50% failure rate in 10s sliding window
+     - Half-open: allow 1 probe request every 5s
+     - Satisfies: C3
 
-1.2  Add circuit breaker to Service B → Service C path
-     - Configuration:
-       - failure_threshold: 50% over 10s sliding window
-       - open_duration: 15s
-       - half_open_probes: 3 requests
-     - When open: fail fast (return fallback or 503)
-     - Breaks reinforcing loop R1
+1.2  Reduce Service B downstream timeout: 10s → 3s
+     - Service C is healthy at 200ms; 3s provides 15x headroom
+     - Reduces t_hold from 8s to 3s under degradation
+     - Satisfies: C1 (partially)
 
-1.3  Add deadline propagation header
-     - Service A sets: X-Deadline: <unix_timestamp_now + 30s>
-     - Service B reads deadline, skips retry if remaining < timeout(X)
-     - Eliminates wasted work on expired requests
+1.3  Add request idempotency keys to Service D (Payment) calls
+     - Generate UUID per-operation at Service B before first attempt
+     - Service D must deduplicate on this key
+     - Satisfies: C5
 ```
 
-### Phase 2: Structural Improvements (~3-5 days)
+### Phase 2: Structural Fix (Day 3-5)
 
 ```
-2.1  Replace fixed backoff with exponential backoff + jitter
-     - delay = min(1s × 2^attempt + random(0, 1s), 8s)
-     - Prevents thundering herd on recovery
+2.1  Realign timeout budget
+     Current:  A=30s, B_per_call=10s, retries=3, backoff=2s
+     Problem:  Worst case = 4×10 + 3×2 = 46s > 30s (A's timeout)
+     
+     New budget (working backward from A=30s):
+       A timeout:            30s
+       B processing margin:   2s
+       Available for calls:  28s
+       Per-call timeout:      2s  (reduced from 10s)
+       Max retries:           2   (reduced from 3)
+       Backoff:              1s   (reduced from 2s)
+       Worst case: 3×2 + 2×1 = 8s << 28s  ✓
+     Satisfies: C1, C2
 
-2.2  Add bulkhead isolation
-     - Separate thread/connection pools for C and D calls
-     - Size: P_c = P_d = P_b × 0.4 (80% total, 20% headroom)
-     - D availability preserved when C degrades
+2.2  Add thread pool bulkheads in Service B
+     - Separate pools for Service C calls vs Service D calls
+     - Size: 50% of total threads each (adjustable)
+     - Prevents Service C degradation from starving Service D calls
+     - Satisfies: C4 (partial)
 
-2.3  Classify retry-eligibility by error type
-     - Retryable: 503, connection reset, TCP timeout
-     - Non-retryable: 400, 401, 403, 404, 429 (rate limited)
-     - Non-retryable: timeout when circuit is half-open
-
-2.4  Add circuit breaker to Service B → Service D path
-     - Same configuration as 1.2
+2.3  Add load shedding at Service B
+     - When active requests > 75% of thread pool: return 503
+     - Service A must handle 503 gracefully (return to client, don't retry)
+     - Satisfies: C4
 ```
 
-### Phase 3: Observability & Validation (~2-3 days)
+### Phase 3: Observability and Validation (Day 5-7)
 
 ```
-3.1  Instrument metrics
-     - circuit_breaker_state{service="C|D"} (gauge: 0/1/2)
-     - retry_count{service="C|D", attempt="1|2|3"} (counter)
-     - request_duration{service="B", downstream="C|D"} (histogram)
-     - thread_pool_usage{service="B", pool="C|D"} (gauge)
-     - zombie_request_count (counter: requests where upstream timed out)
+3.1  Add metrics emission
+     - p50/p95/p99 latency per downstream service
+     - Circuit breaker state transitions
+     - Retry rate as percentage of total calls
+     - Thread pool utilization per bulkhead
+     - Active connection count at Service A
 
-3.2  Load test validation
-     - Simulate C degradation (inject 8s latency)
-     - Verify: circuit opens within 10s window
-     - Verify: B thread pool stays below 80% capacity
-     - Verify: D success rate unaffected by C degradation
-     - Verify: no zombie requests (B total_time < A timeout)
+3.2  Implement cooperative cancellation
+     - Service A cancels → propagates to Service B → cancels downstream
+     - Use context/cancellation tokens (Go context, Java CompletableFuture)
+     - Satisfies: C7
 
 3.3  Chaos testing
-     - Kill Service C entirely → verify graceful degradation
-     - Saturate Service C → verify circuit breaker engagement
-     - Network partition C → verify timeout + circuit behavior
+     - Inject Service C latency (200ms → 8s → 15s → full failure)
+     - Verify: circuit breaker opens, retries stay bounded,
+       Service A returns errors (not timeouts), Service D unaffected
+     - Satisfies: C6
 ```
 
-### Execution Dependencies
+### Dependency Graph
 
 ```
-1.1 ──┐
-1.2 ──┼── can be done in parallel ──→ 2.1, 2.2, 2.3 (parallel) ──→ 3.1 ──→ 3.2 ──→ 3.3
-1.3 ──┘                                     2.4 depends on 2.2
+Phase 1:  [1.1] [1.2] [1.3]     ← all independent, parallelize
+              \    |    /
+Phase 2:  [2.1]  [2.2]  [2.3]   ← 2.1 independent; 2.2, 2.3 can parallel
+              \    |    /
+Phase 3:  [3.1] → [3.3]         ← metrics before chaos testing
+           [3.2]                 ← independent
 ```
 
-### Expected Outcome After Fix
+---
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Worst-case thread hold time | 46s | 26s (phase 1), ~5s with circuit breaker |
-| Load amplification on C | 4x | 1x (circuit open → 0x) |
-| Zombie request waste | 34.8% | 0% |
-| D availability during C failure | degraded | isolated |
-| Min λ for B exhaustion (P_b=200) | ~5 req/s | ~200 req/s (with circuit breaker fast-failing) |
+## Summary
 
-The core fix is conceptually simple: **add the missing balancing feedback loop (circuit breaker) to counteract the reinforcing loop (retries), and propagate deadlines to eliminate zombie work.** Everything else is defense in depth.
+The architecture has a fundamental stability flaw: **two reinforcing feedback loops with no balancing mechanism**. Under even modest latency degradation, the system transitions from healthy to fully exhausted in seconds. The retry strategy compounds this by injecting additional load into an already degraded downstream service, and the timeout misalignment (46s worst-case vs 30s parent timeout) guarantees orphaned work. Most critically, retrying Payment Service calls without idempotency is a correctness bug that can cause real financial harm.
+
+The fix is not "add a circuit breaker" — it's **introducing the missing balancing feedback loops** (circuit breaker, backpressure, load shedding) while **realigning the timeout budget** so the system's timing constraints are satisfiable.
 
 </details>
 
 ### SkillOS + Dialects Output
 
 <details>
-<summary>Click to expand (3,778 output tokens)</summary>
+<summary>Click to expand (13,892 output tokens)</summary>
 
-Now I have all dialect definitions. Let me produce all 6 deliverables.
-
----
-
-## Deliverable 1: Root Cause Diagnosis — `formal-proof` dialect
-
-```
-GIVEN: route(A, B) ∧ call_parallel(B, {C, D})
-GIVEN: retry(B, max=3, backoff=2s) ← fail(C) ∨ fail(D)
-GIVEN: timeout(B→C) = 10s ∧ timeout(B→D) = 10s ∧ timeout(A→B) = 30s
-GIVEN: latency(C, normal) = 200ms ∧ latency(C, load) = 8s
-GIVEN: ¬circuit_breaker(B)
-DERIVE: load → latency(C) ↑ 200ms → 8s → near_timeout(10s) [BY modus_ponens]
-DERIVE: near_timeout(C) → ↑fail_rate(C) → trigger(retry, B→C) [BY implication]
-DERIVE: retry(B→C, 3×) → 3× additional_calls(B→C) → ↑load(C) [BY conjunction_introduction]
-DERIVE: ↑load(C) → ↑latency(C) → ↑fail_rate(C) → ↑retry_rate [BY transitivity]
-DERIVE: ↑retry_rate → ↑load(C) → reinforcing_loop [BY hypothetical_syllogism]
-DERIVE: ¬circuit_breaker(B) → ¬break(reinforcing_loop) [BY contrapositive]
-DERIVE: timeout(B, worst_case) = 10s × 4_attempts = 40s > timeout(A→B, 30s) [BY implication]
-DERIVE: timeout(A→B) → fail(A) → user_retry → ↑load(A→B) [BY transitivity]
-QED: retry_without_circuit_breaker ∧ load → reinforcing_feedback_loop → cascade_failure(A, B, C)
-```
+The file write was blocked by permissions. Let me output all 6 deliverables directly here instead:
 
 ---
 
-## Deliverable 2: System Dynamics Model — `system-dynamics` dialect
+# Dialect Benchmark: Microservice Cascade Failure Analysis
+## Pipeline Execution Mode — 6 Deliverables
+
+---
+
+## Step 1: Root Cause Diagnosis — `formal-proof`
 
 ```
-[STOCK] active_connections_B→C
-[STOCK] active_connections_B→D
+GIVEN: route(A, B) ∧ parallel_call(B, C) ∧ parallel_call(B, D) [architecture]
+GIVEN: retry(B, 3, 2s_backoff) ∧ timeout(B→C, 10s) ∧ timeout(B→D, 10s) [retry_policy]
+GIVEN: timeout(A→B, 30s) [gateway_timeout]
+GIVEN: ¬circuit_breaker(B) [no_protection]
+GIVEN: load_response(C, normal) = 200ms ∧ load_response(C, high) = 8000ms [degradation]
+
+DERIVE: high_load → response_time(C) > timeout(B→C)
+        [BY degradation: 8s base + retry amplification → >10s → timeout]
+
+DERIVE: timeout(B→C) → retry(B, attempt+1)
+        [BY retry_policy: failure triggers retry up to 3×]
+
+DERIVE: retry(B, attempt+1) → additional_connections(B→C, +1)
+        [BY connection_semantics: each retry opens new connection]
+
+DERIVE: additional_connections(B→C, +1) → increased_load(C)
+        [BY load_proportionality: more connections = more load on C]
+
+DERIVE: increased_load(C) → response_time(C) ↑ → timeout(B→C) ↑
+        [BY degradation: load increases latency]
+
+DERIVE: timeout(B→C) ↑ → retry(B) ↑ → connections ↑ → load(C) ↑
+        [BY transitive_closure: steps 2-5 form cycle]
+
+DERIVE: ¬circuit_breaker(B) → cycle_unbroken
+        [BY no_protection: no mechanism to halt reinforcing loop]
+
+QED: retry_without_circuit_breaker ∧ load_dependent_latency
+     → reinforcing_feedback_loop → cascade_failure
+     [BY composition of DERIVE 1-7: retries amplify load,
+      load amplifies timeouts, timeouts amplify retries — unbounded]
+```
+
+---
+
+## Step 2: System Dynamics Model — `system-dynamics`
+
+```
+[STOCK] active_connections_B_to_C
+[STOCK] active_connections_B_to_D
 [STOCK] pending_retries_B
 [STOCK] available_threads_B
 [STOCK] request_queue_A
+[STOCK] service_C_load
 
-[EXT] user_request_rate
-[FLOW] user_request_rate → +request_queue_A
-[FLOW] request_dispatch → -request_queue_A → -available_threads_B → +active_connections_B→C → +active_connections_B→D
-[FLOW] successful_response → -active_connections_B→C → +available_threads_B
-[FLOW] timeout_C → -active_connections_B→C → +pending_retries_B
-[FLOW] retry_dispatch → -pending_retries_B → +active_connections_B→C → -available_threads_B
+[FLOW] incoming_requests → +request_queue_A → +active_connections_B_to_C
+[FLOW] incoming_requests → +request_queue_A → +active_connections_B_to_D
+[FLOW] timeout_rate → -active_connections_B_to_C → +pending_retries_B
+[FLOW] retry_dispatch → -pending_retries_B → +active_connections_B_to_C
+[FLOW] retry_dispatch → -available_threads_B
+[FLOW] success_rate → -active_connections_B_to_C → +available_threads_B
+[FLOW] timeout_rate → -available_threads_B
 
-[FB+] ↑active_connections_B→C → ↑latency(C) → ↑timeout_rate → ↑pending_retries_B → ↑active_connections_B→C
-[FB-] ↓available_threads_B → ↓request_dispatch → ↓active_connections_B→C (thread_exhaustion_brake)
-[FB+] timeout(A→B) → user_retry → ↑request_queue_A → ↑active_connections_B→C
+[FB+] retry_amplification_loop:
+      active_connections_B_to_C ↑
+      → service_C_load ↑
+      → response_time_C ↑
+      → timeout_rate ↑
+      → pending_retries_B ↑
+      → active_connections_B_to_C ↑
 
-[DELAY] retry_backoff(2s, 4s, 6s)
-[DELAY] timeout_detection(10s)
+[FB-] thread_exhaustion_brake:
+      available_threads_B ↓
+      → dispatch_capacity ↓
+      → active_connections_B_to_C ↓
+
+[DELAY] retry_backoff(2s × attempt)
+[DELAY] timeout_wait(10s)
 [DELAY] gateway_timeout(30s)
 
-[EQ] collapse: available_threads_B = 0 ∧ request_queue_A → ∞
+[EXT] user_request_rate
+[EXT] service_C_base_capacity
 ```
 
 ---
 
-## Deliverable 3: Retry Condition — `boolean-logic` dialect
+## Step 3: Retry Condition — `boolean-logic`
 
 ```
--- Atomic predicates
-P1: failed(call(B→X))          -- X ∈ {C, D}, call returned error or timeout
-P2: retry_count(B→X) < 3       -- attempts not exhausted
-P3: elapsed(B→X) ≥ 10s         -- timeout threshold reached
-P4: circuit_breaker(B) = open   -- circuit breaker tripped
+LET failed(svc)      := (response_code(svc) ≥ 500) ∨ (elapsed(svc) ≥ timeout(svc))
+LET retriable(svc)   := retry_count(svc) < max_retries
+LET max_retries      := 3
+LET timeout(B→C)     := 10s
+LET timeout(B→D)     := 10s
+LET timeout(A→B)     := 30s
 
--- Retry fires when:
-retry(B→X) ↔ ((failed(call(B→X)) ∨ (elapsed(B→X) ≥ 10s)) ∧ (retry_count(B→X) < 3) ∧ ¬(circuit_breaker(B) = open))
+retry_fires(B, svc) :=
+  (failed(svc)) ∧ (retriable(svc)) ∧ (¬cancelled(B))
 
--- Given ¬∃circuit_breaker, simplifies to:
-retry(B→X) ↔ ((failed(call(B→X)) ∨ (elapsed(B→X) ≥ 10s)) ∧ (retry_count(B→X) < 3))
+retry_fires(B, C) :=
+  ((response_code(C) ≥ 500) ∨ (elapsed(C) ≥ 10s))
+  ∧ (retry_count(C) < 3)
+  ∧ (¬cancelled(B))
 
--- Cascade condition (retry amplification under load):
-cascade ↔ (∀X ∈ {C, D}: (latency(X) → 10s) ∧ (retry(B→X) = true)) ∧ (retry_multiplier = (1 + max_retries) = 4) ∧ ¬∃circuit_breaker
+cascade(B, C) :=
+  (retry_fires(B, C))
+  ∧ (∀ attempt_i ∈ {1,2,3}:
+      (additional_load(C, attempt_i) → (elapsed(C) ≥ 10s)))
+  ∧ (¬∃ circuit_breaker(B, C))
 
--- Gateway timeout cascade:
-gateway_fail(A) ↔ (elapsed(A→B) ≥ 30s) ∧ (worst_case(B) = (10s × 4) = 40s > 30s)
-cascade_amplify ↔ gateway_fail(A) ∧ user_retry → (↑request_rate(A→B) ∧ cascade)
-```
+system_cascade :=
+  (cascade(B, C) ∨ cascade(B, D))
+  ∧ (thread_consumption(B) > thread_pool_size(B))
+  → (¬available(B))
+  → (timeout(A→B))
+  → (∀ req ∈ queue(A): failed(req))
 
----
-
-## Deliverable 4: Resource Exhaustion Proof — `formal-proof` dialect
-
-```
-GIVEN: max_retries = 3 ∧ backoff = 2s ∧ timeout(B→X) = 10s
-GIVEN: timeout(A→B) = 30s
-GIVEN: latency(C, load) = 8s < timeout = 10s [confidence: 70%]
-GIVEN: latency(C, degraded) ≥ 10s → timeout triggered
-GIVEN: calls_per_request(B) = 2 (parallel: C, D)
-GIVEN: threads(B) = T (finite thread pool)
-
-DERIVE: worst_case_per_downstream = timeout × (1 + max_retries) = 10s × 4 = 40s [BY implication]
-DERIVE: backoff_total = 0 + 2s + 4s + 6s = 12s (cumulative wait before retries) [BY implication]
-DERIVE: connection_hold_time = 40s + 12s = 52s (per downstream, worst case) [BY conjunction_introduction]
-DERIVE: since call_parallel(B, {C, D}): threads_per_request(worst) = 2 × 4 = 8 connections [BY implication]
-DERIVE: thread_hold_per_request = 52s (both downstream paths blocked) [BY conjunction_elimination]
-DERIVE: throughput(B, max) = T / 8 concurrent_requests (vs T / 2 in healthy state) [BY implication]
-DERIVE: amplification_factor = 4× per downstream (1 initial + 3 retries) [BY implication]
-DERIVE: effective_load(C) = actual_requests × 4 (all timeout → all retry) [BY transitivity]
-DERIVE: requests_in_flight(30s_window) = request_rate × 30s (A holds connection 30s before timeout) [BY implication]
-DERIVE: at request_rate R: threads_needed = R × 8, exhaustion when R × 8 > T [BY transitivity]
-DERIVE: R_critical = T / 8 (e.g., T=100 → R_critical = 12.5 req/s vs healthy 50 req/s) [BY specialization]
-DERIVE: ∀R > R_critical: available_threads = 0 → queue_depth → ∞ [BY modus_ponens]
-
-QED: 4× retry amplification + 52s hold time → thread exhaustion at R > T/8; system collapses at ~25% of healthy capacity
+cascade_inevitable :=
+  (response_time(C) > timeout(B→C))
+  ∧ (¬circuit_breaker(B))
+  ∧ (request_rate > 0)
 ```
 
 ---
 
-## Deliverable 5: Fix Constraints — `constraint-dsl` dialect
+## Step 4: Resource Exhaustion Proof — `formal-proof`
 
 ```
-C[1][H] circuit_breaker(B→C) ∧ circuit_breaker(B→D)
-  ⇒ open_when(fail_rate > 50% ∨ consecutive_failures ≥ 5, window=60s)
-  → {half_open_after(30s) | probe(1_req)}
+GIVEN: max_retries = 3 [config]
+GIVEN: backoff = 2s × attempt_number [config: 2s, 4s, 6s]
+GIVEN: timeout(B→C) = 10s [config]
+GIVEN: timeout(B→D) = 10s [config]
+GIVEN: timeout(A→B) = 30s [config]
+GIVEN: response_time(C, under_load) ≥ 10s [degradation]
+GIVEN: thread_pool(B) = T threads [resource_bound]
 
-C[2][H] retry_budget(B) ≤ 20% × total_request_rate
-  ⇒ shared_budget(B→C, B→D) ∧ !per_request_retry_limit_alone
-  → {token_bucket(rate=0.2×R) | adaptive_concurrency}
+DERIVE: worst_case_hold_time_per_request(B→C) =
+        attempt_1_timeout + backoff_1 + attempt_2_timeout + backoff_2 +
+        attempt_3_timeout + backoff_3 + attempt_4_timeout
+        = 10 + 2 + 10 + 4 + 10 + 6 + 10 = 52s
+        [BY retry_policy: 1 initial + 3 retries = 4 attempts, 3 backoff gaps]
 
-C[3][M] timeout(B→X) < timeout(A→B) ∧ total_retry_time(B) < timeout(A→B)
-  ⇒ timeout(B→X) × (1 + max_retries) + backoff_sum < timeout(A→B)
-  → {timeout(B→X) = 5s ∧ max_retries = 2 ∧ backoff = 1s | total = 5×3+3 = 18s < 30s}
+DERIVE: timeout(A→B) = 30s < 52s
+        → A cancels B at t=30s → effective_hold = 30s per thread
+        [BY gateway_timeout: A terminates before B exhausts retries]
 
-S[4][M] backpressure(B) ← queue_depth(B) > threshold
-  ⇒ shed_load(B) ∧ return(503, retry-after) → {reject_new | priority_queue}
+DERIVE: during 30s window, single request spawns:
+        attempt_1 at t=0   (timeout at t=10)
+        attempt_2 at t=12  (timeout at t=22)
+        attempt_3 at t=26  (running at t=30 when A cancels)
+        = 3 connection attempts to C
+        [BY retry_schedule: cumulative = 0, 10+2=12, 22+4=26]
 
-S[5][L] monitor(latency_p99(B→C)) ∧ monitor(retry_rate(B)) ∧ monitor(thread_util(B))
-  ⇒ alert_when(p99 > 2s ∨ retry_rate > 10% ∨ thread_util > 80%)
-  → {dashboard | pagerduty(severity=warn)}
+DERIVE: connection_multiplier = 3× per request to C
+        [BY parallel_call: B→D also retried → up to 4× total downstream]
+
+DERIVE: threads_held = request_rate × 30s
+        [BY Little's_law: L = λ × W]
+
+DERIVE: saturation_time = T / R seconds
+        [BY resource_bound: R threads consumed per second, T total]
+
+DERIVE: R=10 req/s, T=200 → saturation in 20s
+        downstream connections = 10 × 3 × 20 = 600 to C in 20s
+        [BY arithmetic]
+
+DERIVE: post-saturation: 0 threads available → 100% failure
+        [BY thread_exhaustion: no capacity to process requests]
+
+QED: sustained_load(R > T/30) ∧ response_time(C) ≥ timeout(B→C) ∧ ¬circuit_breaker
+     → thread_pool_exhaustion(B) in T/R seconds
+     → cascade_failure(A) → system_unavailable
+     [BY composition: retry_amplification × timeout_hold × finite_threads]
 ```
 
 ---
 
-## Deliverable 6: Implementation Plan — `exec-plan` dialect
+## Step 5: Fix Constraints — `constraint-dsl`
 
 ```
-@plan[cascade_fix] pattern=hierarchical agents=3 type=resilience_remediation
+C[1][H]: circuit_breaker(B→C) ∧ circuit_breaker(B→D)
+         failure_threshold ≥ 50% over sliding_window(30s)
+         → open_state(30s) → half_open(probe: 1 req)
 
-ctx{
-  root_cause: retry_amplification_feedback_loop
-  affected: B→C, B→D, A→B
-  priority: P0_production_stability
-}
+C[2][H]: retry_budget(B) ≤ 20% × total_request_rate
+         ∧ shared across all downstream calls
+         ∧ token_bucket(refill=0.2×RPS, burst=10)
 
-P1[platform-eng]: implement circuit_breaker(B→C, B→D) | threshold=5_consecutive ∨ 50%_fail_rate(60s) | half_open=30s | verify: breaker_trips_under_simulated_failure ∧ recovers_on_healthy
-P2[platform-eng] dep=P1: enforce retry_budget(B, 20%×R) + reduce(max_retries=2, backoff=1s, timeout=5s) | verify: total_retry_time < 18s ∧ budget_shared(B→C, B→D)
-P3[platform-eng] dep=P1: add backpressure(B, queue_depth>100) → shed_load(503, retry-after) | verify: overload → 503 ∧ ¬thread_exhaustion
-P4[platform-eng] dep=P2: realign timeout_hierarchy(B→X=5s, A→B=20s) | verify: timeout(B→X) × max_attempts + backoff_sum < timeout(A→B)
-P5[sre-eng] dep=P1,P2,P3: deploy monitoring(latency_p99, retry_rate, thread_util, breaker_state) + alerts(p99>2s ∨ retry>10% ∨ threads>80%) | verify: dashboard_live ∧ alert_fires_on_threshold
-P6[qa-eng] dep=P1,P2,P3,P4: load_test(R=2×peak, duration=10m) | verify: ¬cascade ∧ error_rate < 5% ∧ p99 < 3s ∧ breaker_activates ∧ recovery < 60s
+C[3][H]: timeout(B→downstream) + max_retry_time(B) < timeout(A→B)
+         ∧ timeout(B→C) = timeout(B→D) = 5s
+         ∧ max_retries = 1
 
-success: circuit_breaker_active ∧ retry_budget_enforced ∧ timeout_hierarchy_valid ∧ backpressure_enabled ∧ monitoring_live ∧ load_test_pass
-on_fail: rollback(feature_flags) → {disable_retry_changes | revert_timeout_config}
+S[1][M]: backpressure(B):
+         WHEN queue_depth(B) > 0.8 × max_queue
+         → reject_new(HTTP 503) ∧ shed_oldest
+
+S[2][M]: bulkhead(B→C) ∧ bulkhead(B→D)
+         max_concurrent(B→C) ≤ 0.5 × thread_pool(B)
+         max_concurrent(B→D) ≤ 0.5 × thread_pool(B)
+
+S[3][L]: monitor(B, [error_rate, p99_latency, retry_rate, thread_util])
+         alert WHEN error_rate > 5% ∨ p99 > 2s ∨ retry_rate > 10% ∨ threads > 80%
+
+NC[1]: ¬circuit_breaker(B) ⇒ cascade_failure under sustained_load
+       → {add_circuit_breaker | rate_limit_at_gateway}
+
+NC[2]: ¬timeout_hierarchy ⇒ orphaned_retries after gateway_cancel
+       → {reduce_inner_timeouts | propagate_cancellation}
 ```
 
 ---
 
-All 6 deliverables produced in their specified dialect notation. Key findings encoded:
+## Step 6: Implementation Plan — `exec-plan`
 
-- **FB+ loop**: retries → load → timeouts → more retries (no circuit breaker to break the cycle)
-- **4× amplification**: each request spawns up to 4 attempts per downstream service
-- **52s worst-case hold**: threads locked for 52s vs ~200ms healthy, collapsing capacity to ~25%
-- **Fix priority**: circuit breaker first (C[1]), then retry budget (C[2]), then timeout hierarchy (C[3])
+```
+@plan[cascade-fix] pattern=sequential agents=4
+
+P[1][infra-eng]: deploy circuit_breaker(B→C, B→D)
+     config: threshold=50%, window=30s, open=30s, half_open_probe=1
+     dep=none
+     verify: inject_failure(C, 60%) → circuit_opens < 5s ∧ no_retry_after_open
+     on_err→ rollback_config(B) ∧ restore_retry_policy
+
+P[2][infra-eng]: implement retry_budget(B)
+     config: token_bucket(rate=0.2×RPS, burst=10), shared_across_downstreams
+     dep=P[1]
+     verify: load_test(2×capacity) → retry_rate ≤ 20% ∧ no_thread_exhaustion
+     on_err→ disable_retry_budget ∧ rely_on_circuit_breaker
+
+P[3][infra-eng]: fix timeout_hierarchy
+     config: timeout(B→C)=5s, timeout(B→D)=5s, max_retries=1, timeout(A→B)=15s
+     dep=P[1] ∧ P[2]
+     verify: worst_case(B) = 5 + 2 + 5 = 12s < 15s = timeout(A→B)
+     on_err→ revert_timeouts ∧ keep_circuit_breaker
+
+P[4][infra-eng]: add backpressure + bulkhead(B)
+     config: queue_threshold=80%, bulkhead(C)=50%threads, bulkhead(D)=50%threads
+     dep=P[3]
+     verify: load_test(3×capacity) → graceful_degradation ∧ partial_availability
+     on_err→ disable_bulkhead ∧ widen_circuit_breaker_threshold
+
+P[5][sre-eng]: deploy monitoring + alerts per S[3]
+     dep=P[1]
+     verify: trigger_each_alert → notification < 30s ∧ dashboard_reflects
+     on_err→ log_to_file ∧ manual_monitoring
+
+P[6][qa-eng]: integration_test full cascade scenario
+     dep=P[1] ∧ P[2] ∧ P[3] ∧ P[4] ∧ P[5]
+     verify: simulate(load_spike + C_degradation) →
+             circuit_opens ∧ retry_budget_holds ∧ B_available
+             ∧ A_returns_503_gracefully ∧ thread_util(B) < 80%
+             ∧ recovery < 60s after C recovers
+     on_err→ identify_failing_constraint ∧ rollback_to_last_passing_P[N]
+
+success: circuit_breaker_active ∧ retry_budget ≤ 20%
+         ∧ timeout_hierarchy_valid ∧ thread_util < 80% @3×load
+         ∧ recovery < 60s ∧ monitoring_active
+```
+
+---
+
+## Pipeline Summary
+
+| Step | Deliverable | Dialect | Status |
+|------|------------|---------|--------|
+| 1 | Root cause diagnosis | `formal-proof` | COMPLETE |
+| 2 | System dynamics model | `system-dynamics` | COMPLETE |
+| 3 | Retry condition | `boolean-logic` | COMPLETE |
+| 4 | Resource exhaustion proof | `formal-proof` | COMPLETE |
+| 5 | Fix constraints | `constraint-dsl` | COMPLETE |
+| 6 | Implementation plan | `exec-plan` | COMPLETE |
+
+**Key findings:**
+- **Root cause**: Retry-without-circuit-breaker creates unbounded `[FB+]` reinforcing loop
+- **Exhaustion**: Thread pool depletes in `T/R` seconds (200 threads / 10 RPS = 20s)
+- **Multiplier**: 3× connections per request (each spawns up to 3 retry attempts to C within A's 30s window)
+- **Critical fix**: `C[1][H]` circuit breaker breaks the `[FB+]` loop; all others are defense-in-depth
+
+File write was blocked by permissions — grant write access to `projects/Project_dialect_benchmark/output/` to persist these results.
 
 </details>
