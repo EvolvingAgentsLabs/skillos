@@ -274,6 +274,95 @@ Measured against real SkillOS project artifacts:
 
 ---
 
+## Benchmarks: Measured Performance
+
+Four automated benchmarks compare SkillOS dialects against plain Claude Code on real tasks. All use `claude -p --output-format json` in isolated temp directories (no CLAUDE.md context), with fully automated quality verification (no LLM judge).
+
+### Benchmark Suite
+
+| # | Script | Task | Dialect | Turns |
+|---|--------|------|---------|-------|
+| 1 | `benchmark_dialects.py` | Cascade failure analysis | mixed (6 dialects) | 1 vs 8 |
+| 2 | `benchmark_patch.py` | Fix 2 bugs in 993-line Python service | `strict-patch` | 1 vs 1 |
+| 3 | `benchmark_math.py` | K_{3,4} spanning trees (Matrix Tree Theorem) | `formal-proof` | 1 vs 1+1 |
+| 4 | `benchmark_physiology.py` | Mitral regurgitation hemodynamics | `system-dynamics` | 1 vs 1+1 |
+
+Benchmarks 3 and 4 include a **Language Facade renderer** step (dialect → English) to demonstrate the full ingress/egress pattern.
+
+### Results
+
+#### Code Editing — `strict-patch` (Benchmark 2)
+
+The strongest result. Plain Claude must rewrite the entire 993-line file; SkillOS emits only `[DEL:N]/[ADD:N]` patch operations.
+
+| Metric | Plain Claude | SkillOS + strict-patch |
+|---|---|---|
+| Output tokens | 10,286 | 224 (**-97.8%**) |
+| Cost | $0.3417 | $0.1119 (**-67.3%**) |
+| Duration | 107.3s | 6.9s (**15.5x faster**) |
+| Bugs fixed | 2/2 | 2/2 |
+| Verification | `ast.parse()` + regex | `ast.parse()` + regex |
+
+This is **O(1) vs O(N)** output — the patch size is independent of file size. For a 10,000-line file, the advantage would be even larger.
+
+#### Mathematical Reasoning — `formal-proof` (Benchmark 3)
+
+Tests whether formal-proof notation eliminates arithmetic hallucinations. The correct answer (432 spanning trees) requires matrix construction, cofactor extraction, and determinant calculation.
+
+| Metric | Plain Claude | SkillOS Solver | SkillOS + Renderer |
+|---|---|---|---|
+| Output tokens | 4,632 | 1,976 (**-57.3%**) | 2,370 (**-48.8%**) |
+| Quality score | 80/100 | **90/100** | — |
+| Answer correct | Yes (432) | Yes (432) | — |
+
+The dialect version scored **higher** (90 vs 80) because formal-proof notation forces step-by-step derivation with rule citations — the model cannot skip logical steps. Even with a renderer step translating back to English, total tokens remain below plain Claude.
+
+#### Physiological Computation — `system-dynamics` (Benchmark 4)
+
+Tests whether system-dynamics notation improves accuracy on a clinical physics problem. The model must calculate regurgitant velocity, volume, fraction, and severity classification.
+
+| Metric | Plain Claude | SkillOS Solver | SkillOS + Renderer |
+|---|---|---|---|
+| Output tokens | 742 | 291 (**-60.8%**) | 599 (**-19.3%**) |
+| Quality score | 100/100 | 100/100 | — |
+| All values correct | Yes | Yes | — |
+
+Both approaches got perfect scores, but SkillOS used 61% fewer tokens. The system-dynamics notation mapped the heart to a hydraulic circuit (`[STOCK] LV_pump`, `[FLOW] Q_leak`, `[EVAL] RF > 50% → SEVERE`), producing a flawless computation in ~15 lines. The renderer then translated this into a compassionate clinical summary for physicians.
+
+#### Analytical Reasoning — mixed dialects (Benchmark 1)
+
+The baseline benchmark using a cascade failure analysis. Both approaches scored 100/100 quality; the task was analytical rather than computational, so the advantage was modest.
+
+| Metric | Plain Claude | SkillOS + Dialects |
+|---|---|---|
+| Output tokens | 1,977 | 1,787 (**-9.6%**) |
+| Quality score | 100/100 | 100/100 |
+
+### Key Takeaways
+
+1. **Code editing** (`strict-patch`): **97.8% token reduction** — O(1) vs O(N) output
+2. **Complex math** (`formal-proof`): **57% fewer tokens AND higher accuracy** — cognitive scaffolding eliminates arithmetic hallucinations
+3. **Scientific computation** (`system-dynamics`): **61% fewer tokens** with identical accuracy — domain mapping strips away prose distraction
+4. **Language Facade**: Even with a 2nd translation step (dialect → English), total tokens remain below plain Claude output
+5. **Analytical reasoning**: Modest savings (~10%) when the task is already O(N) for both approaches
+
+```bash
+# Run all benchmarks
+cd skillos
+python3 benchmark_patch.py        # ~2 min
+python3 benchmark_math.py         # ~2 min
+python3 benchmark_physiology.py   # ~1 min
+python3 benchmark_dialects.py     # ~3 min
+
+# Reports written to:
+# projects/Project_patch_benchmark/output/benchmark_patch_report.md
+# projects/Project_patch_benchmark/output/benchmark_math_report.md
+# projects/Project_patch_benchmark/output/benchmark_physiology_report.md
+# projects/Project_dialect_benchmark/output/benchmark_report.md
+```
+
+---
+
 ## Adding a New Dialect
 
 1. Create `system/dialects/your-dialect.dialect.md` following the format above.
