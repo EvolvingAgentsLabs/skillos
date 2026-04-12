@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-04-12T16:42:01.568843",
+  "expected": {
+    "velocity": 500,
+    "volume": 60,
+    "fraction": 60,
+    "severity": "severe"
+  },
+  "plain": {
+    "input_tokens": 3,
+    "cache_creation_input_tokens": 1856,
+    "cache_read_input_tokens": 18679,
+    "output_tokens": 742,
+    "total_cost_usd": 0.0395045,
+    "duration_ms": 11814,
+    "num_turns": 1
+  },
+  "plain_quality": {
+    "velocity_correct": true,
+    "volume_correct": true,
+    "fraction_correct": true,
+    "severity_correct": true,
+    "intermediate_steps": true,
+    "score": 100,
+    "extracted_values": {
+      "velocity": 500,
+      "volume": 60,
+      "fraction": 60,
+      "severity": "severe"
+    },
+    "errors": []
+  },
+  "solver": {
+    "input_tokens": 3,
+    "cache_creation_input_tokens": 1984,
+    "cache_read_input_tokens": 18679,
+    "output_tokens": 291,
+    "total_cost_usd": 0.029029500000000003,
+    "duration_ms": 4956,
+    "num_turns": 1
+  },
+  "solver_quality": {
+    "velocity_correct": true,
+    "volume_correct": true,
+    "fraction_correct": true,
+    "severity_correct": true,
+    "intermediate_steps": true,
+    "score": 100,
+    "extracted_values": {
+      "velocity": 500,
+      "volume": 60,
+      "fraction": 60,
+      "severity": "severe"
+    },
+    "errors": []
+  },
+  "renderer": {
+    "input_tokens": 3,
+    "cache_creation_input_tokens": 1969,
+    "cache_read_input_tokens": 18679,
+    "output_tokens": 308,
+    "total_cost_usd": 0.029360749999999998,
+    "duration_ms": 8267,
+    "num_turns": 1
+  }
+}
