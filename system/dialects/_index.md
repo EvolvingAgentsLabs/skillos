@@ -1,8 +1,8 @@
 ---
 type: dialect-registry
 version: 1.0.0
-dialect_count: 9
-last_updated: "2026-04-11"
+dialect_count: 14
+last_updated: "2026-04-12"
 ---
 
 # Dialect Registry
@@ -22,6 +22,11 @@ Central index of all domain-specific token compression dialects available in Ski
 | exec-plan | Execution Plan Compression | symbolic | ~70-85% | true | orchestration, memory |
 | strict-patch | Strict Patch Notation | structural | ~90-98% | true | orchestration, knowledge |
 | dom-nav | DOM Navigation Dialect | structural | ~90-97% | false | orchestration, knowledge |
+| formal-proof | Formal Proof Notation | symbolic | ~60-75% | true | knowledge, memory |
+| system-dynamics | System Dynamics Notation | symbolic | ~55-70% | true | knowledge, orchestration |
+| boolean-logic | Boolean Logic Notation | symbolic | ~50-65% | true | knowledge, orchestration, memory |
+| data-flow | Data Flow DAG Notation | structural | ~65-80% | true | orchestration, knowledge |
+| smiles-chem | SMILES Chemical Notation | structural | ~80-95% | true | knowledge |
 
 ## Dialect Files
 
@@ -36,6 +41,11 @@ All dialect definitions live in `system/dialects/` as `.dialect.md` files:
 - `system/dialects/exec-plan.dialect.md`
 - `system/dialects/strict-patch.dialect.md`
 - `system/dialects/dom-nav.dialect.md`
+- `system/dialects/formal-proof.dialect.md`
+- `system/dialects/system-dynamics.dialect.md`
+- `system/dialects/boolean-logic.dialect.md`
+- `system/dialects/data-flow.dialect.md`
+- `system/dialects/smiles-chem.dialect.md`
 
 ## Matching Protocol
 

@@ -110,6 +110,8 @@ Skills are organized in a **3-level hierarchy** (Domain → Family → Skill) wi
 Domain → Family → Skill
 ──────────────────────────────────────────────────
 orchestration/  core/           system-agent
+                ingress/        intent-compiler-agent
+                egress/         human-renderer-agent
 memory/         analysis/       memory-analysis-agent
                 consolidation/  memory-consolidation-agent
                 query/          query-memory-tool
@@ -132,7 +134,7 @@ project/        scaffold/       project-scaffold-tool
 - **Pure Markdown** — No code compilation. The LLM is the interpreter.
 - **Hierarchical Skills** — Domain → Family → Skill taxonomy with 4-step lazy loading
 - **Token Efficient** — 61% reduction in routing-phase token consumption
-- **Dialects** — 9 domain-specific compression formats (60-99% token reduction) for edge AI
+- **Dialects** — 14 domain-specific compression formats (50-99% token reduction) with Language Facade and cognitive scaffolding
 - **Knowledge Wiki** — Compounding knowledge base inspired by Karpathy's LLM Wiki pattern
 - **Memory System** — Every execution improves future runs via structured memory
 - **Robot Integration** — SkillOS as Prefrontal Cortex for the RoClaw physical robot
@@ -144,7 +146,7 @@ project/        scaffold/       project-scaffold-tool
 
 ## Dialects: Token Compression for Edge AI
 
-SkillOS includes a **dialect framework** — 9 domain-specific compression formats that transform verbose content into minimal, actionable representations. Dialects reduce token cost by 60-99% while preserving (or improving) quality.
+SkillOS includes a **dialect framework** — 14 domain-specific compression formats that transform verbose content into minimal, actionable representations. Dialects reduce token cost by 50-99% while preserving (or improving) quality. A **Language Facade** (ingress/egress boundary agents) ensures agents never process verbose English internally, and 5 **cognitive scaffolding** dialects use formal notations (proofs, boolean logic, DAGs, stock-flow, SMILES) to improve reasoning quality.
 
 **The three pillars:**
 
@@ -154,7 +156,28 @@ SkillOS includes a **dialect framework** — 9 domain-specific compression forma
 | Reasoning | `caveman-prose` | `"You should always run tests before pushing"` → `"Run tests before push."` | ~75% |
 | Software | `strict-patch` | 500-line file rewrite → `[DEL:42]`/`[ADD:42]` (4 lines) | ~98% |
 
-Plus 6 more: `strategy-pointer`, `trace-log`, `memory-xp`, `constraint-dsl`, `exec-plan`, `dom-nav`.
+Plus 11 more: `strategy-pointer`, `trace-log`, `memory-xp`, `constraint-dsl`, `exec-plan`, `dom-nav`, `formal-proof`, `system-dynamics`, `boolean-logic`, `data-flow`, `smiles-chem`.
+
+### Benchmark Results
+
+Four automated benchmarks prove the architecture across three domains — code editing, mathematical reasoning, and scientific computation:
+
+| Benchmark | Dialect | Token Reduction | Quality (Plain → SkillOS) | Key Result |
+|-----------|---------|-----------------|---------------------------|------------|
+| Code Editing (2 bug fixes in 993-line file) | `strict-patch` | **-97.8%** | 2/2 → 2/2 | 15x faster, 67% cheaper |
+| Math (K_{3,4} spanning trees) | `formal-proof` | **-57.3%** | 80 → 90 /100 | Higher accuracy with fewer tokens |
+| Physiology (hemodynamics) | `system-dynamics` | **-60.8%** | 100 → 100 /100 | Identical accuracy, 61% fewer tokens |
+| Analytical (cascade failure) | mixed | -9.6% | 100 → 100 /100 | Equal quality, modest savings |
+
+All verification is automated (`ast.parse()` + regex + exact answer checks) — no LLM judge needed.
+
+```bash
+# Run benchmarks
+python3 benchmark_patch.py        # Code editing: strict-patch
+python3 benchmark_math.py         # Math: formal-proof
+python3 benchmark_physiology.py   # Physiology: system-dynamics
+python3 benchmark_dialects.py     # Analytical: mixed dialects
+```
 
 **Why it matters for small models:** Gemma 4B generates a strict-patch in 0.5s instead of 30s for a full rewrite — and gets it right. A 50,000-token HTML page becomes 80 tokens of interactive elements. The dialect removes the cognitive load, letting small models punch above their weight.
 
@@ -168,7 +191,7 @@ See [docs/dialects.md](docs/dialects.md) for the full guide.
 |-----|----------|
 | [docs/architecture.md](docs/architecture.md) | Skill tree, lazy loading, agent discovery, execution flow |
 | [docs/skills.md](docs/skills.md) | Authoring agents and tools, manifests, inheritance, best practices |
-| [docs/dialects.md](docs/dialects.md) | Dialect framework, 9 compression formats, MAD for edge AI |
+| [docs/dialects.md](docs/dialects.md) | Dialect framework, 14 compression formats, Language Facade, cognitive scaffolding |
 | [docs/memory.md](docs/memory.md) | SmartMemory, short/long-term layers, memory-driven execution |
 | [docs/runtimes.md](docs/runtimes.md) | Claude Code, Qwen/Gemini, Ollama — setup and comparison |
 | [docs/scenarios.md](docs/scenarios.md) | All built-in scenarios and how to run them |

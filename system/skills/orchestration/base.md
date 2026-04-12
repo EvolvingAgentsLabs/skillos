@@ -30,3 +30,10 @@ Log every sub-agent invocation to `projects/[Project]/memory/short_term/` using 
 
 ## Error Escalation
 On sub-task failure, delegate to `recovery/error/error-recovery-agent` before retrying.
+
+## Dialect Protocol
+When the orchestration layer touches content that will be stored or passed between agents:
+1. At ingress: delegate to intent-compiler-agent to compile user input into internal dialect
+2. Between agents: prefer dialect-compressed forms (exec-plan, strategy-pointer, constraint-dsl)
+3. At egress: delegate to human-renderer-agent to expand internal output to readable prose
+4. Memory writes: always store in the most compressed applicable dialect

@@ -1,0 +1,39 @@
+{
+  "timestamp": "2026-04-12T15:49:55.896553",
+  "buggy_file_lines": 993,
+  "plain": {
+    "input_tokens": 3,
+    "cache_creation_input_tokens": 12031,
+    "cache_read_input_tokens": 18679,
+    "output_tokens": 10286,
+    "total_cost_usd": 0.34169825,
+    "duration_ms": 107347,
+    "num_turns": 1
+  },
+  "plain_text_len": 37605,
+  "plain_quality": {
+    "compiles": true,
+    "bug1_fixed": true,
+    "bug2_fixed": true,
+    "lines_changed": 10,
+    "errors": []
+  },
+  "skillos": {
+    "input_tokens": 3,
+    "cache_creation_input_tokens": 15514,
+    "cache_read_input_tokens": 18679,
+    "output_tokens": 224,
+    "total_cost_usd": 0.111917,
+    "duration_ms": 6935,
+    "num_turns": 1
+  },
+  "skillos_text_len": 659,
+  "skillos_quality": {
+    "compiles": true,
+    "bug1_fixed": true,
+    "bug2_fixed": true,
+    "lines_changed": 9,
+    "errors": []
+  },
+  "patch_errors": []
+}
