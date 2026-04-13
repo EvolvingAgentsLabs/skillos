@@ -70,7 +70,7 @@ skillos execute: "Run the CodeAnalysis_Task scenario on this repository"
 
 **File:** `scenarios/ProjectAortaScenario.md`
 **Mode:** EXECUTION
-**Last validated:** 2026-04-12 (Opus 4.6)
+**Last validated:** 2026-04-12 (Opus 4.6), 2026-04-13 (Gemma 4 26B)
 
 The "Project Aorta" three-agent cognitive pipeline for quantum homomorphic signal processing of arterial pressure waves. Demonstrates specialized multi-agent collaboration with mathematical rigor.
 
@@ -86,8 +86,21 @@ The "Project Aorta" three-agent cognitive pipeline for quantum homomorphic signa
 
 **Run it:**
 ```bash
+# Claude Code
 skillos execute: "Run the Project Aorta scenario"
+
+# Gemma 4 via OpenRouter (cognitive pipeline)
+python run_scenario.py scenarios/ProjectAortaScenario.md \
+    "quantum arterial navigation using homomorphic cepstral analysis" \
+    --provider gemma-openrouter --no-stream
 ```
+
+**Results by model:**
+
+| Model | Steps | Total Output | Quality |
+|-------|-------|-------------|---------|
+| Opus 4.6 | 3/3 PASS | 464 KB | Publication-grade, includes PNG visualization |
+| Gemma 4 26B | 3/3 PASS | 28 KB | Structurally complete, suitable for prototyping |
 
 **Expected outputs:** `projects/Project_aorta/output/` — `project_vision.md`, `mathematical_framework.md`, quantum implementation
 
@@ -212,7 +225,7 @@ skillos execute: "Run the RoClaw Integration scenario"
 **File:** `scenarios/Operation_Echo_Q.md`
 **Mode:** EXECUTION
 **Tutorial:** [docs/tutorial-echo-q.md](tutorial-echo-q.md)
-**Last validated:** 2026-04-12 (Opus 4.6)
+**Last validated:** 2026-04-12 (Opus 4.6), 2026-04-13 (Gemma 4 26B)
 
 Mathematically rigorous quantum computing scenario: derive, prove, and implement a Quantum Cepstral Analysis algorithm. The "Markdown as mathematical blackboard" demonstration.
 
@@ -228,12 +241,27 @@ Mathematically rigorous quantum computing scenario: derive, prove, and implement
 - Reflective error recovery cross-referenced against wiki math
 - 4-agent hierarchical decomposition with wiki handoffs
 
-**Validated results (2026-04-12):** All 4 phases pass. Hard constraints C1-C6 all pass. Chebyshev polynomial error 5.43e-4 (within 1e-3 budget). Echo detection PASS (0.003s error < 0.05s threshold). 8,894 output tokens.
-
 **Run it:**
 ```bash
+# Claude Code
 skillos execute: "Run the Operation Echo-Q scenario"
+
+# Gemma 4 via OpenRouter (cognitive pipeline)
+python run_scenario.py scenarios/Operation_Echo_Q.md \
+    "quantum cepstral deconvolution for echo separation" \
+    --provider gemma-openrouter --no-stream
 ```
+
+**Results by model:**
+
+| Model | Steps | Total Output | Quality |
+|-------|-------|-------------|---------|
+| Opus 4.6 | 4/4 PASS | 136 KB | Publication-grade, 466-line quantum code |
+| Gemma 4 26B | 4/4 PASS | 28 KB | Structurally complete, wiki + constraints + code + whitepaper |
+
+**Validated results (Opus 4.6, 2026-04-12):** All 4 phases pass. Hard constraints C1-C6 all pass. Chebyshev polynomial error 5.43e-4 (within 1e-3 budget). Echo detection PASS (0.003s error < 0.05s threshold). 8,894 output tokens.
+
+**Validated results (Gemma 4 26B, 2026-04-13):** All 4 phases pass via cognitive pipeline. 28,009 chars total, 0 retries. Output includes math wiki, sentient state constraints, Qiskit implementation, and synthesized whitepaper.
 
 ---
 

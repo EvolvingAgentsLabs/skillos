@@ -287,3 +287,52 @@ class TestGemmaProviderConfig:
 
     def test_gemma_api_key_default(self, gemma_cfg):
         assert gemma_cfg["gemma"]["api_key_default"] == "ollama"
+
+
+# ── Gemma OpenRouter provider config tests ────────────────────────
+
+class TestGemmaOpenRouterProviderConfig:
+    """Verify the gemma-openrouter provider is correctly configured."""
+
+    @pytest.fixture(scope="class")
+    def provider_configs(self):
+        mod = load_qwen_module()
+        return mod.AgentRuntime.PROVIDER_CONFIGS
+
+    def test_provider_exists(self, provider_configs):
+        assert "gemma-openrouter" in provider_configs
+
+    def test_uses_openrouter_base_url(self, provider_configs):
+        assert provider_configs["gemma-openrouter"]["base_url"] == "https://openrouter.ai/api/v1"
+
+    def test_uses_openrouter_api_key(self, provider_configs):
+        assert provider_configs["gemma-openrouter"]["api_key_env"] == "OPENROUTER_API_KEY"
+
+    def test_default_model(self, provider_configs):
+        assert provider_configs["gemma-openrouter"]["model"] == "google/gemma-4-26b-a4b-it"
+
+    def test_uses_gemini_manifest(self, provider_configs):
+        assert provider_configs["gemma-openrouter"]["manifest"] == "GEMINI.md"
+
+    def test_has_model_env_override(self, provider_configs):
+        assert provider_configs["gemma-openrouter"]["model_env"] == "GEMMA_OPENROUTER_MODEL"
+
+    def test_has_cache_headers(self, provider_configs):
+        headers = provider_configs["gemma-openrouter"]["cache_headers"]
+        assert "HTTP-Referer" in headers
+        assert "X-Title" in headers
+
+    def test_manifest_loads_for_gemma_openrouter(self, root):
+        """Verify GEMINI.md manifest loads correctly for gemma-openrouter."""
+        mod = load_qwen_module()
+        with patch.dict(sys.modules, {"openai": MagicMock(), "dotenv": MagicMock()}):
+            from sandbox import create_executor
+            rt = object.__new__(mod.AgentRuntime)
+            rt.client = MagicMock()
+            rt.model = "google/gemma-4-26b-a4b-it"
+            rt.tools = {}
+            rt.system_prompt = ""
+            rt.executor = create_executor("local")
+            rt._load_manifest(str(root / "GEMINI.md"))
+        assert len(rt.system_prompt) > 100
+        assert callable(rt.tools.get("delegate_to_agent"))

@@ -27,6 +27,8 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "gemma4:e4b": 128_000,
     "gemma4:26b": 256_000,
     "gemma4:31b": 256_000,
+    # Gemma 4 via OpenRouter
+    "google/gemma-4-26b-a4b-it": 131_072,
 }
 
 DEFAULT_COMPACTION_RATIO = 0.70   # compact at 70 % of context window

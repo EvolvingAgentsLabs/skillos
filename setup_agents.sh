@@ -165,11 +165,11 @@ if [[ -d "system/skills" ]]; then
         [[ -f "$manifest" ]] || continue
 
         # Check if this is an agent manifest (type: agent)
-        skill_type=$(grep -m 1 "^type:" "$manifest" 2>/dev/null | sed 's/type:\s*//' | tr -d '\r' || true)
+        skill_type=$(grep -m 1 "^type:" "$manifest" 2>/dev/null | sed 's/^type:[[:space:]]*//' | tr -d '\r ' || true)
         [[ "$skill_type" == "agent" ]] || continue
 
         # Get the full_spec path from the manifest
-        full_spec=$(grep -m 1 "^full_spec:" "$manifest" 2>/dev/null | sed 's/full_spec:\s*//' | tr -d '\r' || true)
+        full_spec=$(grep -m 1 "^full_spec:" "$manifest" 2>/dev/null | sed 's/^full_spec:[[:space:]]*//' | tr -d '\r ' || true)
         [[ -n "$full_spec" && -f "$full_spec" ]] || continue
 
         dest_name=$(basename "$full_spec")
@@ -189,7 +189,7 @@ if [[ -d "system/agents" ]]; then
         [[ -f "$agent" ]] || continue
         dest_name=$(basename "$agent")
         # Skip if already loaded from skill tree (avoid overwriting full spec with stub)
-        if [[ " ${SKILL_TREE_AGENTS[*]} " =~ " ${dest_name} " ]]; then
+        if [[ ${#SKILL_TREE_AGENTS[@]} -gt 0 && " ${SKILL_TREE_AGENTS[*]} " =~ " ${dest_name} " ]]; then
             echo "  SKIP (already loaded from skill tree): $dest_name"
             SKIP_COUNT=$((SKIP_COUNT + 1))
             continue

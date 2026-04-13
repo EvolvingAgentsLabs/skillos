@@ -9,6 +9,8 @@ Covers:
 """
 
 import re
+from typing import Optional
+
 import pytest
 from pathlib import Path
 from conftest import ROOT
@@ -21,7 +23,7 @@ PROJECTS_DIR = ROOT / "projects"
 
 # ── Helpers ───────────────────────────────────────────────────────
 
-def md_title(text: str) -> str | None:
+def md_title(text: str) -> Optional[str]:
     m = re.search(r"^#\s+(.+)", text, re.MULTILINE)
     return m.group(1).strip() if m else None
 
