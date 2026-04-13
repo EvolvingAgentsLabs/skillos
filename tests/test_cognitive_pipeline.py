@@ -368,3 +368,133 @@ class TestRunScenarioScript:
     def test_script_supports_project_dir(self):
         source = _read_file(os.path.join(SKILLOS_ROOT, "run_scenario.py"))
         assert "--project-dir" in source
+
+
+# ---------------------------------------------------------------------------
+# TestDynamicSubagentCreation
+# ---------------------------------------------------------------------------
+class TestDynamicSubagentCreation:
+    """_generate_agent_spec creates markdown agent files from scenario context."""
+
+    def test_source_has_generate_agent_spec(self):
+        source = _read_source()
+        assert "def _generate_agent_spec(" in source
+
+    def test_generate_agent_spec_creates_file(self, rt_mod, tmp_path):
+        """Generated spec is saved to components/agents/ and .claude/agents/."""
+        project_dir = str(tmp_path / "projects" / "Project_test")
+        os.makedirs(os.path.join(project_dir, "components", "agents"), exist_ok=True)
+
+        step = {"step": 1, "agent": "test-visionary-agent",
+                "goal": "Create a project vision", "output": "vision.md"}
+        scenario = "---\nname: test\n---\n# Test\n\n### Stage 1: Vision\n**Agent**: test-visionary-agent\n**Goal**: Create vision\n"
+
+        spec = rt_mod.AgentRuntime._generate_agent_spec(
+            "test-visionary-agent", step, scenario, project_dir,
+        )
+        assert "name: test-visionary-agent" in spec
+        assert "Create a project vision" in spec
+
+        agent_file = os.path.join(project_dir, "components", "agents", "test-visionary-agent.md")
+        assert os.path.isfile(agent_file)
+
+    def test_generate_agent_spec_has_frontmatter(self, rt_mod, tmp_path):
+        project_dir = str(tmp_path / "projects" / "Project_test2")
+        os.makedirs(os.path.join(project_dir, "components", "agents"), exist_ok=True)
+
+        step = {"step": 2, "agent": "math-agent", "goal": "Derive equations",
+                "output": "math.md"}
+        spec = rt_mod.AgentRuntime._generate_agent_spec(
+            "math-agent", step, "---\nname: x\n---\n# Body", project_dir,
+        )
+        assert spec.startswith("---")
+        assert "phase: 2" in spec
+        assert "name: math-agent" in spec
+
+    def test_generate_agent_spec_adds_bash_for_py(self, rt_mod, tmp_path):
+        """Agent spec includes Bash tool when output is .py."""
+        project_dir = str(tmp_path / "projects" / "Project_test3")
+        os.makedirs(os.path.join(project_dir, "components", "agents"), exist_ok=True)
+
+        step = {"step": 3, "agent": "coder-agent", "goal": "Write code",
+                "output": "implementation.py"}
+        spec = rt_mod.AgentRuntime._generate_agent_spec(
+            "coder-agent", step, "---\nname: x\n---\n# Body", project_dir,
+        )
+        assert "Bash" in spec
+
+    def test_run_step_uses_generate_on_missing_agent(self):
+        """_run_step_with_tools calls _generate_agent_spec when agent not found."""
+        source = _read_source()
+        # Find the _run_step_with_tools method body
+        start = source.index("def _run_step_with_tools(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "_generate_agent_spec" in body
+
+
+# ---------------------------------------------------------------------------
+# TestToolCallScaffolding
+# ---------------------------------------------------------------------------
+class TestToolCallScaffolding:
+    """Tool-call scaffolding injects a few-shot example for mid-tier models."""
+
+    def test_scaffold_in_run_step(self):
+        """_run_step_with_tools injects a scaffold example message."""
+        source = _read_source()
+        start = source.index("def _run_step_with_tools(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "scaffold_example" in body
+        assert "write_file" in body
+
+    def test_scaffold_has_three_messages(self):
+        """Initial messages include user prompt, scaffold assistant, and follow-up user."""
+        source = _read_source()
+        start = source.index("def _run_step_with_tools(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        # Should have 3 initial messages: user, assistant (scaffold), user (follow-up)
+        assert '"role": "assistant"' in body
+        assert "Good format" in body
+
+    def test_auto_wrap_prose_output(self):
+        """When model produces prose but no tool call, auto-save to file."""
+        source = _read_source()
+        start = source.index("def _run_step_with_tools(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "Auto-saved prose output" in body or "auto_path" in body
+
+
+# ---------------------------------------------------------------------------
+# TestPriorOutputFileInjection
+# ---------------------------------------------------------------------------
+class TestPriorOutputFileInjection:
+    """Prior step files are pre-read and injected into later step prompts."""
+
+    def test_file_injection_in_run_step(self):
+        """_run_step_with_tools scans output dir for prior files."""
+        source = _read_source()
+        start = source.index("def _run_step_with_tools(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "FILES FROM PRIOR STEPS" in body
+        assert "os.walk" in body
+
+    def test_file_injection_truncates_large_files(self):
+        """Injected files are truncated to 3000 chars."""
+        source = _read_source()
+        start = source.index("def _run_step_with_tools(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "3000" in body
+
+    def test_file_injection_limits_count(self):
+        """At most 10 files are injected to keep context manageable."""
+        source = _read_source()
+        start = source.index("def _run_step_with_tools(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "[:10]" in body
+        assert "--project-dir" in source

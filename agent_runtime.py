@@ -403,6 +403,82 @@ Do not use tool calls - just provide your expert response directly.
                                     }
         return {"found": False}
 
+    @staticmethod
+    def _generate_agent_spec(agent_name: str, step: dict, scenario_content: str,
+                              project_dir: str) -> str:
+        """Generate a markdown agent spec from scenario context when no existing agent is found.
+
+        Extracts the relevant section from the scenario body for the agent's step,
+        creates a proper agent .md file, saves it to components/agents/ and
+        .claude/agents/, and returns the content.
+        """
+        goal = step.get("goal", "")
+        output_file = step.get("output", "")
+        step_num = step.get("step", 0)
+
+        # Extract the section for this step/phase from scenario body
+        section_content = ""
+        body = re.sub(r"^---\n.*?\n---\n?", "", scenario_content, count=1, flags=re.DOTALL)
+        # Try to find the section for this step's agent
+        pattern = rf"(?:###?\s+(?:Stage|Phase)\s+{step_num}[:\s].*?)(?=\n###?\s+(?:Stage|Phase)\s+\d+|\n## Expected|\n## Execution|\n## Loop|\n## Error|\n## Success|\n## Why|\n## Usage|\Z)"
+        match = re.search(pattern, body, re.DOTALL | re.MULTILINE)
+        if match:
+            section_content = match.group(0).strip()
+
+        # Determine tools based on step context
+        tools_list = ["Read", "Write"]
+        if output_file.endswith(".py"):
+            tools_list.append("Bash")
+        if "wiki" in goal.lower() or "research" in goal.lower():
+            tools_list.append("WebFetch")
+
+        # Derive a human-readable role from the agent name
+        role = agent_name.replace("-agent", "").replace("-", " ").title()
+
+        spec = f"""---
+name: {agent_name}
+type: specialized-agent
+project: {os.path.basename(project_dir)}
+phase: {step_num}
+capabilities:
+  - {role} expertise
+  - Technical content generation
+  - Structured document creation
+tools:
+  - {chr(10) + "  - ".join(tools_list)}
+---
+
+# {role} Agent
+
+## Purpose
+{goal}
+
+## Instructions
+{section_content if section_content else f"Execute step {step_num} of the pipeline: {goal}"}
+
+## Output
+Save results to `{project_dir}/output/{output_file}` using the write_file tool.
+Produce comprehensive, detailed output with at least 2000 characters.
+"""
+
+        # Save to project components/agents/
+        agents_dir = os.path.join(project_dir, "components", "agents")
+        os.makedirs(agents_dir, exist_ok=True)
+        agent_path = os.path.join(agents_dir, f"{agent_name}.md")
+        with open(agent_path, "w", encoding="utf-8") as f:
+            f.write(spec)
+
+        # Also copy to .claude/agents/ for discovery
+        claude_agents_dir = ".claude/agents"
+        os.makedirs(claude_agents_dir, exist_ok=True)
+        prefix = os.path.basename(project_dir)
+        discovery_path = os.path.join(claude_agents_dir, f"{prefix}_{agent_name}.md")
+        with open(discovery_path, "w", encoding="utf-8") as f:
+            f.write(spec)
+
+        print(f"    🤖 Generated agent spec: {agent_name} → {agent_path}")
+        return spec
+
     # ── AOT Dialect Injection + Pipeline Execution ────────────────────
 
     @staticmethod
@@ -1226,24 +1302,58 @@ Do not use tool calls - just provide your expert response directly.
 
         result = StepResult(step_num=step_num, agent_name=agent_name)
 
-        # Load agent markdown
+        # Load agent markdown — try discovery first, then generate dynamically
         agent_info = self._find_agent(agent_name) if agent_name else {"found": False}
 
         if agent_info.get("found"):
             agent_system = agent_info["content"]
         else:
-            # Fallback: inline prompt from scenario
-            agent_system = (
-                f"# {agent_name or 'Specialist Agent'}\n\n"
-                f"You are a specialized agent tasked with a specific step in a pipeline.\n"
-                f"Focus exclusively on producing the requested deliverable.\n"
+            # Dynamic subagent creation: generate from scenario context
+            agent_system = self._generate_agent_spec(
+                agent_name or f"step-{step_num}-agent",
+                step, scenario_content, project_dir,
             )
+
+        # Build prior-output file injection: pre-read files from prior steps
+        # so the model has actual file content without calling read_file.
+        file_injection = ""
+        prior_files_read: list[str] = []
+        for prev_result in prior_outputs:
+            # Extract file paths mentioned in prior step summaries
+            pass  # We'll use the results list passed separately
+
+        # Collect files from the results list (passed via prior_outputs metadata)
+        # Instead, scan the project output directory for existing files
+        output_dir = os.path.join(project_dir, "output")
+        state_dir = os.path.join(project_dir, "state")
+        wiki_dir = os.path.join(project_dir, "output", "wiki")
+        injected_files = []
+        for scan_dir in [output_dir, state_dir, wiki_dir]:
+            if not os.path.isdir(scan_dir):
+                continue
+            for root, _dirs, files in os.walk(scan_dir):
+                for fname in sorted(files):
+                    fpath = os.path.join(root, fname)
+                    try:
+                        with open(fpath, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        if content.strip():
+                            # Truncate large files to keep context manageable
+                            truncated = content[:3000] if len(content) > 3000 else content
+                            rel_path = os.path.relpath(fpath, project_dir)
+                            injected_files.append(f"### File: `{rel_path}`\n```\n{truncated}\n```")
+                    except (OSError, UnicodeDecodeError):
+                        continue
+
+        if injected_files:
+            file_injection = "\n\n## FILES FROM PRIOR STEPS (pre-loaded for you)\n\n" + "\n\n".join(injected_files[:10])
+            prior_files_read = [f for f in injected_files[:10]]
 
         # Build step prompt
         prior_context = ""
         if prior_outputs:
-            prior_context = "\n\n## Prior Step Outputs\n\n" + "\n\n---\n\n".join(
-                o[:4000] for o in prior_outputs
+            prior_context = "\n\n## Prior Step Summaries\n\n" + "\n\n---\n\n".join(
+                o[:2000] for o in prior_outputs
             )
 
         step_prompt = (
@@ -1255,6 +1365,7 @@ Do not use tool calls - just provide your expert response directly.
             f"- Use write_file tool to save your output\n"
             f"- Focus ONLY on this specific task\n"
             f"- Be thorough and include mathematical detail where appropriate\n"
+            f"{file_injection}"
             f"{prior_context}"
             f"{retry_feedback}"
         )
@@ -1263,8 +1374,20 @@ Do not use tool calls - just provide your expert response directly.
         original_system_prompt = self.system_prompt
         self.system_prompt = agent_system + self._GEMINI_TOOL_FORMAT_INSTRUCTIONS
         try:
+            # Tool-call scaffolding: inject a concrete example so mid-tier
+            # models see the exact XML format before generating their response.
+            output_path = f"{project_dir}/output/{output_file}" if output_file else f"{project_dir}/output/step_{step_num}.md"
+            scaffold_example = (
+                f'Here is an example of the tool call format you MUST use:\n\n'
+                f'<tool_call name="write_file">\n'
+                f'{{"path": "{output_path}", "content": "Your detailed content here..."}}\n'
+                f'</tool_call>\n\n'
+                f'<final_answer>\nStep {step_num} complete. File saved to {output_path}\n</final_answer>'
+            )
             messages: list[dict] = [
-                {"role": "user", "content": step_prompt}
+                {"role": "user", "content": step_prompt},
+                {"role": "assistant", "content": scaffold_example},
+                {"role": "user", "content": f"Good format. Now execute the task for real. Write the FULL content to `{output_path}` using write_file, then provide a final_answer."},
             ]
 
             for turn in range(max_turns):
@@ -1346,6 +1469,18 @@ Do not use tool calls - just provide your expert response directly.
 
                 # If no tools and no final answer, done with this step
                 if not tool_calls:
+                    # Auto-wrap: if the model produced substantial prose but
+                    # didn't call write_file, save it automatically.
+                    if not result.files_written and len(response.strip()) >= 500 and output_file:
+                        auto_path = f"{project_dir}/output/{output_file}"
+                        try:
+                            if "write_file" in self.tools:
+                                self.tools["write_file"](path=auto_path, content=response)
+                                result.files_written.append(auto_path)
+                                result.char_count = max(result.char_count, len(response))
+                                print(f"    📝 Auto-saved prose output → {auto_path} ({len(response)} chars)")
+                        except Exception as e:
+                            print(f"    ⚠️  Auto-save failed: {e}")
                     break
 
         finally:
