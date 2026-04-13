@@ -70,8 +70,21 @@ pip install openai python-dotenv
 OPENROUTER_API_KEY=... python agent_runtime.py "Your goal here"            # Qwen (default)
 GEMINI_API_KEY=... python agent_runtime.py --provider gemini "Your goal"   # Gemini
 python agent_runtime.py --provider gemma "Your goal"                        # Gemma 4 (Ollama)
+OPENROUTER_API_KEY=... python agent_runtime.py --provider gemma-openrouter "Your goal"  # Gemma 4 (OpenRouter)
 python agent_runtime.py --sandbox e2b "Your goal"                           # E2B cloud sandbox
 python agent_runtime.py interactive                                          # Interactive mode
+```
+
+**Run multi-agent scenarios with any provider:**
+
+```bash
+# Cognitive pipeline — forces step-by-step execution for mid-tier models
+python run_scenario.py scenarios/Operation_Echo_Q.md "quantum cepstral analysis" \
+    --provider gemma-openrouter --no-stream
+
+# Strategy auto-selects based on model tier (or override manually)
+python run_scenario.py scenarios/ProjectAortaScenario.md "quantum arterial navigation" \
+    --provider gemma-openrouter --strategy cognitive_pipeline --no-stream
 ```
 
 **Gemma 4 on a free Colab GPU** — no local GPU needed:
@@ -83,7 +96,7 @@ python agent_runtime.py interactive                                          # I
 OLLAMA_BASE_URL=https://xxx.trycloudflare.com/v1 python agent_runtime.py --provider gemma "Your goal"
 ```
 
-See [docs/tutorial-gemma4-colab.md](docs/tutorial-gemma4-colab.md) for the full walkthrough, and [docs/runtimes.md](docs/runtimes.md) for setup, environment variables, and a runtime comparison table.
+See [docs/tutorial-gemma4-colab.md](docs/tutorial-gemma4-colab.md) for the full walkthrough, [docs/runtimes.md](docs/runtimes.md) for setup and comparison, and [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) for the cognitive pipeline architecture.
 
 ---
 
@@ -134,11 +147,12 @@ project/        scaffold/       project-scaffold-tool
 - **Pure Markdown** — No code compilation. The LLM is the interpreter.
 - **Hierarchical Skills** — Domain → Family → Skill taxonomy with 4-step lazy loading
 - **Token Efficient** — 61% reduction in routing-phase token consumption
+- **Cognitive Pipeline** — Capability-aware strategy router that automatically picks the right execution mode per model tier ([docs](docs/cognitive-pipeline.md))
 - **Dialects** — 14 domain-specific compression formats (50-99% token reduction) with Language Facade and cognitive scaffolding
 - **Knowledge Wiki** — Compounding knowledge base inspired by Karpathy's LLM Wiki pattern
 - **Memory System** — Every execution improves future runs via structured memory
 - **Robot Integration** — SkillOS as Prefrontal Cortex for the RoClaw physical robot
-- **Multi-Provider** — Works with Claude Code, Qwen, Gemini, or local Ollama
+- **Multi-Provider** — Works with Claude Code, Qwen, Gemini, Gemma 4 (Ollama + OpenRouter), or any OpenAI-compatible endpoint
 - **Dynamic Agents** — New agents created as markdown at runtime, no restarts needed
 - **Execution Sandboxing** — Path traversal prevention, restricted `exec()`, optional E2B cloud sandbox
 
@@ -191,9 +205,10 @@ See [docs/dialects.md](docs/dialects.md) for the full guide.
 |-----|----------|
 | [docs/architecture.md](docs/architecture.md) | Skill tree, lazy loading, agent discovery, execution flow |
 | [docs/skills.md](docs/skills.md) | Authoring agents and tools, manifests, inheritance, best practices |
+| [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) | Cognitive pipeline executor, strategy router, model capability tiers |
 | [docs/dialects.md](docs/dialects.md) | Dialect framework, 14 compression formats, Language Facade, cognitive scaffolding |
 | [docs/memory.md](docs/memory.md) | SmartMemory, short/long-term layers, memory-driven execution |
-| [docs/runtimes.md](docs/runtimes.md) | Claude Code, Qwen/Gemini, Ollama — setup and comparison |
+| [docs/runtimes.md](docs/runtimes.md) | Claude Code, Qwen/Gemini, Ollama, OpenRouter — setup and comparison |
 | [docs/scenarios.md](docs/scenarios.md) | All built-in scenarios and how to run them |
 | [docs/robot.md](docs/robot.md) | RoClaw physical robot integration, Cognitive Trinity |
 | [docs/security.md](docs/security.md) | Skill package security scanning and threat model |
@@ -204,27 +219,59 @@ See [docs/dialects.md](docs/dialects.md) for the full guide.
 
 ## Validated Scenarios
 
-Two complex multi-agent scenarios are validated end-to-end with each release:
+Two complex multi-agent scenarios are validated end-to-end with each release, across both high-tier (Claude Opus 4.6) and mid-tier (Gemma 4 26B) models:
 
 ### Operation Echo-Q — Quantum Cepstral Deconvolution
 
 4-agent pipeline: quantum theorist → pure mathematician → Qiskit engineer → system architect. Derives quantum algorithms in a LaTeX Knowledge Wiki before writing code, proving that markdown acts as a persistent mathematical blackboard.
 
 ```bash
+# Claude Code
 skillos execute: "Run the Operation Echo-Q scenario"
+
+# Gemma 4 via OpenRouter (cognitive pipeline)
+python run_scenario.py scenarios/Operation_Echo_Q.md "quantum cepstral analysis" \
+    --provider gemma-openrouter --no-stream
 ```
 
 **Results (Opus 4.6, 2026-04-12):** All 4 phases pass — 5 wiki concept pages with LaTeX, 6 hard + 4 soft mathematical constraints, working `quantum_cepstrum.py` (classical echo detection error 0.003s, quantum statevector 0.034s), synthesized whitepaper. 8,894 output tokens.
+
+**Results (Gemma 4 26B, 2026-04-13):** All 4 phases pass — 28,009 chars total output, 0 retries. See cross-model comparison below.
 
 ### Project Aorta — Quantum Homomorphic Signal Processing
 
 3-agent cognitive pipeline: visionary → mathematician → quantum engineer. Produces a 36KB clinical vision document and 37KB rigorous mathematical framework for radiation-free catheter navigation via pressure wave echo analysis.
 
 ```bash
+# Claude Code
 skillos execute: "Run the Project Aorta scenario"
+
+# Gemma 4 via OpenRouter (cognitive pipeline)
+python run_scenario.py scenarios/ProjectAortaScenario.md "quantum arterial navigation" \
+    --provider gemma-openrouter --no-stream
 ```
 
 **Results (Opus 4.6, 2026-04-12):** Vision and mathematical framework stages produce publication-grade outputs. Three specialized agents created dynamically as markdown at runtime.
+
+**Results (Gemma 4 26B, 2026-04-13):** All 3 stages pass — 28,120 chars total output, 0 retries.
+
+### Cross-Model Comparison
+
+The cognitive pipeline enables mid-tier models to complete the same multi-agent scenarios that previously required high-tier models:
+
+| Metric | Claude Opus 4.6 | Gemma 4 26B (cognitive pipeline) | Ratio |
+|--------|-----------------|----------------------------------|-------|
+| **Aorta total output** | 464 KB | 28 KB | 17x |
+| **Aorta steps passing** | 3/3 | 3/3 | Equal |
+| **Echo-Q total output** | 136 KB | 28 KB | 5x |
+| **Echo-Q steps passing** | 4/4 | 4/4 | Equal |
+| **Code depth** | 1,208 lines | ~180 lines | 7x |
+| **Image generation** | Yes (PNG plots) | No | - |
+| **Cost** | Claude pricing | ~$0.05/run (OpenRouter) | 50-100x cheaper |
+
+Claude produces deeper, publication-grade content with code execution and visualization. Gemma 4 with the cognitive pipeline produces structurally complete output suitable for prototyping and first-pass exploration at a fraction of the cost.
+
+The cognitive pipeline improved Gemma 4's output from unusable (5K chars, collapsed single-turn) to fully passing (28K chars, step-by-step) — a **5.2x improvement** through architectural compensation. See [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) for the full architecture.
 
 ### Dialect-Enhanced Variants (A/B Token Comparison)
 

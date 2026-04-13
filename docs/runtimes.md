@@ -68,7 +68,7 @@ For tighter control, use `permission_policy.py` to define ALLOW/DENY/PROMPT rule
 
 **Best for:** Lightweight use, learning, resource-constrained environments, free-tier access.
 
-`agent_runtime.py` is a provider-agnostic agent runtime that supports Qwen (via OpenRouter), Gemini (Google AI), and Gemma 4 (via Ollama). It interprets the provider's manifest and implements the same agent delegation model as Claude Code.
+`agent_runtime.py` is a provider-agnostic agent runtime that supports Qwen (via OpenRouter), Gemini (Google AI), Gemma 4 (via Ollama or OpenRouter), and any OpenAI-compatible endpoint. It interprets the provider's manifest and implements the same agent delegation model as Claude Code.
 
 ### Setup
 
@@ -83,6 +83,9 @@ OPENROUTER_API_KEY=your_key_here
 
 # For Gemini (Google AI)
 GEMINI_API_KEY=your_key_here
+
+# For Gemma 4 via OpenRouter (uses same key as Qwen)
+# OPENROUTER_API_KEY=your_key_here
 ```
 
 ### Usage
@@ -94,6 +97,9 @@ python agent_runtime.py "Your goal here"
 # Run with Gemini
 python agent_runtime.py --provider gemini "Your goal here"
 
+# Run with Gemma 4 via OpenRouter (26B model)
+python agent_runtime.py --provider gemma-openrouter "Your goal here"
+
 # Use a custom manifest
 python agent_runtime.py --provider gemini --manifest CUSTOM.md "Your goal"
 
@@ -103,6 +109,26 @@ python agent_runtime.py interactive
 # Test connectivity
 python agent_runtime.py --provider gemini test
 ```
+
+### Scenario Runner
+
+`run_scenario.py` is a generic scenario runner that replaces per-scenario scripts. It uses the strategy router to automatically pick the right execution mode:
+
+```bash
+# Run Echo-Q with Gemma 4 (auto-selects cognitive_pipeline for mid-tier models)
+python run_scenario.py scenarios/Operation_Echo_Q.md "quantum cepstral analysis" \
+    --provider gemma-openrouter --no-stream
+
+# Run Aorta with explicit strategy override
+python run_scenario.py scenarios/ProjectAortaScenario.md "quantum arterial navigation" \
+    --provider gemma-openrouter --strategy cognitive_pipeline --no-stream
+
+# Run with a specific project directory
+python run_scenario.py scenarios/Operation_Echo_Q.md "quantum cepstral analysis" \
+    --provider gemma-openrouter --project-dir projects/Project_echo_q_custom
+```
+
+See [docs/cognitive-pipeline.md](cognitive-pipeline.md) for how the strategy router and cognitive pipeline work.
 
 ### Gemma 4 via Ollama
 
@@ -145,6 +171,23 @@ GEMMA_MODEL=gemma4:e2b python agent_runtime.py --provider gemma interactive
 ```
 
 See `notebooks/skillos_gemma4_colab.ipynb` for a self-contained Colab notebook that sets up Ollama + Gemma 4 + Cloudflare tunnel on a free T4 GPU, and [docs/tutorial-gemma4-colab.md](tutorial-gemma4-colab.md) for the full walkthrough.
+
+### Gemma 4 via OpenRouter
+
+Run Gemma 4 (26B) through OpenRouter's API — no local GPU required:
+
+```bash
+# Uses your existing OpenRouter API key
+python agent_runtime.py --provider gemma-openrouter "Your goal here"
+
+# Run multi-agent scenarios (auto-selects cognitive pipeline)
+python run_scenario.py scenarios/Operation_Echo_Q.md "quantum cepstral analysis" \
+    --provider gemma-openrouter --no-stream
+```
+
+The `gemma-openrouter` provider uses `google/gemma-4-26b-a4b-it` via OpenRouter. It shares the same `OPENROUTER_API_KEY` as the Qwen provider but uses the GEMINI manifest format.
+
+**Cognitive Pipeline:** Mid-tier models like Gemma 4 automatically use the cognitive pipeline strategy, which forces step-by-step agent execution instead of letting the model self-orchestrate. This improves output from ~5K chars (collapsed single-turn) to ~28K chars (structured multi-step). See [docs/cognitive-pipeline.md](cognitive-pipeline.md) for details.
 
 ### Native Tools Available
 
@@ -208,16 +251,18 @@ curl -s -X POST http://localhost:8430/tool/robot.go_to \
 
 ## Runtime Comparison
 
-| Feature | Claude Code | Qwen/Gemini | Gemma (Ollama) |
-|---------|-------------|-------------|----------------|
-| Full tool access | Yes | Yes (Python) | Yes (Python) |
-| Agent sub-spawning | Yes (native) | Yes (delegate_to_agent) | Yes (delegate_to_agent) |
-| Robot integration | Yes | Yes | Yes |
-| Dream consolidation | Yes | Yes (native tools) | Yes |
-| Cost | Claude pricing | OpenRouter / Google AI | Free (local or Colab) |
-| Offline use | No | No | Yes (local Ollama) |
-| Context window | Large | Provider-dependent | 128K–256K |
-| LLM-powered compaction | N/A | Yes (compactor.py) | Yes (compactor.py) |
+| Feature | Claude Code | Qwen/Gemini | Gemma (Ollama) | Gemma (OpenRouter) |
+|---------|-------------|-------------|----------------|-------------------|
+| Full tool access | Yes | Yes (Python) | Yes (Python) | Yes (Python) |
+| Agent delegation | Yes (native) | Yes (with tool loop) | Yes (with tool loop) | Yes (with tool loop) |
+| Cognitive pipeline | N/A (not needed) | Available | Available | Auto-selected |
+| Multi-agent scenarios | Agentic (self-orchestrate) | Agentic | Cognitive pipeline | Cognitive pipeline |
+| Robot integration | Yes | Yes | Yes | Yes |
+| Dream consolidation | Yes | Yes (native tools) | Yes | Yes |
+| Cost | Claude pricing | OpenRouter / Google AI | Free (local or Colab) | ~$0.05/scenario |
+| Offline use | No | No | Yes (local Ollama) | No |
+| Context window | Large | Provider-dependent | 128K–256K | 128K |
+| LLM-powered compaction | N/A | Yes (compactor.py) | Yes (compactor.py) | Yes (compactor.py) |
 
 ---
 
@@ -237,4 +282,7 @@ GEMINI_API_KEY=AI...
 OLLAMA_BASE_URL=https://xxx.trycloudflare.com/v1 # omit for local Ollama (defaults to localhost:11434)
 OLLAMA_API_KEY=ollama                            # Ollama ignores auth; placeholder for OpenAI client
 GEMMA_MODEL=gemma4                               # override: gemma4:e2b, gemma4:26b, gemma4:31b
+
+# Gemma 4 via OpenRouter (uses same key as Qwen)
+OPENROUTER_API_KEY=sk-or-...                     # same key works for both Qwen and Gemma-OpenRouter
 ```
