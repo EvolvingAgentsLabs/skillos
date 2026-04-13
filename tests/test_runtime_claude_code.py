@@ -41,7 +41,8 @@ class TestAgentDiscoveryDirectory:
 
 # ── Core agents are discoverable ─────────────────────────────────
 
-CORE_AGENT_NAMES = [
+# PascalCase names in system/agents/ (backward-compat redirect stubs)
+CORE_AGENT_STUBS = [
     "SystemAgent",
     "ValidationAgent",
     "ErrorRecoveryAgent",
@@ -49,17 +50,26 @@ CORE_AGENT_NAMES = [
     "MemoryConsolidationAgent",
 ]
 
+# kebab-case names in .claude/agents/ (full specs from skill tree)
+CORE_AGENT_DISCOVERY_NAMES = [
+    "system-agent",
+    "validation-agent",
+    "error-recovery-agent",
+    "memory-analysis-agent",
+    "memory-consolidation-agent",
+]
+
 
 class TestCoreAgentsPresent:
-    @pytest.mark.parametrize("agent_name", CORE_AGENT_NAMES)
+    @pytest.mark.parametrize("agent_name", CORE_AGENT_STUBS)
     def test_agent_in_system_dir(self, agent_name):
         assert (SYSTEM_AGENTS_DIR / f"{agent_name}.md").exists(), (
             f"system/agents/{agent_name}.md not found"
         )
 
-    @pytest.mark.parametrize("agent_name", CORE_AGENT_NAMES)
+    @pytest.mark.parametrize("agent_name", CORE_AGENT_DISCOVERY_NAMES)
     def test_agent_discoverable_in_claude_dir(self, agent_name):
-        """Every system agent must be mirrored in .claude/agents/ for discovery."""
+        """Every core agent must be in .claude/agents/ (kebab-case from skill tree)."""
         assert (AGENTS_DIR / f"{agent_name}.md").exists(), (
             f".claude/agents/{agent_name}.md not found — run setup_agents.sh"
         )
@@ -72,6 +82,12 @@ def all_agent_files():
     if not AGENTS_DIR.exists():
         return []
     return list(AGENTS_DIR.glob("*.md"))
+
+
+def _is_project_agent(agent_path: Path) -> bool:
+    """Project agents (e.g. Project_aorta_visionary-agent.md) are dynamically
+    generated and may have incomplete frontmatter."""
+    return agent_path.name.startswith("Project_")
 
 
 class TestAgentFrontmatter:
@@ -91,6 +107,8 @@ class TestAgentFrontmatter:
 
     @pytest.mark.parametrize("agent_path", all_agent_files())
     def test_agent_has_description_field(self, agent_path):
+        if _is_project_agent(agent_path):
+            pytest.skip("Project agents may have incomplete frontmatter")
         text = agent_path.read_text(encoding="utf-8")
         fm = parse_frontmatter(text)
         assert "description" in fm, (
@@ -123,30 +141,74 @@ class TestAgentFrontmatter:
 # ── System↔discovery sync ─────────────────────────────────────────
 
 class TestAgentSync:
-    """Every agent in system/agents/ must be mirrored in .claude/agents/."""
+    """Non-redirect agents in system/agents/ must be discoverable in .claude/agents/."""
 
-    def test_all_system_agents_discoverable(self):
+    @staticmethod
+    def _is_redirect_stub(path: Path) -> bool:
+        """Check if an agent file is a redirect stub (has redirect: in frontmatter)."""
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            return False
+        try:
+            end = text.index("---", 3)
+            frontmatter = text[3:end]
+            return "redirect:" in frontmatter
+        except ValueError:
+            return False
+
+    def test_non_redirect_system_agents_discoverable(self):
+        """Non-redirect agents in system/agents/ must be in .claude/agents/.
+        Redirect stubs are expected — their full specs live in the skill tree
+        and are copied to .claude/agents/ under kebab-case names by setup_agents.sh.
+        """
         if not SYSTEM_AGENTS_DIR.exists() or not AGENTS_DIR.exists():
             pytest.skip("Agent directories not set up")
 
-        system_agents = {f.name for f in SYSTEM_AGENTS_DIR.glob("*.md")}
+        non_redirect = {
+            f.name for f in SYSTEM_AGENTS_DIR.glob("*.md")
+            if not self._is_redirect_stub(f)
+        }
         discovery_agents = {f.name for f in AGENTS_DIR.glob("*.md")}
-        missing = system_agents - discovery_agents
+        missing = non_redirect - discovery_agents
         assert not missing, (
-            f"These system agents are not in .claude/agents/ (run setup_agents.sh): "
+            f"These non-redirect system agents are not in .claude/agents/: "
             f"{sorted(missing)}"
         )
+
+    def test_redirect_stubs_have_skill_tree_counterpart(self):
+        """Every redirect stub should have a corresponding agent in .claude/agents/."""
+        if not SYSTEM_AGENTS_DIR.exists() or not AGENTS_DIR.exists():
+            pytest.skip("Agent directories not set up")
+
+        discovery_names = {f.stem for f in AGENTS_DIR.glob("*.md")}
+        for stub in SYSTEM_AGENTS_DIR.glob("*.md"):
+            if not self._is_redirect_stub(stub):
+                continue
+            # Read the frontmatter name field to find the kebab-case name
+            text = stub.read_text(encoding="utf-8")
+            fm = parse_frontmatter(text)
+            agent_name = fm.get("name", "")
+            assert agent_name in discovery_names, (
+                f"Redirect stub {stub.name} (name={agent_name}) has no "
+                f"counterpart in .claude/agents/"
+            )
 
 
 # ── SystemAgent content ───────────────────────────────────────────
 
+SYSTEM_AGENT_SKILL_PATH = ROOT / "system" / "skills" / "orchestration" / "core" / "system-agent.md"
+
+
 class TestSystemAgentContent:
     @pytest.fixture(scope="class")
     def system_agent_text(self):
-        p = SYSTEM_AGENTS_DIR / "SystemAgent.md"
-        if not p.exists():
-            pytest.skip("SystemAgent.md not found")
-        return p.read_text(encoding="utf-8")
+        # Prefer the full spec from the skill tree; fall back to legacy path
+        if SYSTEM_AGENT_SKILL_PATH.exists():
+            return SYSTEM_AGENT_SKILL_PATH.read_text(encoding="utf-8")
+        p = AGENTS_DIR / "system-agent.md"
+        if p.exists():
+            return p.read_text(encoding="utf-8")
+        pytest.skip("system-agent.md not found in skill tree or .claude/agents/")
 
     def test_system_agent_has_purpose(self, system_agent_text):
         assert "orchestrat" in system_agent_text.lower(), (

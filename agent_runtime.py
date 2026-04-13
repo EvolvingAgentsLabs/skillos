@@ -74,6 +74,17 @@ class AgentRuntime:
             "manifest": "GEMINI.md",
             "cache_headers": {"Bypass-Tunnel-Reminder": "true"},
         },
+        "gemma-openrouter": {
+            "base_url": "https://openrouter.ai/api/v1",
+            "api_key_env": "OPENROUTER_API_KEY",
+            "model": "google/gemma-4-26b-a4b-it",
+            "model_env": "GEMMA_OPENROUTER_MODEL",
+            "manifest": "GEMINI.md",
+            "cache_headers": {
+                "HTTP-Referer": "https://skillos.dev",
+                "X-Title": "SkillOS",
+            },
+        },
     }
 
     def __init__(self, manifest_path: str | None = None, permission_policy: PermissionPolicy | None = None, provider: str = "qwen", stream: bool = True, sandbox_mode: str = "local"):
