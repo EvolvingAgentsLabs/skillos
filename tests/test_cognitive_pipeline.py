@@ -498,3 +498,130 @@ class TestPriorOutputFileInjection:
         body = source[start:end]
         assert "[:10]" in body
         assert "--project-dir" in source
+
+
+# ---------------------------------------------------------------------------
+# TestEnhancedDelegation
+# ---------------------------------------------------------------------------
+class TestEnhancedDelegation:
+    """_handle_delegate_to_agent now runs a multi-turn tool loop."""
+
+    def test_delegation_has_tool_loop(self):
+        """_handle_delegate_to_agent contains a tool execution loop."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        # Must have a bounded loop
+        assert "for turn in range(max_turns)" in body
+
+    def test_delegation_injects_tool_format(self):
+        """Delegated agents get tool format instructions in their system prompt."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "_GEMINI_TOOL_FORMAT_INSTRUCTIONS" in body
+
+    def test_delegation_has_scaffold(self):
+        """Delegated agents get a few-shot scaffold example."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "scaffold_example" in body
+        assert '"role": "assistant"' in body
+
+    def test_delegation_parses_tool_calls(self):
+        """Delegated agents' responses are parsed for tool calls."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "_parse_tool_calls(response)" in body
+
+    def test_delegation_tracks_files(self):
+        """File writes by delegated agents are tracked."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "files_written" in body
+        assert 'write_file' in body
+
+    def test_delegation_restores_system_prompt(self):
+        """System prompt is restored after delegation via try/finally."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "original_system_prompt" in body
+        assert "finally:" in body
+        assert "self.system_prompt = original_system_prompt" in body
+
+    def test_delegation_generates_missing_agents(self):
+        """When agent not found, delegation generates a spec dynamically."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "_generate_agent_spec" in body
+
+    def test_delegation_injects_project_files(self):
+        """Delegated agents get project file context when project_dir is set."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "AVAILABLE PROJECT FILES" in body
+        assert "os.walk" in body
+
+    def test_delegation_uses_active_project_dir(self):
+        """Delegation falls back to self._active_project_dir when no explicit project_dir."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "_active_project_dir" in body
+
+    def test_delegation_handles_final_answer(self):
+        """Delegation extracts final_answer tag to return clean output."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "final_answer" in body
+        assert "_extract_tag_content" in body
+
+    def test_delegation_has_permission_check(self):
+        """Tool calls within delegation go through permission policy."""
+        source = _read_source()
+        start = source.index("def _handle_delegate_to_agent(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "self.policy.authorize" in body
+
+    def test_active_project_dir_in_init(self):
+        """_active_project_dir is initialized in __init__."""
+        source = _read_source()
+        assert "_active_project_dir" in source
+        start = source.index("def __init__(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "_active_project_dir" in body
+
+    def test_active_project_dir_set_in_cognitive_pipeline(self):
+        """run_cognitive_pipeline sets _active_project_dir."""
+        source = _read_source()
+        start = source.index("def run_cognitive_pipeline(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "_active_project_dir = project_dir" in body
+
+    def test_active_project_dir_set_in_execute_scenario(self):
+        """execute_scenario sets _active_project_dir for agentic mode."""
+        source = _read_source()
+        start = source.index("def execute_scenario(")
+        end = source.index("\n    def ", start + 1)
+        body = source[start:end]
+        assert "_active_project_dir" in body

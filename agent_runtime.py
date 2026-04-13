@@ -136,6 +136,7 @@ class AgentRuntime:
         self.executor = create_executor(sandbox_mode)
         self.compaction_config = CompactionConfig()
         self.compaction_config.configure_for_model(self.model)
+        self._active_project_dir = ""  # Set by execute_scenario/run_cognitive_pipeline for delegation context
         resolved_manifest = manifest_path or cfg["manifest"]
         self._load_manifest(resolved_manifest)
         print(f"✅ Agent Runtime Initialized (provider={provider}, model={self.model}, manifest={resolved_manifest}, sandbox={sandbox_mode}).")
@@ -313,8 +314,26 @@ Agents are discovered in `system/agents/` and `.claude/agents/`. Use agent names
         ]
         return self._call_llm(messages)
 
-    def _handle_delegate_to_agent(self, agent_name: str, task_description: str, input_data: dict = None):
-        """Handles delegation to specialized agents."""
+    def _handle_delegate_to_agent(self, agent_name: str, task_description: str,
+                                    input_data: dict = None, *,
+                                    max_turns: int = 5, project_dir: str = ""):
+        """Handles delegation to specialized agents with full tool access.
+
+        Runs a mini agentic loop (like _run_step_with_tools) so that delegated
+        agents can use tools (write_file, read_file, etc.), produce substantial
+        output, and interact over multiple turns.
+
+        Args:
+            agent_name: Name of the agent to delegate to.
+            task_description: What the agent should do.
+            input_data: Optional structured data to pass to the agent.
+            max_turns: Maximum LLM round-trips for the delegated agent.
+            project_dir: Project directory for file operations context.
+                Falls back to self._active_project_dir if not provided.
+        """
+        # Use instance-level project dir if not explicitly passed
+        if not project_dir:
+            project_dir = getattr(self, "_active_project_dir", "")
         print(f"\n🎯 Delegating to agent: {agent_name}")
 
         # Load the agent definition — use compiled load_agent tool if available,
@@ -323,46 +342,178 @@ Agents are discovered in `system/agents/` and `.claude/agents/`. Use agent names
             agent_info = self.tools["load_agent"](agent_name)
         else:
             agent_info = self._find_agent(agent_name)
+
         if not agent_info.get("found"):
-            return f"❌ Agent '{agent_name}' not found."
+            # Try dynamic generation from a minimal context
+            agent_info = {
+                "found": True,
+                "content": self._generate_agent_spec(
+                    agent_name,
+                    {"step": 0, "agent": agent_name, "goal": task_description, "output": ""},
+                    task_description,
+                    project_dir or ".",
+                ),
+                "description": f"Dynamically generated agent for: {task_description[:80]}",
+                "tools": "write_file, read_file, list_files",
+            }
+            print(f"   📝 Generated agent spec for '{agent_name}'")
 
-        # Create agent-specific prompt using the agent's context
-        agent_prompt = f"""
-{agent_info['content']}
-
-## CURRENT TASK
-
-{task_description}
-
-## INPUT DATA
-
-{json.dumps(input_data or {}, indent=2)}
-
-## INSTRUCTIONS
-
-Execute this task according to your specialized capabilities and return the results.
-Focus on generating high-quality, detailed content appropriate to your role.
-Do not use tool calls - just provide your expert response directly.
-"""
-
+        agent_system = agent_info["content"]
         print(f"   📋 Agent description: {agent_info['description']}")
-        print(f"   🛠️  Available tools: {agent_info.get('tools', 'N/A')}")
+        print(f"   🛠️  Available tools: {list(self.tools.keys())}")
 
-        # Make LLM call with agent context
-        messages = [
-            {"role": "system", "content": agent_prompt},
-            {"role": "user", "content": f"Execute the task: {task_description}"}
-        ]
+        # Inject context from project output files (if project_dir is set)
+        file_injection = ""
+        if project_dir:
+            injected_files = []
+            for scan_dir in [os.path.join(project_dir, d) for d in ["output", "state"]]:
+                if not os.path.isdir(scan_dir):
+                    continue
+                for root, _dirs, files in os.walk(scan_dir):
+                    for fname in sorted(files):
+                        fpath = os.path.join(root, fname)
+                        try:
+                            with open(fpath, "r", encoding="utf-8") as f:
+                                content = f.read()
+                            if content.strip():
+                                truncated = content[:3000] if len(content) > 3000 else content
+                                rel_path = os.path.relpath(fpath, project_dir)
+                                injected_files.append(
+                                    f"### File: `{rel_path}`\n```\n{truncated}\n```"
+                                )
+                        except (OSError, UnicodeDecodeError):
+                            continue
+            if injected_files:
+                file_injection = (
+                    "\n\n## AVAILABLE PROJECT FILES\n\n"
+                    + "\n\n".join(injected_files[:10])
+                )
+
+        # Build task prompt
+        input_section = ""
+        if input_data:
+            input_section = f"\n\n## INPUT DATA\n\n```json\n{json.dumps(input_data, indent=2)}\n```"
+
+        task_prompt = (
+            f"## YOUR TASK\n\n{task_description}\n"
+            f"{input_section}"
+            f"\n\n## INSTRUCTIONS\n\n"
+            f"- Execute this task according to your specialized capabilities\n"
+            f"- Use write_file to save any substantial output to files\n"
+            f"- Produce COMPREHENSIVE, DETAILED content\n"
+            f"- End with a <final_answer> summarizing what you accomplished\n"
+            f"{file_injection}"
+        )
+
+        # Temporarily swap system prompt to agent persona + tool instructions
+        original_system_prompt = self.system_prompt
+        self.system_prompt = agent_system + self._GEMINI_TOOL_FORMAT_INSTRUCTIONS
+
+        files_written: list[str] = []
+        all_output = ""
 
         try:
-            response = self._call_llm(messages)
-            print(f"   ✅ Agent {agent_name} completed task")
-            print(f"   📄 Generated {len(response)} characters")
-            return response
+            # Tool-call scaffold: show the model the exact XML format as few-shot
+            scaffold_example = (
+                f'Here is an example of the tool call format you MUST use:\n\n'
+                f'<tool_call name="write_file">\n'
+                f'{{"path": "output.md", "content": "Your detailed content here..."}}\n'
+                f'</tool_call>\n\n'
+                f'<final_answer>\nTask complete. File saved.\n</final_answer>'
+            )
+            messages: list[dict] = [
+                {"role": "user", "content": task_prompt},
+                {"role": "assistant", "content": scaffold_example},
+                {"role": "user", "content": "Good format. Now execute the task for real. Use tool calls as needed, then provide a final_answer."},
+            ]
+
+            for turn in range(max_turns):
+                # Compact if needed
+                if should_compact(messages, self.compaction_config):
+                    try:
+                        messages, _ = asyncio.run(
+                            compact_messages_async(messages, self.compaction_config, self._call_llm_async)
+                        )
+                    except RuntimeError:
+                        messages, _ = compact_messages(messages, self.compaction_config)
+
+                try:
+                    full_messages = self._build_messages(messages)
+                    if self.use_streaming:
+                        response = self._call_llm_stream(full_messages)
+                    else:
+                        response = self._call_llm(full_messages)
+                except Exception as e:
+                    print(f"   !!! Agent {agent_name} LLM error: {e}")
+                    break
+
+                if not response or response.strip() == "":
+                    messages.append({
+                        "role": "user",
+                        "content": "Please provide your output with tool calls or a final_answer."
+                    })
+                    continue
+
+                messages.append({"role": "assistant", "content": response})
+                all_output += response + "\n"
+
+                # Parse and execute tool calls
+                tool_calls = self._parse_tool_calls(response)
+                if tool_calls:
+                    for tool_name, args_str in tool_calls:
+                        tool_name = self._TOOL_ALIASES.get(tool_name, tool_name)
+                        try:
+                            clean_args = self._extract_json_object(args_str.strip())
+                            try:
+                                args = json.loads(clean_args)
+                            except json.JSONDecodeError:
+                                args = self._repair_json_args(clean_args)
+                                if args is None:
+                                    raise json.JSONDecodeError("Repair failed", clean_args, 0)
+
+                            # Permission check
+                            input_preview = args_str.strip()[:120]
+                            authorized, reason = self.policy.authorize(tool_name, input_preview, args=args)
+                            if not authorized:
+                                messages.append({"role": "user", "content": f"Tool '{tool_name}' denied: {reason}"})
+                                continue
+
+                            if tool_name in self.tools:
+                                tool_result = self.tools[tool_name](**args) if isinstance(args, dict) else self.tools[tool_name](args)
+                            else:
+                                tool_result = f"Error: Tool '{tool_name}' not found."
+
+                            # Track file writes
+                            if tool_name == "write_file" and isinstance(args, dict):
+                                written_path = args.get("path", "")
+                                files_written.append(written_path)
+                                content_len = len(args.get("content", ""))
+                                print(f"   📄 Agent wrote {written_path} ({content_len} chars)")
+
+                            display = str(tool_result)[:300] + "..." if len(str(tool_result)) > 300 else str(tool_result)
+                            messages.append({"role": "user", "content": f"Tool '{tool_name}' returned:\n{display}"})
+                        except (json.JSONDecodeError, Exception) as e:
+                            messages.append({"role": "user", "content": f"Error with tool '{tool_name}': {e}"})
+
+                # Check for final answer
+                final_answer = self._extract_tag_content("final_answer", response)
+                if final_answer:
+                    all_output = final_answer
+                    break
+
+                # If no tools and no final answer, done
+                if not tool_calls:
+                    break
+
+            print(f"   ✅ Agent {agent_name} completed ({len(all_output)} chars, {len(files_written)} files)")
+            return all_output
+
         except Exception as e:
             error_msg = f"❌ Error executing agent {agent_name}: {e}"
             print(f"   {error_msg}")
             return error_msg
+        finally:
+            self.system_prompt = original_system_prompt
 
     @staticmethod
     def _find_agent(agent_name: str) -> dict:
@@ -1159,6 +1310,8 @@ Produce comprehensive, detailed output with at least 2000 characters.
             self.load_scenario(scenario_path)
             with open(scenario_path, "r", encoding="utf-8") as f:
                 scenario_content = f.read()
+            if project_dir:
+                self._active_project_dir = project_dir
             goal = f"Execute the following scenario:\n\n{scenario_content}\n\nProblem context: {problem_context}"
             return self.run_goal(goal, max_turns=max_turns)
 
@@ -1217,6 +1370,9 @@ Produce comprehensive, detailed output with at least 2000 characters.
         for subdir in ["output", "state", "memory/short_term", "memory/long_term",
                         "components/agents", "components/tools", "wiki/concepts"]:
             os.makedirs(os.path.join(project_dir, subdir), exist_ok=True)
+
+        # Set active project dir so delegation picks it up
+        self._active_project_dir = project_dir
 
         print(f"\n{'='*60}")
         print(f"  Cognitive Pipeline: {len(steps)} steps")
