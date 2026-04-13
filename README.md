@@ -147,7 +147,7 @@ project/        scaffold/       project-scaffold-tool
 - **Pure Markdown** — No code compilation. The LLM is the interpreter.
 - **Hierarchical Skills** — Domain → Family → Skill taxonomy with 4-step lazy loading
 - **Token Efficient** — 61% reduction in routing-phase token consumption
-- **Cognitive Pipeline** — Capability-aware strategy router that automatically picks the right execution mode per model tier ([docs](docs/cognitive-pipeline.md))
+- **Cognitive Pipeline** — Recursive Context Isolation gives mid-tier models (Gemma 4 26B) the executive functioning of frontier models: 5K→28K output, 100% step pass rate, 50-100x cheaper ([docs](docs/cognitive-pipeline.md))
 - **Dialects** — 14 domain-specific compression formats (50-99% token reduction) with Language Facade and cognitive scaffolding
 - **Knowledge Wiki** — Compounding knowledge base inspired by Karpathy's LLM Wiki pattern
 - **Memory System** — Every execution improves future runs via structured memory
@@ -255,9 +255,9 @@ python run_scenario.py scenarios/ProjectAortaScenario.md "quantum arterial navig
 
 **Results (Gemma 4 26B, 2026-04-13):** All 3 stages pass — 28,120 chars total output, 0 retries.
 
-### Cross-Model Comparison
+### Cross-Model Comparison: Recursive Context Isolation
 
-The cognitive pipeline enables mid-tier models to complete the same multi-agent scenarios that previously required high-tier models:
+The cognitive pipeline uses **Recursive Context Isolation** — the same pattern behind Claude Code's subagent architecture — to give mid-tier models the executive functioning of frontier models. Each delegated agent gets its own fresh context window with only its spec and task, runs a bounded tool loop, and returns results. Five learned mechanisms (tool-call scaffolding, file injection, auto-wrap prose, output validation, dynamic agent generation) compensate for mid-tier model weaknesses:
 
 | Metric | Claude Opus 4.6 | Gemma 4 26B (cognitive pipeline) | Ratio |
 |--------|-----------------|----------------------------------|-------|
@@ -271,7 +271,7 @@ The cognitive pipeline enables mid-tier models to complete the same multi-agent 
 
 Claude produces deeper, publication-grade content with code execution and visualization. Gemma 4 with the cognitive pipeline produces structurally complete output suitable for prototyping and first-pass exploration at a fraction of the cost.
 
-The cognitive pipeline improved Gemma 4's output from unusable (5K chars, collapsed single-turn) to fully passing (28K chars, step-by-step) — a **5.2x improvement** through architectural compensation. See [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) for the full architecture.
+**The core insight:** Mid-tier models produce good content when isolated to a single focused task, but can't self-orchestrate. The cognitive pipeline imposes the decomposition externally — parsing scenarios into steps, giving each agent an isolated context window with tool access, and chaining results between steps. This brought Gemma 4 from unusable (5K chars, collapsed single-turn) to fully passing (28K chars, step-by-step) — a **5.2x improvement** through architectural compensation alone. See [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) for the full architecture.
 
 ### Dialect-Enhanced Variants (A/B Token Comparison)
 
