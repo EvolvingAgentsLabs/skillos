@@ -75,6 +75,10 @@ python agent_runtime.py --sandbox e2b "Your goal"                           # E2
 python agent_runtime.py interactive                                          # Interactive mode
 ```
 
+For **Claude-Code-style subagents on Gemma 4** in sealed domains (cooking,
+electrical design, …), use the Cartridge runtime — see
+[Cartridges](#cartridges--gemma-native-subagents) below.
+
 **Run multi-agent scenarios with any provider:**
 
 ```bash
@@ -148,6 +152,7 @@ project/        scaffold/       project-scaffold-tool
 - **Hierarchical Skills** — Domain → Family → Skill taxonomy with 4-step lazy loading
 - **Token Efficient** — 61% reduction in routing-phase token consumption
 - **Cognitive Pipeline** — Recursive Context Isolation gives mid-tier models (Gemma 4 26B) the executive functioning of frontier models: 5K→28K output, 100% step pass rate, 50-100x cheaper ([docs](docs/cognitive-pipeline.md))
+- **Cartridges** — Claude-Code-style subagents on Gemma 4 via sealed per-domain bundles (agents + JSON Schemas + deterministic validators). Typed blackboard, closed-set router, `<produces>{…}</produces>` contract with schema-validated retry. Reference cartridges: `cooking`, `residential-electrical` (IEC 60364 compliance in pure Python). ([docs](docs/cartridges.md))
 - **Dialects** — 14 domain-specific compression formats (50-99% token reduction) with Language Facade and cognitive scaffolding
 - **Knowledge Wiki** — Compounding knowledge base inspired by Karpathy's LLM Wiki pattern
 - **Memory System** — Every execution improves future runs via structured memory
@@ -199,6 +204,114 @@ See [docs/dialects.md](docs/dialects.md) for the full guide.
 
 ---
 
+## Cartridges — Gemma-Native Subagents
+
+Cartridges are the answer to: **"Can we reproduce Claude Code's subagent experience using open-weights models like Gemma 4?"**
+
+Yes — scoped per domain. A cartridge is a self-contained folder under `cartridges/<name>/` that pre-seals the plan space: declared agents, flows, JSON Schemas, tool allow-lists, and pure-Python validators. Gemma's job collapses from open-ended planning to structured slot-filling, which it handles reliably.
+
+### Why this is different from the Cognitive Pipeline
+
+| | Cognitive Pipeline ([docs](docs/cognitive-pipeline.md)) | Cartridges ([docs](docs/cartridges.md)) |
+|---|---|---|
+| Plan source | Scenario file written per task | Cartridge folder installed once, reused |
+| Output shape | Markdown/Python files | Typed JSON on a blackboard |
+| Safety rules | Live in prompts | Live in Python validators |
+| Adding a domain | New scenario | New cartridge (one day of authoring) |
+| Best for | One-off complex workflows | Recurring narrow-domain tasks |
+
+### How it works
+
+```
+User goal  →  Registry match_intent (keyword)  →  Cartridge
+                                                     │
+                              router.md (closed-set) │
+                                                     ▼
+                                              Flow = [agent₁, agent₂, …]
+                                                     │
+                                    For each agent:  │
+                                      · bundle blackboard inputs (spec.needs)
+                                      · delegate via AgentRuntime
+                                      · extract <produces>{…}</produces>
+                                      · JSON-Schema validate → Blackboard
+                                      · retry once on failure
+                                                     │
+                                                     ▼
+                                      Pure-Python validators (no LLM)
+                                                     │
+                                                     ▼
+                                             RunResult (snapshot + status)
+```
+
+Five stacked guardrails make Gemma reliable: keyword router (no LLM call), closed-set flow classifier (single-word LLM call), `<produces>` contract with balanced-brace fallback, per-step JSON Schema validation with one retry, and deterministic post-flow validators in Python.
+
+### Quick start
+
+```bash
+# List installed cartridges
+python -m cartridge_runtime --list
+
+# Run the cooking cartridge against a goal (Gemma 4 on OpenRouter by default)
+python -m cartridge_runtime cooking \
+    "Plan meals for next week, 2 adults, vegetarian, Mediterranean"
+
+# Residential electrical design with IEC 60364 compliance checking
+python -m cartridge_runtime residential-electrical \
+    "Design electrical for a 3-BR apartment with kitchen, 2 bathrooms"
+```
+
+From the SkillOS REPL:
+
+```
+skillos$ cartridges                                        # list
+skillos$ cartridge cooking "plan meals for 4, vegetarian"  # explicit
+skillos$ cartridge auto "design electrical installation"   # intent-match
+skillos$ plan weekly menu for 2 vegetarians                # auto-dispatch
+skillos$ claude <goal>                                     # bypass cartridges
+skillos$ cartridge provider gemma                          # switch provider
+```
+
+Bare goals that strongly match a cartridge's `entry_intents` are auto-dispatched. `claude <goal>` forces the original Claude Code path.
+
+### Reference cartridges shipped in this repo
+
+| Cartridge | Agents | Validator highlight |
+|---|---:|---|
+| `cartridges/cooking/` | 3 (menu-planner → shopping-list-builder → recipe-writer) | Structural completeness (7 days × 3 slots) |
+| `cartridges/residential-electrical/` | 2 (load-calculator → circuit-designer) | **IEC 60364 subset** in ~80 LOC of Python — wire/breaker ratios, RCD on wet rooms, 25% breaker margin |
+
+The electrical compliance checker is the key illustration: Gemma proposes the circuits, but the safety rules live in code, not in a prompt. A new code edition is a reviewable Python diff.
+
+### Authoring a new cartridge
+
+```
+cartridges/<name>/
+├── cartridge.yaml         name, entry_intents, flows, validators
+├── router.md              (optional) closed-set flow classifier prompt
+├── agents/<agent>.md      frontmatter (needs/produces/schema) + CoT body + few-shot example
+├── flows/<flow>.flow.md   (optional) human-readable flow doc
+├── schemas/*.schema.json  JSON Schemas for every blackboard key
+├── validators/*.py        pure-Python post-flow checks (the safety net)
+└── evals/cases.yaml       regression goals — gate to ≥85% before shipping
+```
+
+One day of authoring per new domain. No model upgrade required. See [docs/cartridges.md](docs/cartridges.md) for the complete architecture + 7-step authoring guide, and [cartridges/README.md](cartridges/README.md) for the 30-second version.
+
+### Parity with Claude Code's subagents
+
+| Capability | Cartridge equivalent |
+|---|---|
+| `Task` tool spawns subagent | `delegate_to_agent` in `agent_runtime.py` |
+| Isolated subagent context | System-prompt swap + scoped `input_data` |
+| Agent discovery | `CartridgeRegistry.load_agent` |
+| Autonomous routing | **Closed-set router per cartridge** (not open planner) |
+| Tool access | `tools:` frontmatter allow-list |
+| Result synthesis | `Blackboard` snapshot + final summary |
+
+What you give up: general-purpose routing across unseen domains. What you gain: every cartridge is reviewable like code, runs on a 26B open-weights model, and costs a day of authoring per new domain.
+
+---
+
 ## Documentation
 
 | Doc | Contents |
@@ -206,6 +319,7 @@ See [docs/dialects.md](docs/dialects.md) for the full guide.
 | [docs/architecture.md](docs/architecture.md) | Skill tree, lazy loading, agent discovery, execution flow |
 | [docs/skills.md](docs/skills.md) | Authoring agents and tools, manifests, inheritance, best practices |
 | [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) | Cognitive pipeline executor, strategy router, model capability tiers |
+| [docs/cartridges.md](docs/cartridges.md) | Cartridge architecture — Gemma-native subagents, typed blackboard, JSON-Schema contract, authoring guide |
 | [docs/dialects.md](docs/dialects.md) | Dialect framework, 14 compression formats, Language Facade, cognitive scaffolding |
 | [docs/memory.md](docs/memory.md) | SmartMemory, short/long-term layers, memory-driven execution |
 | [docs/runtimes.md](docs/runtimes.md) | Claude Code, Qwen/Gemini, Ollama, OpenRouter — setup and comparison |
@@ -312,6 +426,10 @@ skillos execute: "Navigate to the kitchen and describe what you see"
 # Built-in scenarios
 skillos execute: "Run the Operation Echo-Q scenario"
 skillos execute: "Run the RealWorld_Research_Task scenario in EXECUTION MODE"
+
+# Cartridges (Gemma-native subagents in sealed domains)
+skillos$ plan weekly menu for 2 vegetarians
+skillos$ cartridge residential-electrical "design electrical for a 3-BR apartment"
 ```
 
 ---
