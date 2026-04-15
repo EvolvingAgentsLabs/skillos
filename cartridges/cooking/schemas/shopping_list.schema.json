@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ShoppingList",
+  "type": "object",
+  "required": ["household_size", "aisles"],
+  "properties": {
+    "household_size": { "type": "integer", "minimum": 1 },
+    "aisles": {
+      "type": "object",
+      "required": ["produce", "dairy", "pantry", "protein", "other"],
+      "properties": {
+        "produce": { "$ref": "#/definitions/aisle" },
+        "dairy":   { "$ref": "#/definitions/aisle" },
+        "pantry":  { "$ref": "#/definitions/aisle" },
+        "protein": { "$ref": "#/definitions/aisle" },
+        "other":   { "$ref": "#/definitions/aisle" }
+      }
+    }
+  },
+  "definitions": {
+    "aisle": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["item", "quantity"],
+        "properties": {
+          "item":     { "type": "string", "minLength": 1 },
+          "quantity": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

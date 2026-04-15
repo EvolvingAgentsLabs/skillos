@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Circuits",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "required": ["id", "label", "type", "breaker_a", "wire_mm2", "rcd", "loads"],
+    "properties": {
+      "id":        { "type": "string" },
+      "label":     { "type": "string" },
+      "type":      { "type": "string", "enum": ["lighting", "outlet", "dedicated"] },
+      "breaker_a": { "type": "number", "enum": [6, 10, 13, 16, 20, 25, 32, 40, 50, 63] },
+      "wire_mm2":  { "type": "number", "enum": [1.0, 1.5, 2.5, 4, 6, 10, 16] },
+      "rcd":       { "type": "boolean" },
+      "loads":     { "type": "array", "minItems": 1, "items": { "type": "string" } }
+    }
+  }
+}
