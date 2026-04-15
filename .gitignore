@@ -5,6 +5,11 @@
 .claude/todos/
 .qwen/
 
+# Test-run debris: dynamic agent specs emitted by test_cognitive_pipeline
+# and related tests into .claude/agents/. These are regenerated on every
+# run — not checked in.
+.claude/agents/Project_test*
+
 # Python
 __pycache__/
 *.pyc
