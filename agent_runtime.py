@@ -498,7 +498,17 @@ Agents are discovered in `system/agents/` and `.claude/agents/`. Use agent names
                 # Check for final answer
                 final_answer = self._extract_tag_content("final_answer", response)
                 if final_answer:
-                    all_output = final_answer
+                    # Preserve <produces> blocks from accumulated output
+                    # (cartridge agents may emit <produces> outside <final_answer>)
+                    if '<produces>' in all_output and '<produces>' not in final_answer:
+                        produces_match = re.search(
+                            r'<produces>.*?</produces>', all_output, re.DOTALL)
+                        if produces_match:
+                            all_output = produces_match.group(0) + "\n\n" + final_answer
+                        else:
+                            all_output = final_answer
+                    else:
+                        all_output = final_answer
                     break
 
                 # If no tools and no final answer, done

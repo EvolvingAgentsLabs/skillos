@@ -282,6 +282,13 @@ Bare goals that strongly match a cartridge's `entry_intents` are auto-dispatched
 
 The electrical compliance checker is the key illustration: Gemma proposes the circuits, but the safety rules live in code, not in a prompt. A new code edition is a reviewable Python diff.
 
+**Live Gemma 4 test results (2026-04-16, `google/gemma-4-26b-a4b-it` via OpenRouter):**
+
+| Cartridge | Agents | All `<produces>` OK? | Attempts | Validators |
+|---|---:|---|---|---|
+| `cooking` (plan-weekly-menu) | 3/3 | Yes | 1 each | menu_complete: 7 days × 3 slots; shopping_list_sane: 31 items, 5 aisles |
+| `residential-electrical` (new-installation) | 2/2 | Yes | 1 each | compliance_checker: caught undersized breakers (IEC 60364) |
+
 ### Authoring a new cartridge
 
 ```

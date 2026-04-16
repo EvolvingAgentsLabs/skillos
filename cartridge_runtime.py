@@ -597,16 +597,22 @@ class CartridgeRunner:
         if spec.produces:
             produces_clause = (
                 "\n\n## REQUIRED OUTPUT\n\n"
+                "CRITICAL: You MUST include a `<produces>` JSON block in your response.\n"
+                "Do NOT use write_file for this output. Do NOT save it to a file.\n"
+                "Put the `<produces>` block INSIDE your `<final_answer>` tags.\n\n"
                 f"Produce exactly these keys: {spec.produces}\n"
                 f"{('Conform to schema: ' + spec.produces_schema) if spec.produces_schema else ''}\n\n"
                 "Wrap the JSON object in `<produces>` tags, like this:\n\n"
+                "<final_answer>\n"
                 "<produces>\n"
                 "{\n"
                 + ",\n".join(f'  \"{k}\": ...' for k in spec.produces) +
                 "\n}\n"
-                "</produces>\n\n"
+                "</produces>\n"
+                "</final_answer>\n\n"
                 "Do NOT put anything between the opening `<produces>` and the `{`. "
-                "Do NOT include commentary inside the JSON."
+                "Do NOT include commentary inside the JSON. "
+                "Do NOT use write_file — return the JSON inline in `<produces>` tags."
             )
         retry_clause = ""
         if retry_feedback:
