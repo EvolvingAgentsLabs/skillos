@@ -1,0 +1,39 @@
+# Regression eval set for the cooking cartridge.
+#
+# Each case specifies a user goal and the structural properties the
+# resulting blackboard must satisfy. The cartridge eval harness loads
+# this file, runs each case through CartridgeRunner, and reports the
+# pass rate. A cartridge cannot be promoted to production if pass rate
+# < 0.85 on a supported model tier.
+
+cases:
+  - id: plan-2people-vegetarian
+    goal: "Plan my meals for next week, we are 2 adults, vegetarian"
+    flow: plan-weekly-menu
+    assertions:
+      - key: weekly_menu.household_size
+        equals: 2
+      - key: weekly_menu.days
+        length: 7
+      - key: shopping_list.aisles.produce
+        min_length: 1
+      - key: recipes
+        length: 7
+
+  - id: plan-4people-omnivore
+    goal: "Weekly meal plan, family of 4, kids, nothing too spicy"
+    flow: plan-weekly-menu
+    assertions:
+      - key: weekly_menu.household_size
+        equals: 4
+      - key: weekly_menu.days
+        length: 7
+
+  - id: quick-shopping-only
+    goal: "Give me a shopping list for a weekly menu, 3 people, Mediterranean"
+    flow: quick-shopping-list
+    assertions:
+      - key: weekly_menu.days
+        length: 7
+      - key: shopping_list
+        present: true

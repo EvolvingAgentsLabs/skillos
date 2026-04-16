@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Recipes",
+  "type": "array",
+  "minItems": 7,
+  "maxItems": 7,
+  "items": {
+    "type": "object",
+    "required": ["name", "day", "servings", "total_minutes", "ingredients", "steps"],
+    "properties": {
+      "name":          { "type": "string", "minLength": 2 },
+      "day":           { "type": "string" },
+      "servings":      { "type": "integer", "minimum": 1 },
+      "total_minutes": { "type": "integer", "minimum": 1 },
+      "ingredients": {
+        "type": "array",
+        "minItems": 2,
+        "items": {
+          "type": "object",
+          "required": ["item", "quantity"],
+          "properties": {
+            "item":     { "type": "string" },
+            "quantity": { "type": "string" }
+          }
+        }
+      },
+      "steps": {
+        "type": "array",
+        "minItems": 3,
+        "items": { "type": "string", "minLength": 3 }
+      }
+    }
+  }
+}

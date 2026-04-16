@@ -1,0 +1,33 @@
+name: residential-electrical
+description: >
+  Size circuits and produce a single-line diagram for a small residential
+  electrical installation. The compliance step is deterministic Python
+  (IEC 60364 subset) — Gemma never sees the rules as prose.
+
+entry_intents:
+  - design electrical installation
+  - plan circuits for house
+  - size circuits for
+  - residential wiring plan
+  - electrical load calculation
+
+flows:
+  new-installation:
+    - load-calculator
+    - circuit-designer
+
+default_flow: new-installation
+
+blackboard_schema:
+  load_profile: load_profile.schema.json
+  circuits:    circuits.schema.json
+
+validators:
+  - compliance_checker.py
+
+max_turns_per_agent: 3
+
+variables:
+  code: IEC_60364
+  default_voltage: 230
+  default_frequency: 50
