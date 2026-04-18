@@ -31,6 +31,7 @@ class SkillDefinition:
     skill_dir: str = ""                # absolute path to skill directory
     script_path: str = ""              # path to index.html (or index.js)
     js_path: str = ""                  # path to index.js (for Node.js runner)
+    runtime: str = "node"              # "node" (default) or "browser" (needs Playwright)
 
 
 def _parse_skill_md(content: str) -> tuple[dict, str]:
@@ -88,6 +89,7 @@ def load_skill(skill_dir: str | Path) -> Optional[SkillDefinition]:
         skill_dir=str(skill_dir),
         script_path=script_path,
         js_path=js_path,
+        runtime=metadata.get("runtime", "node"),
     )
 
 
