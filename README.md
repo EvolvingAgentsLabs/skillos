@@ -30,7 +30,7 @@ Initialize the agent discovery system before booting:
 .\setup_agents.ps1   # Windows
 ```
 
-Requires: Python 3.11+, Git, Claude Code CLI.
+Requires: Python 3.11+, Git, Claude Code CLI. Optional: Node.js 18+ (for JS skills).
 
 ---
 
@@ -152,7 +152,8 @@ project/        scaffold/       project-scaffold-tool
 - **Hierarchical Skills** — Domain → Family → Skill taxonomy with 4-step lazy loading
 - **Token Efficient** — 61% reduction in routing-phase token consumption
 - **Cognitive Pipeline** — Recursive Context Isolation gives mid-tier models (Gemma 4 26B) the executive functioning of frontier models: 5K→28K output, 100% step pass rate, 50-100x cheaper ([docs](docs/cognitive-pipeline.md))
-- **Cartridges** — Claude-Code-style subagents on Gemma 4 via sealed per-domain bundles (agents + JSON Schemas + deterministic validators). Typed blackboard, closed-set router, `<produces>{…}</produces>` contract with schema-validated retry. Reference cartridges: `cooking`, `residential-electrical` (IEC 60364 compliance in pure Python). ([docs](docs/cartridges.md))
+- **Cartridges** — Claude-Code-style subagents on Gemma 4 via sealed per-domain bundles (agents + JSON Schemas + deterministic validators). Typed blackboard, closed-set router, `<produces>{…}</produces>` contract with schema-validated retry. Reference cartridges: `cooking`, `residential-electrical` (IEC 60364), `demo` (11 JS skills). ([docs](docs/cartridges.md))
+- **JS Skill Cartridges** — Run [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery) JavaScript skills via Node.js. Skills can call Gemma 4 as subagents, persist state, and chain through the Blackboard. Three flow modes: deterministic (e2b), skill-chaining (pipelines), agentic (capable models). ([docs](docs/js-skills.md))
 - **Dialects** — 14 domain-specific compression formats (50-99% token reduction) with Language Facade and cognitive scaffolding
 - **Knowledge Wiki** — Compounding knowledge base inspired by Karpathy's LLM Wiki pattern
 - **Memory System** — Every execution improves future runs via structured memory
@@ -275,10 +276,11 @@ Bare goals that strongly match a cartridge's `entry_intents` are auto-dispatched
 
 ### Reference cartridges shipped in this repo
 
-| Cartridge | Agents | Validator highlight |
-|---|---:|---|
-| `cartridges/cooking/` | 3 (menu-planner → shopping-list-builder → recipe-writer) | Structural completeness (7 days × 3 slots) |
-| `cartridges/residential-electrical/` | 2 (load-calculator → circuit-designer) | **IEC 60364 subset** in ~80 LOC of Python — wire/breaker ratios, RCD on wet rooms, 25% breaker margin |
+| Cartridge | Type | Agents/Skills | Validator highlight |
+|---|---|---:|---|
+| `cartridges/cooking/` | standard | 3 agents (menu-planner → shopping-list-builder → recipe-writer) | Structural completeness (7 days × 3 slots) |
+| `cartridges/residential-electrical/` | standard | 2 agents (load-calculator → circuit-designer) | **IEC 60364 subset** in ~80 LOC of Python — wire/breaker ratios, RCD on wet rooms, 25% breaker margin |
+| `cartridges/demo/` | **js-skills** | 11 JS skills (Gallery format) + 1 param-extractor agent | result_valid: no-error check. 3 flow modes (deterministic, agentic, pipeline) |
 
 The electrical compliance checker is the key illustration: Gemma proposes the circuits, but the safety rules live in code, not in a prompt. A new code edition is a reviewable Python diff.
 
@@ -319,6 +321,97 @@ What you give up: general-purpose routing across unseen domains. What you gain: 
 
 ---
 
+## JS Skill Cartridges — Gallery Skills as Subagents
+
+SkillOS can run [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery) JavaScript skills natively via Node.js, without requiring Android. A new cartridge type (`type: js-skills`) bridges Gallery's skill format with SkillOS's agent runtime.
+
+### How it works
+
+```
+User goal → keyword/LLM router → select skill → param-extractor (1 LLM call)
+                                                        ↓
+                                               js-executor (Node.js, 0 LLM calls)
+                                                        ↓
+                                               Validated result → user
+```
+
+The LLM extracts parameters. Node.js executes deterministically. One LLM call per invocation.
+
+### Quick start
+
+```bash
+# Requires: Node.js 18+
+
+# List available skills
+skillos$ skills
+
+# Run a skill directly (no LLM needed)
+skillos$ skill calculate-hash '{"text":"hello world"}'
+skillos$ skill mood-tracker '{"action":"log_mood","score":8,"comment":"good day"}'
+skillos$ skill query-wikipedia '{"topic":"Albert Einstein","lang":"en"}'
+
+# Run via cartridge (Gemma 4 extracts params from natural language)
+skillos$ cartridge demo "calculate the hash of hello world"
+skillos$ cartridge demo "look up quantum computing on wikipedia"
+
+# Skill chaining pipeline (wikipedia → hash, no LLM)
+python -m cartridge_runtime demo "Python programming" --flow research-pipeline
+
+# Agentic mode (LLM chooses skills autonomously — needs capable model)
+python -m cartridge_runtime demo "what is the hash of test" --flow agentic --provider gemma-openrouter
+```
+
+### 11 Gallery skills included
+
+| Skill | What it does | API? |
+|---|---|---|
+| `calculate-hash` | SHA-1 hash of text | No |
+| `query-wikipedia` | Wikipedia summary lookup | Wikipedia API |
+| `text-spinner` | Spinning text animation | No |
+| `mood-tracker` | Log/view mood history (persistent state) | No |
+| `qr-code` | Generate QR code image | No |
+| `kitchen-adventure` | Text adventure game | No |
+| `restaurant-roulette` | Random restaurant picker | Gemini API |
+| `mood-music` | Music by mood (2-step) | Loudly API |
+| `send-email` | Compose email | Native intent |
+| `interactive-map` | Google Maps embed | No |
+| `virtual-piano` | Piano keyboard UI | No |
+
+### Five architecture upgrades over Gallery
+
+| Upgrade | What | Gallery? |
+|---|---|---|
+| **Persistent state** | localStorage persists to disk across sessions | WebView-only, lost on restart |
+| **LLM subagents** | JS skills call Gemma 4 via `__skillos.llm.chat()` | Cloud API only (no local model) |
+| **Skill chaining** | Blackboard pipelines with needs/produces per step | No skill-to-skill communication |
+| **Agentic mode** | LLM picks skills freely (capable models) | Always agentic (no fallback) |
+| **Browser executor** | Optional Playwright for Canvas/WebAudio skills | Native WebView |
+
+### Three flow modes
+
+```yaml
+# cartridges/demo/cartridge.yaml
+flows:
+  run-skill:           # Deterministic: LLM extracts params → Node.js executes
+    - param-extractor  #   Best for: gemma4:e2b (small models)
+    - js-executor
+
+  agentic:             # LLM has load_skill + run_js tools, decides autonomously
+    mode: agentic      #   Best for: gemma4:26b, gemini, claude
+
+  research-pipeline:   # Multi-skill chaining through Blackboard
+    - skill: query-wikipedia
+      needs: [user_goal]
+      produces: [wiki_data]
+    - skill: calculate-hash
+      needs: [wiki_data]
+      produces: [content_hash]
+```
+
+See [docs/js-skills.md](docs/js-skills.md) for the full architecture, skill authoring guide, and subagent patterns.
+
+---
+
 ## Documentation
 
 | Doc | Contents |
@@ -327,6 +420,7 @@ What you give up: general-purpose routing across unseen domains. What you gain: 
 | [docs/skills.md](docs/skills.md) | Authoring agents and tools, manifests, inheritance, best practices |
 | [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) | Cognitive pipeline executor, strategy router, model capability tiers |
 | [docs/cartridges.md](docs/cartridges.md) | Cartridge architecture — Gemma-native subagents, typed blackboard, JSON-Schema contract, authoring guide |
+| [docs/js-skills.md](docs/js-skills.md) | JS Skill Cartridges — Gallery skills as subagents, skill chaining, agentic mode, `__skillos.llm` API |
 | [docs/dialects.md](docs/dialects.md) | Dialect framework, 14 compression formats, Language Facade, cognitive scaffolding |
 | [docs/memory.md](docs/memory.md) | SmartMemory, short/long-term layers, memory-driven execution |
 | [docs/runtimes.md](docs/runtimes.md) | Claude Code, Qwen/Gemini, Ollama, OpenRouter — setup and comparison |
@@ -437,6 +531,12 @@ skillos execute: "Run the RealWorld_Research_Task scenario in EXECUTION MODE"
 # Cartridges (Gemma-native subagents in sealed domains)
 skillos$ plan weekly menu for 2 vegetarians
 skillos$ cartridge residential-electrical "design electrical for a 3-BR apartment"
+
+# JS Skills (Gallery skills — direct or via cartridge)
+skillos$ skills
+skillos$ skill calculate-hash '{"text":"hello world"}'
+skillos$ skill mood-tracker '{"action":"log_mood","score":9,"comment":"shipped it"}'
+skillos$ cartridge demo "look up quantum computing on wikipedia"
 ```
 
 ---
