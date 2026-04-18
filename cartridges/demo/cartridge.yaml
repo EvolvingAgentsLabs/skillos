@@ -5,7 +5,9 @@ description: >
   Supports three flow modes: deterministic (e2b), skill-chaining (pipelines),
   and agentic (capable models choose freely).
 
-skills_source: ../../../gallery/skills
+# Skills are self-contained in cartridges/demo/skills/
+# No external dependency on the gallery project
+skills_source: skills
 
 entry_intents:
   # calculate-hash
