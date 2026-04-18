@@ -1,0 +1,72 @@
+name: demo
+type: js-skills
+description: >
+  All Google AI Edge Gallery JS skills bundled as a demo cartridge.
+  Gemma 4 e2b extracts parameters from user intent, Node.js executes
+  the skill deterministically. One LLM call + one subprocess per invocation.
+
+skills_source: ../../../gallery/skills
+
+entry_intents:
+  # calculate-hash
+  - calculate hash
+  - hash of text
+  - sha hash
+  # query-wikipedia
+  - search wikipedia
+  - query wikipedia
+  - wikipedia summary
+  - look up on wikipedia
+  # text-spinner
+  - spin text
+  - text spinner
+  - rotate text
+  # mood-tracker
+  - track mood
+  - log mood
+  - mood history
+  - how am I feeling
+  # qr-code
+  - generate qr code
+  - qr code for
+  - create qr
+  # kitchen-adventure
+  - kitchen adventure
+  - start kitchen adventure
+  # restaurant-roulette
+  - restaurant roulette
+  - find restaurant
+  - suggest restaurant
+  - random restaurant
+  # send-email
+  - send email
+  - compose email
+  # interactive-map
+  - show map
+  - interactive map
+  # mood-music
+  - mood music
+  - play music for mood
+  # virtual-piano
+  - virtual piano
+  - play piano
+
+flows:
+  run-skill:
+    - param-extractor
+    - js-executor
+
+default_flow: run-skill
+
+blackboard_schema:
+  skill_params: skill_params.schema.json
+  skill_result: skill_result.schema.json
+
+validators:
+  - result_valid.py
+
+max_turns_per_agent: 2
+
+variables:
+  gemma_model: gemma4:e2b
+  node_timeout: 30

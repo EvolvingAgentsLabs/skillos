@@ -1,0 +1,57 @@
+# Regression test cases for the demo JS-skills cartridge.
+# Each case tests: user goal → skill routing → param extraction → JS execution.
+
+- name: hash_hello_world
+  goal: "Calculate the hash of hello world"
+  expected_skill: calculate-hash
+  expected_params:
+    text: "hello world"
+  expected_result_contains: "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed"
+
+- name: hash_empty
+  goal: "What is the SHA hash of an empty string?"
+  expected_skill: calculate-hash
+  expected_params:
+    text: ""
+  expected_result_contains: "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+
+- name: wikipedia_einstein
+  goal: "Look up Albert Einstein on Wikipedia"
+  expected_skill: query-wikipedia
+  expected_params:
+    topic: "Albert Einstein"
+    lang: "en"
+  # Result depends on network; just check it's non-empty
+  expected_result_not_empty: true
+
+- name: wikipedia_spanish
+  goal: "Busca información sobre la Torre Eiffel en Wikipedia"
+  expected_skill: query-wikipedia
+  expected_params:
+    topic: "Torre Eiffel"
+    lang: "es"
+  expected_result_not_empty: true
+
+- name: text_spinner
+  goal: "Spin the text 'Hello World' on my head"
+  expected_skill: text-spinner
+  expected_params:
+    text: "Hello World"
+  # text-spinner returns a webview
+  expected_has_webview: true
+
+- name: mood_log
+  goal: "Log my mood as happy today"
+  expected_skill: mood-tracker
+  expected_params:
+    action: "log_mood"
+  expected_result_not_empty: true
+
+- name: restaurant_mexican
+  goal: "Find Mexican restaurants in San Jose"
+  expected_skill: restaurant-roulette
+  expected_params:
+    location: "San Jose"
+    cuisine: "Mexican"
+  # Requires API key — expect graceful error or result
+  expected_result_not_empty: true
