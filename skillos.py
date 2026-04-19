@@ -588,6 +588,13 @@ def show_help():
 | `simulate: "<goal>"` | Simulate a goal for training data |
 | `<goal>` | Direct goal (auto-wrapped in execute) |
 
+## Skill Commands  _(Gallery JS skills — run directly without LLM)_
+
+| Command | Description |
+|---------|-------------|
+| `skills` | List all available JS skills |
+| `skill <name> '<json>'` | Run a skill directly (e.g., `skill calculate-hash '{"text":"hello"}'`) |
+
 ## Cartridge Commands  _(Gemma-native subagents — see `docs/cartridges.md`)_
 
 | Command | Description |
@@ -899,11 +906,207 @@ def run_cartridge_goal(cartridge_name: str, goal: str, flow: str | None = None):
         tone = "success" if step.validated else "warning"
         console.print(f"  [{tone}]{icon}[/{tone}] {step.agent}: {step.message} "
                       f"[dim](produced={step.produced_keys})[/dim]")
-    if result.blackboard:
-        console.print()
-        console.print("[dim]Blackboard keys:[/dim] "
-                      f"{list(result.blackboard.keys())}")
+    # Rich result display for skill outputs
+    _render_skill_results(result.blackboard)
     console.print()
+
+
+# ── Skill result rendering & browser launch ─────────────────────
+
+def _render_skill_results(blackboard: dict):
+    """Rich display of skill outputs from the Blackboard."""
+    if not blackboard:
+        return
+
+    # Find the main result value — try common keys
+    for key in ("skill_result", "agentic_output", "wiki_data", "analysis", "report"):
+        entry = blackboard.get(key)
+        if not entry:
+            continue
+        value = entry.get("value", entry) if isinstance(entry, dict) else entry
+        if not value:
+            continue
+
+        console.print()
+        if isinstance(value, dict):
+            # Skill result dict — show the important parts
+            if "error" in value and value["error"]:
+                console.print(f"[error]Error: {value['error']}[/error]")
+                return
+            if "result" in value and value["result"]:
+                console.print(f"[bold]Result:[/bold] {value['result']}")
+            if "webview" in value and value["webview"]:
+                _handle_webview_result(value["webview"], blackboard)
+            if "image" in value and value["image"]:
+                _handle_image_result(value["image"])
+        elif isinstance(value, str):
+            # Plain text result
+            if len(value) > 500:
+                console.print(Markdown(value[:2000]))
+            else:
+                console.print(f"[bold]Result:[/bold] {value}")
+        break  # show only the first relevant result
+
+
+def _handle_webview_result(webview: dict, blackboard: dict = None):
+    """Handle webview results — open in browser if possible."""
+    url = webview.get("url", "")
+    if not url:
+        return
+    console.print(f"[info]Webview: [cyan]{url}[/cyan][/info]")
+
+    # Try to find the actual HTML file and open it
+    import webbrowser
+    # Check if it's a relative path to a skill asset
+    for key in ("selected_skill",):
+        entry = blackboard.get(key, {}) if blackboard else {}
+        skill_name = entry.get("value", entry) if isinstance(entry, dict) else entry
+        if skill_name and isinstance(skill_name, str):
+            # Look for the webview HTML in the skill's assets
+            asset_path = SKILLOS_DIR / "cartridges" / "demo" / "skills" / skill_name / "assets" / url
+            if not asset_path.exists():
+                # Try without subdir
+                asset_path = SKILLOS_DIR / "cartridges" / "demo" / "skills" / skill_name / "assets" / Path(url).name
+            if asset_path.exists():
+                console.print(f"[success]Opening in browser...[/success]")
+                _serve_and_open(asset_path)
+                return
+
+    # Try as a direct file path
+    direct = Path(url)
+    if direct.exists():
+        console.print(f"[success]Opening in browser...[/success]")
+        _serve_and_open(direct)
+
+
+def _handle_image_result(image: dict):
+    """Handle image results — save to file."""
+    import base64
+    b64 = image.get("base64", "")
+    if not b64:
+        return
+    output_dir = SKILLOS_DIR / "cartridges" / "demo" / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    img_path = output_dir / f"skill_output_{int(__import__('time').time())}.png"
+    try:
+        img_path.write_bytes(base64.b64decode(b64))
+        console.print(f"[success]Image saved: [cyan]{img_path}[/cyan][/success]")
+        # Try to open
+        import webbrowser
+        webbrowser.open(str(img_path))
+    except Exception as e:
+        console.print(f"[warning]Could not save image: {e}[/warning]")
+
+
+_skill_server = None  # lazy HTTP server for serving skill assets
+
+
+def _serve_and_open(html_path: Path):
+    """Serve a skill HTML file via local HTTP server and open in browser."""
+    import webbrowser
+    import threading
+    from http.server import HTTPServer, SimpleHTTPRequestHandler
+    global _skill_server
+
+    serve_dir = str(html_path.parent)
+    filename = html_path.name
+
+    if _skill_server is None:
+        # Start a local server on a random port
+        class QuietHandler(SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=serve_dir, **kwargs)
+            def log_message(self, format, *args):
+                pass  # suppress logs
+
+        try:
+            server = HTTPServer(("127.0.0.1", 0), QuietHandler)
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            _skill_server = (server, port, serve_dir)
+        except Exception:
+            # Fallback: just open the file directly
+            webbrowser.open(html_path.as_uri())
+            return
+    else:
+        _, port, _ = _skill_server
+
+    webbrowser.open(f"http://127.0.0.1:{port}/{filename}")
+
+
+# ── Direct skill commands ────────────────────────────────────────
+
+def list_skills():
+    """List all available Gallery JS skills in the demo cartridge."""
+    import sys as _sys
+    _exp_dir = str(SKILLOS_DIR / "experiments" / "gemma4-skills")
+    if _exp_dir not in _sys.path:
+        _sys.path.insert(0, _exp_dir)
+    from skill_loader import SkillRegistry
+
+    skills_dir = SKILLOS_DIR / "cartridges" / "demo" / "skills"
+    if not skills_dir.exists():
+        console.print("[warning]No skills found. Missing cartridges/demo/skills/[/warning]")
+        return
+
+    registry = SkillRegistry(str(skills_dir))
+    table = Table(title="Gallery JS Skills", show_lines=False)
+    table.add_column("Skill", style="cyan", no_wrap=True)
+    table.add_column("Description", style="white")
+    table.add_column("Secret?", style="dim", justify="center")
+    for s in registry.list():
+        secret = "🔑" if s.require_secret else ""
+        table.add_row(s.name, s.description, secret)
+    console.print(table)
+    console.print(f"\n[dim]Run a skill: [white]skill <name> '<json data>'[/white][/dim]")
+
+
+def handle_skill_command(user_input: str):
+    """Handle 'skill <name> <data>' command for direct skill invocation."""
+    import sys as _sys
+    _exp_dir = str(SKILLOS_DIR / "experiments" / "gemma4-skills")
+    if _exp_dir not in _sys.path:
+        _sys.path.insert(0, _exp_dir)
+    from skill_loader import SkillRegistry
+    from js_executor import run_skill_by_name, RuntimeConfig
+
+    tail = user_input[len("skill"):].strip()
+    if not tail:
+        console.print("[warning]Usage: skill <name> '<json data>'[/warning]")
+        return
+
+    parts = tail.split(None, 1)
+    skill_name = parts[0]
+    data = parts[1] if len(parts) > 1 else "{}"
+    # Strip surrounding quotes if present
+    data = data.strip("'\"")
+
+    skills_dir = SKILLOS_DIR / "cartridges" / "demo" / "skills"
+    registry = SkillRegistry(str(skills_dir))
+
+    if not registry.has(skill_name):
+        console.print(f"[error]Skill '{skill_name}' not found.[/error]")
+        console.print(f"[dim]Available: {', '.join(registry.names())}[/dim]")
+        return
+
+    state_dir = str(SKILLOS_DIR / "cartridges" / "demo" / "state")
+    config = RuntimeConfig(state_dir=state_dir)
+
+    console.print(f"[info]Running skill [cyan]{skill_name}[/cyan]...[/info]")
+    result = run_skill_by_name(registry, skill_name, data, config=config)
+
+    if result.error:
+        console.print(f"[error]{result.error}[/error]")
+    elif result.result:
+        console.print(f"[bold]{result.result}[/bold]")
+    if result.webview:
+        _handle_webview_result(result.webview,
+                               {"selected_skill": {"value": skill_name}})
+    if result.image:
+        _handle_image_result(result.image)
+    if not result.ok and not result.error:
+        console.print(f"[warning]Raw: {result.raw}[/warning]")
 
 
 def handle_cartridge_command(user_input: str):
@@ -1053,6 +1256,10 @@ def main():
             show_scheduled_tasks()
         elif cmd_lower.startswith("schedule "):
             handle_schedule_command(user_input)
+        elif cmd_lower in ("skills", "ls skills"):
+            list_skills()
+        elif cmd_lower.startswith("skill "):
+            handle_skill_command(user_input)
         elif cmd_lower in ("cartridges", "ls cartridges"):
             list_cartridges()
         elif cmd_lower.startswith("cartridge"):

@@ -209,6 +209,26 @@ class AgentSpec:
 
 
 @dataclass
+class SkillStep:
+    """A single step in a multi-skill flow (Upgrade 4)."""
+    skill: str                           # skill name to execute
+    needs: list[str] = field(default_factory=list)
+    produces: list[str] = field(default_factory=list)
+    produces_schema: str = ""
+
+
+@dataclass
+class FlowDef:
+    """A flow definition — supports both agent lists and skill step lists."""
+    steps: list[str | SkillStep] = field(default_factory=list)
+    mode: str = "standard"               # "standard", "agentic"
+
+    @property
+    def is_agentic(self) -> bool:
+        return self.mode == "agentic"
+
+
+@dataclass
 class CartridgeManifest:
     """Parsed cartridge.yaml."""
     name: str
@@ -216,11 +236,37 @@ class CartridgeManifest:
     description: str = ""
     entry_intents: list[str] = field(default_factory=list)
     flows: dict[str, list[str]] = field(default_factory=dict)
+    flow_defs: dict[str, FlowDef] = field(default_factory=dict)
     blackboard_schema: dict[str, str] = field(default_factory=dict)
     validators: list[str] = field(default_factory=list)
     max_turns_per_agent: int = 3
     default_flow: str = ""
     variables: dict[str, Any] = field(default_factory=dict)
+    type: str = "standard"           # "standard" (LLM agents) or "js-skills"
+    skills_source: str = ""          # path to Gallery skills directory (for js-skills)
+
+
+def _parse_flow_steps(raw: list) -> list:
+    """Parse flow step definitions from YAML.
+
+    Supports:
+      - Simple strings: "agent-name"
+      - Rich dicts: {skill: "name", needs: [...], produces: [...]}
+    """
+    steps = []
+    for item in raw:
+        if isinstance(item, str):
+            steps.append(item)
+        elif isinstance(item, dict):
+            steps.append(SkillStep(
+                skill=item.get("skill", item.get("name", "")),
+                needs=list(item.get("needs", []) or []),
+                produces=list(item.get("produces", []) or []),
+                produces_schema=item.get("produces_schema", ""),
+            ))
+        else:
+            steps.append(str(item))
+    return steps
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -257,25 +303,57 @@ class CartridgeRegistry:
             raise RuntimeError("PyYAML not installed — run `pip install pyyaml`")
         data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
         cartridge_dir = yaml_path.parent
-        flows = data.get("flows", {}) or {}
-        if isinstance(flows, list):
-            # Accept list-of-dicts for author convenience
+        flows_raw = data.get("flows", {}) or {}
+        if isinstance(flows_raw, list):
             flat = {}
-            for item in flows:
+            for item in flows_raw:
                 if isinstance(item, dict):
                     flat.update(item)
-            flows = flat
+            flows_raw = flat
+
+        # Parse flows into both legacy format (list[str]) and rich FlowDef
+        flows_legacy: dict[str, list[str]] = {}
+        flow_defs: dict[str, FlowDef] = {}
+        for fname, fval in flows_raw.items():
+            if isinstance(fval, dict):
+                # Rich format: {mode: "agentic", tools: [...]} or step dicts
+                mode = fval.get("mode", "standard")
+                steps_raw = fval.get("steps", fval.get("tools", []))
+                steps = _parse_flow_steps(steps_raw)
+                flow_defs[fname] = FlowDef(steps=steps, mode=mode)
+                flows_legacy[fname] = [
+                    s if isinstance(s, str) else s.skill for s in steps
+                ]
+            elif isinstance(fval, list):
+                steps = _parse_flow_steps(fval)
+                flow_defs[fname] = FlowDef(steps=steps, mode="standard")
+                flows_legacy[fname] = [
+                    s if isinstance(s, str) else s.skill for s in steps
+                ]
+            else:
+                flows_legacy[fname] = [str(fval)]
+                flow_defs[fname] = FlowDef(steps=[str(fval)])
+
+        # Resolve skills_source relative to cartridge directory
+        skills_source = data.get("skills_source", "")
+        if skills_source:
+            resolved = (cartridge_dir / skills_source).resolve()
+            skills_source = str(resolved)
+
         manifest = CartridgeManifest(
             name=data.get("name", cartridge_dir.name),
             path=str(cartridge_dir),
             description=data.get("description", ""),
             entry_intents=list(data.get("entry_intents", []) or []),
-            flows={k: list(v) for k, v in flows.items()},
+            flows=flows_legacy,
+            flow_defs=flow_defs,
             blackboard_schema=dict(data.get("blackboard_schema", {}) or {}),
             validators=list(data.get("validators", []) or []),
             max_turns_per_agent=int(data.get("max_turns_per_agent", 3)),
             default_flow=data.get("default_flow", ""),
             variables=dict(data.get("variables", {}) or {}),
+            type=data.get("type", "standard"),
+            skills_source=skills_source,
         )
         if not manifest.default_flow and manifest.flows:
             manifest.default_flow = next(iter(manifest.flows.keys()))
@@ -407,6 +485,9 @@ class CartridgeRunner:
         _handle_delegate_to_agent(agent_name, task_description,
                                   input_data, max_turns) -> str
         _call_llm(messages) -> str
+
+    For ``type: js-skills`` cartridges, the runner also handles deterministic
+    JS skill execution via Node.js (no LLM call for the execution step).
     """
 
     PRODUCES_RE = re.compile(r"<produces>(.*?)</produces>", re.DOTALL)
@@ -418,6 +499,7 @@ class CartridgeRunner:
         self.registry = registry
         self.verbose = verbose
         self.max_retries = max_retries_per_step
+        self._skill_registries: dict[str, Any] = {}  # lazy-loaded per cartridge
 
     # --- public API --------------------------------------------------
 
@@ -433,6 +515,8 @@ class CartridgeRunner:
         if not agent_sequence:
             raise KeyError(f"unknown flow '{flow_name}' in {cartridge_name}")
 
+        flow_def = manifest.flow_defs.get(flow_name, FlowDef(steps=agent_sequence))
+
         schemas_dir = Path(manifest.path) / "schemas"
         bb = Blackboard(schemas_dir=schemas_dir)
         bb.put("user_goal", goal, produced_by="user",
@@ -441,19 +525,31 @@ class CartridgeRunner:
             bb.put(k, v, produced_by="user",
                    description=f"User-supplied input: {k}")
 
+        # For js-skills cartridges: pre-select skill and inject instructions
+        if manifest.type == "js-skills" and not flow_def.is_agentic:
+            self._prepare_js_skills_context(manifest, goal, bb)
+
         result = RunResult(cartridge=cartridge_name, flow=flow_name, goal=goal)
         self._log(f"\n=== Cartridge '{cartridge_name}' flow '{flow_name}' ===")
 
-        for agent_name in agent_sequence:
-            step = self._run_agent(manifest, agent_name, bb)
+        # Upgrade 2: Agentic mode — LLM has full control with skill tools
+        if flow_def.is_agentic:
+            step = self._run_agentic_flow(manifest, goal, bb)
             result.steps.append(step)
-            if not step.validated and self.max_retries > 0:
-                step.attempts += 1
-                self._log(f"  [retry] {agent_name}: {step.message}")
-                retry = self._run_agent(manifest, agent_name, bb,
-                                        retry_feedback=step.message)
-                retry.attempts = step.attempts + retry.attempts
-                result.steps[-1] = retry
+        else:
+            # Standard sequential flow (supports both agent names and SkillSteps)
+            for step_def in flow_def.steps:
+                step = self._execute_flow_step(manifest, step_def, bb)
+                result.steps.append(step)
+                if not step.validated and self.max_retries > 0:
+                    step.attempts += 1
+                    step_name = step_def if isinstance(step_def, str) else step_def.skill
+                    self._log(f"  [retry] {step_name}: {step.message}")
+                    retry = self._execute_flow_step(
+                        manifest, step_def, bb,
+                        retry_feedback=step.message)
+                    retry.attempts = step.attempts + retry.attempts
+                    result.steps[-1] = retry
 
         # Deterministic validators (pure Python, declared on manifest)
         validator_messages = self._run_validators(manifest, bb)
@@ -465,6 +561,454 @@ class CartridgeRunner:
                                                     validator_messages, bb)
         self._log(result.final_summary)
         return result
+
+    def _execute_flow_step(self, manifest: CartridgeManifest,
+                           step_def: str | SkillStep,
+                           bb: Blackboard,
+                           *, retry_feedback: str = "") -> "StepResult":
+        """Execute a single flow step — dispatches to the right executor.
+
+        Handles:
+        - String agent names (legacy: "param-extractor", "js-executor")
+        - SkillStep objects (Upgrade 4: multi-skill chaining with needs/produces)
+        """
+        # Legacy string step
+        if isinstance(step_def, str):
+            if manifest.type == "js-skills" and step_def == "js-executor":
+                return self._run_js_skill(manifest, bb)
+            return self._run_agent(manifest, step_def, bb,
+                                   retry_feedback=retry_feedback)
+
+        # Upgrade 4: SkillStep — direct JS skill execution with Blackboard I/O
+        return self._run_skill_step(manifest, step_def, bb)
+
+    # --- js-skills support ---------------------------------------------
+
+    def _get_skill_registry(self, manifest: CartridgeManifest):
+        """Lazy-load the SkillRegistry for a js-skills cartridge."""
+        if manifest.name in self._skill_registries:
+            return self._skill_registries[manifest.name]
+
+        import sys as _sys
+        _exp_dir = str(Path(__file__).resolve().parent / "experiments" / "gemma4-skills")
+        if _exp_dir not in _sys.path:
+            _sys.path.insert(0, _exp_dir)
+        from skill_loader import SkillRegistry
+
+        skills_dirs = []
+        # Primary: skills_source from cartridge.yaml
+        if manifest.skills_source:
+            src = Path(manifest.skills_source)
+            if src.is_dir():
+                # Check if it has subdirs (built-in/, featured/) or is flat
+                subdirs = [d for d in src.iterdir() if d.is_dir()]
+                has_skill_md = any((d / "SKILL.md").exists() for d in subdirs)
+                if has_skill_md:
+                    skills_dirs.append(str(src))
+                else:
+                    # Nested: skills_source/built-in/, skills_source/featured/
+                    for d in subdirs:
+                        if d.is_dir():
+                            skills_dirs.append(str(d))
+        # Fallback: skills/ directory inside the cartridge
+        cartridge_skills = Path(manifest.path) / "skills"
+        if cartridge_skills.is_dir():
+            skills_dirs.append(str(cartridge_skills))
+
+        registry = SkillRegistry(*skills_dirs)
+        self._skill_registries[manifest.name] = registry
+        self._log(f"  📦 Loaded {len(registry)} Gallery JS skills for '{manifest.name}'")
+        return registry
+
+    def _prepare_js_skills_context(self, manifest: CartridgeManifest,
+                                    goal: str, bb: Blackboard) -> None:
+        """Pre-select the best-matching skill and inject its instructions
+        onto the blackboard so the param-extractor agent has full context."""
+        skill_reg = self._get_skill_registry(manifest)
+
+        # Use the router (LLM or keyword) to pick a skill
+        selected_skill = self._route_to_skill(manifest, goal, skill_reg)
+        skill_def = skill_reg.get(selected_skill)
+
+        if skill_def:
+            bb.put("selected_skill", selected_skill,
+                   produced_by="router",
+                   description=f"Selected Gallery JS skill: {selected_skill}")
+            bb.put("skill_instructions", skill_def.instructions,
+                   produced_by="router",
+                   description=f"SKILL.md instructions for {selected_skill}")
+            bb.put("skill_descriptions", skill_reg.descriptions(),
+                   produced_by="registry",
+                   description="All available skills with descriptions")
+            self._log(f"  🎯 Routed to skill: {selected_skill}")
+        else:
+            # Fallback: let param-extractor choose from all skills
+            bb.put("selected_skill", "",
+                   produced_by="router",
+                   description="No specific skill selected — param-extractor must choose")
+            bb.put("skill_instructions", "",
+                   produced_by="router",
+                   description="No skill instructions — see skill_descriptions")
+            bb.put("skill_descriptions", skill_reg.descriptions(),
+                   produced_by="registry",
+                   description="All available skills with descriptions")
+            self._log(f"  ⚠️ No skill matched — param-extractor will choose")
+
+    def _route_to_skill(self, manifest: CartridgeManifest,
+                        goal: str, skill_reg) -> str:
+        """Route user goal to a specific Gallery skill.
+
+        Uses the router.md LLM classifier if available, with keyword
+        fallback against skill names and descriptions.
+        """
+        router_md = Path(manifest.path) / "router.md"
+        skill_names = skill_reg.names()
+
+        # Try LLM router
+        if router_md.exists() and hasattr(self.rt, "_call_llm"):
+            prompt = router_md.read_text(encoding="utf-8")
+            system = ("You classify a user goal into exactly one skill name "
+                      "from a closed set. Reply with ONE WORD: the skill name.")
+            user = (f"{prompt}\n\n"
+                    f"USER GOAL: {goal}\n\n"
+                    f"AVAILABLE SKILLS: {', '.join(skill_names)}\n\n"
+                    f"ANSWER:")
+            try:
+                resp = self.rt._call_llm([
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ])
+                if resp:
+                    resp_clean = resp.strip().splitlines()[0].strip(" .\"'`*")
+                    for sname in skill_names:
+                        if sname.lower() == resp_clean.lower():
+                            return sname
+                    for sname in skill_names:
+                        if sname.lower() in resp_clean.lower():
+                            return sname
+            except Exception as exc:
+                self._log(f"  [router] LLM failed, falling back: {exc}")
+
+        # Keyword fallback: match against skill names and descriptions
+        goal_tokens = set(_tokenize(goal))
+        best, best_score = skill_names[0] if skill_names else "", 0
+        for sname in skill_names:
+            name_tokens = set(_tokenize(sname.replace("-", " ")))
+            skill_def = skill_reg.get(sname)
+            desc_tokens = set(_tokenize(skill_def.description)) if skill_def else set()
+            all_tokens = name_tokens | desc_tokens
+            score = len(goal_tokens & all_tokens)
+            if score > best_score:
+                best, best_score = sname, score
+        return best
+
+    def _run_js_skill(self, manifest: CartridgeManifest,
+                      bb: Blackboard) -> "StepResult":
+        """Execute a Gallery JS skill deterministically via Node.js.
+
+        Reads skill_params from the blackboard (produced by param-extractor),
+        runs the JS skill, and stores skill_result on the blackboard.
+        """
+        import sys as _sys
+        _exp_dir = str(Path(__file__).resolve().parent / "experiments" / "gemma4-skills")
+        if _exp_dir not in _sys.path:
+            _sys.path.insert(0, _exp_dir)
+        from js_executor import run_skill as exec_js
+
+        self._log(f"\n--- Step: js-executor (deterministic) ---")
+
+        params = bb.value("skill_params")
+        if not params:
+            return StepResult(agent="js-executor", validated=False,
+                              message="skill_params not found on blackboard")
+
+        if isinstance(params, str):
+            try:
+                params = json.loads(params)
+            except json.JSONDecodeError:
+                return StepResult(agent="js-executor", validated=False,
+                                  message=f"skill_params is not valid JSON: {params[:200]}")
+
+        skill_name = params.get("skill_name", "")
+        data = params.get("data", "{}")
+        secret = params.get("secret", "")
+
+        # Ensure data is a string
+        if isinstance(data, dict):
+            data = json.dumps(data)
+
+        skill_reg = self._get_skill_registry(manifest)
+        skill_def = skill_reg.get(skill_name)
+        if not skill_def:
+            available = ", ".join(skill_reg.names())
+            return StepResult(
+                agent="js-executor", validated=False,
+                message=f"skill '{skill_name}' not found. Available: {available}")
+
+        self._log(f"  🔧 Executing: {skill_name}")
+        self._log(f"  📥 Data: {data[:200]}")
+
+        timeout = int(manifest.variables.get("node_timeout", 30))
+        cfg = self._build_runtime_config(manifest)
+        result = exec_js(skill_def, data, secret, timeout=timeout, config=cfg)
+
+        self._log(f"  📤 Result: {result.to_llm_string()[:200]}")
+
+        # Store result on blackboard
+        result_dict = result.raw or {}
+        schema_ref = manifest.blackboard_schema.get("skill_result", "")
+        ok, msg = bb.put("skill_result", result_dict,
+                         schema_ref=schema_ref,
+                         produced_by="js-executor",
+                         description=f"JS execution result from {skill_name}")
+
+        validated = result.ok and ok
+        message = "ok" if validated else (result.error or msg or "execution failed")
+
+        return StepResult(
+            agent="js-executor",
+            produced_keys=["skill_result"] if validated else [],
+            raw_output=result.to_llm_string(),
+            validated=validated,
+            message=message,
+        )
+
+    # --- Upgrade 4: Multi-skill chaining ──────────────────────────────
+
+    def _run_skill_step(self, manifest: CartridgeManifest,
+                        step: SkillStep, bb: Blackboard) -> "StepResult":
+        """Execute a SkillStep — a JS skill with explicit needs/produces.
+
+        Unlike _run_js_skill (which reads skill_params from blackboard),
+        this method bundles the skill's declared `needs` from the blackboard,
+        passes them as the `data` JSON, and stores the result under `produces`.
+        """
+        import sys as _sys
+        _exp_dir = str(Path(__file__).resolve().parent / "experiments" / "gemma4-skills")
+        if _exp_dir not in _sys.path:
+            _sys.path.insert(0, _exp_dir)
+        from js_executor import run_skill as exec_js, RuntimeConfig
+
+        skill_reg = self._get_skill_registry(manifest)
+        skill_def = skill_reg.get(step.skill)
+
+        if not skill_def:
+            return StepResult(agent=step.skill, validated=False,
+                              message=f"skill '{step.skill}' not found")
+
+        # Check blackboard has all needed inputs
+        missing = [k for k in step.needs if not bb.has(k)]
+        if missing:
+            return StepResult(agent=step.skill, validated=False,
+                              message=f"blackboard missing: {missing}")
+
+        # Bundle needs into data JSON
+        # If there's only one need and it's a simple value (string),
+        # check if the skill expects specific params from SKILL.md
+        data_dict = {}
+        for key in step.needs:
+            data_dict[key] = bb.value(key)
+
+        # Smart mapping: if the skill has instructions, try to auto-map
+        # e.g., user_goal → topic for query-wikipedia
+        if skill_def.instructions and len(step.needs) == 1:
+            key = step.needs[0]
+            val = data_dict[key]
+            if isinstance(val, str):
+                # Pass the value as the most likely expected parameter
+                # by inspecting skill instructions for field names
+                import re as _re
+                field_matches = _re.findall(
+                    r'[-*]\s+\*?\*?(\w+)\*?\*?:\s', skill_def.instructions)
+                if field_matches:
+                    mapped = {field_matches[0]: val}
+                    # Add common defaults
+                    if "lang" in [f.lower() for f in field_matches]:
+                        mapped["lang"] = "en"
+                    data_dict = mapped
+                else:
+                    data_dict = {"text": val} if key == "user_goal" else data_dict
+
+        data_json = json.dumps(data_dict)
+
+        self._log(f"\n--- SkillStep: {step.skill} "
+                  f"(needs={step.needs}, produces={step.produces}) ---")
+
+        # Build runtime config
+        cfg = self._build_runtime_config(manifest)
+        timeout = int(manifest.variables.get("node_timeout", 30))
+        result = exec_js(skill_def, data_json, "", timeout=timeout, config=cfg)
+
+        self._log(f"  📤 Result: {result.to_llm_string()[:200]}")
+
+        if not result.ok:
+            return StepResult(agent=step.skill, validated=False,
+                              message=result.error or "skill execution failed")
+
+        # Store produces on blackboard
+        result_data = result.raw or {}
+        # If skill returns {result: "..."}, and produces has one key,
+        # store the result string directly
+        if step.produces:
+            if len(step.produces) == 1 and "result" in result_data:
+                val = result_data["result"]
+                schema_ref = (manifest.blackboard_schema.get(step.produces[0])
+                              or step.produces_schema)
+                bb.put(step.produces[0], val,
+                       schema_ref=schema_ref,
+                       produced_by=step.skill,
+                       description=f"Output from {step.skill}")
+            else:
+                # Store entire result dict, or map keys
+                for key in step.produces:
+                    val = result_data.get(key, result_data.get("result", ""))
+                    schema_ref = (manifest.blackboard_schema.get(key)
+                                  or step.produces_schema)
+                    bb.put(key, val,
+                           schema_ref=schema_ref,
+                           produced_by=step.skill,
+                           description=f"Output from {step.skill}")
+
+        return StepResult(
+            agent=step.skill,
+            produced_keys=list(step.produces),
+            raw_output=result.to_llm_string(),
+            validated=True,
+            message="ok",
+        )
+
+    def _build_runtime_config(self, manifest: CartridgeManifest):
+        """Build RuntimeConfig from manifest and runtime state."""
+        import sys as _sys
+        _exp_dir = str(Path(__file__).resolve().parent / "experiments" / "gemma4-skills")
+        if _exp_dir not in _sys.path:
+            _sys.path.insert(0, _exp_dir)
+        from js_executor import RuntimeConfig
+
+        state_dir = str(Path(manifest.path) / "state")
+
+        # Extract LLM config from the AgentRuntime if available
+        llm_url = ""
+        llm_model = manifest.variables.get("gemma_model", "gemma4:e2b")
+        llm_key = "ollama"
+        if hasattr(self.rt, "client"):
+            llm_url = str(getattr(self.rt.client, "base_url", ""))
+            llm_model = getattr(self.rt, "model", llm_model)
+            llm_key = getattr(self.rt, "api_key", llm_key) or llm_key
+
+        return RuntimeConfig(
+            state_dir=state_dir,
+            llm_api_url=llm_url,
+            llm_model=llm_model,
+            llm_api_key=llm_key,
+        )
+
+    # --- Upgrade 2: Agentic flow mode ─────────────────────────────────
+
+    def _run_agentic_flow(self, manifest: CartridgeManifest,
+                          goal: str, bb: Blackboard) -> "StepResult":
+        """Run a flow in agentic mode — the LLM has load_skill + run_js tools
+        and decides autonomously which skills to use.
+
+        This mirrors Gallery's Android approach: the LLM gets a list of skills
+        and their descriptions, then decides whether and how to use them.
+        """
+        skill_reg = self._get_skill_registry(manifest)
+
+        self._log(f"\n--- Agentic mode: LLM has full skill control ---")
+
+        # Build system prompt with skill list (like Gallery's AgentChatTaskModule)
+        skill_list = skill_reg.descriptions()
+        system_prompt = (
+            "You are an AI assistant that helps users by answering questions "
+            "and completing tasks using skills.\n\n"
+            "For EVERY new task or request, follow these steps:\n"
+            "1. Find the most relevant skill from:\n"
+            f"{skill_list}\n\n"
+            "2. If a relevant skill exists, use the `load_skill` tool to read its instructions.\n"
+            "3. Follow the skill's instructions exactly to call `run_js`.\n"
+            "4. Present the result to the user.\n"
+            "5. If no skill is relevant, answer directly from your knowledge.\n\n"
+            "Output ONLY the final result."
+        )
+
+        # Register skill tools for the agentic loop
+        import sys as _sys
+        _exp_dir = str(Path(__file__).resolve().parent / "experiments" / "gemma4-skills")
+        if _exp_dir not in _sys.path:
+            _sys.path.insert(0, _exp_dir)
+        from js_executor import run_skill as exec_js
+
+        cfg = self._build_runtime_config(manifest)
+
+        def load_skill_tool(skill_name: str) -> str:
+            """Load a skill's instructions."""
+            skill = skill_reg.get(skill_name.strip())
+            if not skill:
+                return f"Skill '{skill_name}' not found. Available: {', '.join(skill_reg.names())}"
+            return f"# Skill: {skill.name}\n\n{skill.instructions}"
+
+        def run_js_tool(skill_name: str, script_name: str = "index.html",
+                        data: str = "{}") -> str:
+            """Execute a JS skill."""
+            skill = skill_reg.get(skill_name.strip())
+            if not skill:
+                return f"Error: skill '{skill_name}' not found"
+            result = exec_js(skill, data, "", timeout=30, config=cfg)
+            return result.to_llm_string()
+
+        # Save and inject tools into the runtime
+        original_tools = dict(self.rt.tools) if hasattr(self.rt, "tools") else {}
+        try:
+            if hasattr(self.rt, "tools"):
+                self.rt.tools["load_skill"] = load_skill_tool
+                self.rt.tools["run_js"] = run_js_tool
+
+            # Build the tool format instructions for the LLM
+            tool_instructions = (
+                "\n\n## AVAILABLE TOOLS\n\n"
+                "You have these tools:\n\n"
+                '### load_skill\nLoad a skill\'s instructions. Call with:\n'
+                '<tool_call name="load_skill">\n'
+                '{"skill_name": "the-skill-name"}\n'
+                '</tool_call>\n\n'
+                '### run_js\nExecute a JS skill. Call with:\n'
+                '<tool_call name="run_js">\n'
+                '{"skill_name": "the-skill-name", "script_name": "index.html", '
+                '"data": "{\\"param\\": \\"value\\"}"}\n'
+                '</tool_call>\n\n'
+                "After getting the result, respond with:\n"
+                "<final_answer>\nYour response to the user\n</final_answer>"
+            )
+
+            task_prompt = f"USER GOAL: {goal}"
+
+            # Use the runtime's delegation mechanism
+            raw_output = self.rt._handle_delegate_to_agent(
+                agent_name="agentic-skill-agent",
+                task_description=task_prompt,
+                input_data={"goal": goal, "available_skills": skill_reg.names()},
+                max_turns=manifest.max_turns_per_agent + 2,  # extra turns for load+run
+            )
+        finally:
+            # Restore original tools
+            if hasattr(self.rt, "tools"):
+                self.rt.tools.clear()
+                self.rt.tools.update(original_tools)
+
+        # Extract any skill_result from the output for blackboard
+        if raw_output:
+            bb.put("agentic_output", raw_output,
+                   produced_by="agentic-flow",
+                   description="Full output from agentic skill execution")
+
+        return StepResult(
+            agent="agentic-flow",
+            produced_keys=["agentic_output"],
+            raw_output=raw_output or "",
+            validated=bool(raw_output),
+            message="ok" if raw_output else "no output from agentic flow",
+        )
 
     # --- internals ---------------------------------------------------
 
@@ -708,7 +1252,10 @@ class CartridgeRunner:
 
     def _log(self, message: str) -> None:
         if self.verbose:
-            print(message, flush=True)
+            try:
+                print(message, flush=True)
+            except UnicodeEncodeError:
+                print(message.encode("ascii", "replace").decode(), flush=True)
 
 
 # ─────────────────────────────────────────────────────────────────────

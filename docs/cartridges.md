@@ -132,6 +132,35 @@ variables:
   default_household_size: 2
 ```
 
+### JS Skill Cartridges (`type: js-skills`)
+
+A variant cartridge type that runs JavaScript skills (Gallery format) via Node.js
+instead of LLM agents. See [docs/js-skills.md](js-skills.md) for the full guide.
+
+```yaml
+name: demo
+type: js-skills              # ← enables JS executor path
+skills_source: skills         # directory containing Gallery skill folders
+
+flows:
+  run-skill:                  # LLM extracts params → Node.js executes
+    - param-extractor
+    - js-executor
+  agentic:                    # LLM decides autonomously
+    mode: agentic
+  pipeline:                   # Multi-skill chaining
+    - skill: query-wikipedia
+      needs: [user_goal]
+      produces: [wiki_data]
+```
+
+Key differences from standard cartridges:
+- `skills/` directory replaces (or supplements) `agents/` for JS skill steps
+- `js-executor` step runs deterministically via Node.js (0 LLM calls)
+- `SkillStep` flow entries have `skill`/`needs`/`produces` fields
+- `mode: agentic` gives the LLM `load_skill` + `run_js` tools
+- Skills can call the orchestrating LLM via `__skillos.llm.chat()`
+
 ### Agent file (`agents/<agent>.md`)
 
 ```markdown
