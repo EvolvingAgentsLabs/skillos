@@ -900,7 +900,7 @@ class CartridgeRunner:
             _sys.path.insert(0, _exp_dir)
         from js_executor import RuntimeConfig
 
-        state_dir = str(Path(manifest.path) / "state")
+        state_dir = str((Path(manifest.path) / "state").resolve())
 
         # Extract LLM config from the AgentRuntime if available
         llm_url = ""
@@ -916,6 +916,7 @@ class CartridgeRunner:
             llm_api_url=llm_url,
             llm_model=llm_model,
             llm_api_key=llm_key,
+            shared_state_name=manifest.name,  # all skills in cartridge share state
         )
 
     # --- Upgrade 2: Agentic flow mode ─────────────────────────────────

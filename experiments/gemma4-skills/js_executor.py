@@ -71,14 +71,16 @@ class RuntimeConfig:
     llm_api_url: str = ""              # LLM_API_URL: Ollama/OpenRouter endpoint
     llm_model: str = "gemma4:e2b"      # LLM_MODEL: model name
     llm_api_key: str = "ollama"        # LLM_API_KEY: API key
+    shared_state_name: str = ""        # Override SKILL_NAME so all skills share state
 
     def to_env(self, skill_name: str = "") -> dict[str, str]:
         """Build env dict for subprocess."""
         env = os.environ.copy()
         if self.state_dir:
             env["SKILL_STATE_DIR"] = self.state_dir
-        if skill_name:
-            env["SKILL_NAME"] = skill_name
+        name = self.shared_state_name or skill_name
+        if name:
+            env["SKILL_NAME"] = name
         if self.llm_api_url:
             env["LLM_API_URL"] = self.llm_api_url
             env["LLM_MODEL"] = self.llm_model
