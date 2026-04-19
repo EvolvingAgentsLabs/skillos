@@ -215,6 +215,8 @@ class SkillStep:
     needs: list[str] = field(default_factory=list)
     produces: list[str] = field(default_factory=list)
     produces_schema: str = ""
+    data_map: dict[str, str] = field(default_factory=dict)  # remap blackboard keys → skill params
+    defaults: dict[str, Any] = field(default_factory=dict)  # default values injected into data
 
 
 @dataclass
@@ -263,6 +265,8 @@ def _parse_flow_steps(raw: list) -> list:
                 needs=list(item.get("needs", []) or []),
                 produces=list(item.get("produces", []) or []),
                 produces_schema=item.get("produces_schema", ""),
+                data_map=dict(item.get("data_map", {}) or {}),
+                defaults=dict(item.get("defaults", {}) or {}),
             ))
         else:
             steps.append(str(item))
@@ -803,31 +807,42 @@ class CartridgeRunner:
                               message=f"blackboard missing: {missing}")
 
         # Bundle needs into data JSON
-        # If there's only one need and it's a simple value (string),
-        # check if the skill expects specific params from SKILL.md
         data_dict = {}
-        for key in step.needs:
-            data_dict[key] = bb.value(key)
 
-        # Smart mapping: if the skill has instructions, try to auto-map
-        # e.g., user_goal → topic for query-wikipedia
-        if skill_def.instructions and len(step.needs) == 1:
+        # Apply data_map if specified (explicit key remapping)
+        if step.data_map:
+            for target_key, source_key in step.data_map.items():
+                data_dict[target_key] = bb.value(source_key)
+        else:
+            for key in step.needs:
+                data_dict[key] = bb.value(key)
+
+        # Apply defaults
+        for k, v in step.defaults.items():
+            if k not in data_dict:
+                data_dict[k] = v
+
+        # Smart mapping: if no data_map and single need with a simple value,
+        # try to auto-map by inspecting SKILL.md instructions
+        if not step.data_map and skill_def.instructions and len(step.needs) == 1:
             key = step.needs[0]
             val = data_dict[key]
             if isinstance(val, str):
-                # Pass the value as the most likely expected parameter
-                # by inspecting skill instructions for field names
                 import re as _re
                 field_matches = _re.findall(
                     r'[-*]\s+\*?\*?(\w+)\*?\*?:\s', skill_def.instructions)
                 if field_matches:
                     mapped = {field_matches[0]: val}
-                    # Add common defaults
                     if "lang" in [f.lower() for f in field_matches]:
                         mapped["lang"] = "en"
+                    # Preserve defaults
+                    for k, v in step.defaults.items():
+                        mapped[k] = v
                     data_dict = mapped
-                else:
-                    data_dict = {"text": val} if key == "user_goal" else data_dict
+                elif key == "user_goal":
+                    data_dict = {"text": val}
+                    for k, v in step.defaults.items():
+                        data_dict[k] = v
 
         data_json = json.dumps(data_dict)
 
@@ -885,7 +900,7 @@ class CartridgeRunner:
             _sys.path.insert(0, _exp_dir)
         from js_executor import RuntimeConfig
 
-        state_dir = str(Path(manifest.path) / "state")
+        state_dir = str((Path(manifest.path) / "state").resolve())
 
         # Extract LLM config from the AgentRuntime if available
         llm_url = ""
@@ -901,6 +916,7 @@ class CartridgeRunner:
             llm_api_url=llm_url,
             llm_model=llm_model,
             llm_api_key=llm_key,
+            shared_state_name=manifest.name,  # all skills in cartridge share state
         )
 
     # --- Upgrade 2: Agentic flow mode ─────────────────────────────────

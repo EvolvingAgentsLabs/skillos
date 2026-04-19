@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Insights",
+  "type": "string",
+  "description": "JSON string containing extracted insights from the insight-extractor skill"
+}
