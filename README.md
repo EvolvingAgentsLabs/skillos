@@ -281,6 +281,7 @@ Bare goals that strongly match a cartridge's `entry_intents` are auto-dispatched
 | `cartridges/cooking/` | standard | 3 agents (menu-planner → shopping-list-builder → recipe-writer) | Structural completeness (7 days × 3 slots) |
 | `cartridges/residential-electrical/` | standard | 2 agents (load-calculator → circuit-designer) | **IEC 60364 subset** in ~80 LOC of Python — wire/breaker ratios, RCD on wet rooms, 25% breaker margin |
 | `cartridges/demo/` | **js-skills** | 11 JS skills (Gallery format) + 1 param-extractor agent | result_valid: no-error check. 3 flow modes (deterministic, agentic, pipeline) |
+| `cartridges/learn/` | **js-skills** | 4 skills (wikipedia + 3 subagent skills) | pipeline_ok: output present. LLM subagents + persistent knowledge + skill chaining ([tutorial](docs/tutorial-js-subagents.md)) |
 
 The electrical compliance checker is the key illustration: Gemma proposes the circuits, but the safety rules live in code, not in a prompt. A new code edition is a reviewable Python diff.
 
@@ -429,6 +430,7 @@ See [docs/js-skills.md](docs/js-skills.md) for the full architecture, skill auth
 | [docs/security.md](docs/security.md) | Skill package security scanning and threat model |
 | [docs/tutorial-echo-q.md](docs/tutorial-echo-q.md) | Step-by-step: Operation Echo-Q quantum computing scenario |
 | [docs/tutorial-gemma4-colab.md](docs/tutorial-gemma4-colab.md) | Run SkillOS with Gemma 4 on a free Colab T4 GPU |
+| [docs/tutorial-js-subagents.md](docs/tutorial-js-subagents.md) | Build a Research & Learn system with JS subagents, skill chaining, and persistent knowledge |
 
 ---
 
