@@ -18,3 +18,13 @@ Skills responsible for goal decomposition, workflow management, and task delegat
 - `system-agent` is the entry point for ALL user goals. It reads this index only if
   a sub-task requires re-invoking orchestration (rare).
 - Token cost: high — load full spec immediately for this domain.
+- **Two-tier runtime**: before delegating, `system-agent` consults
+  `orchestration/provider-router.md` to decide between Hot (Gemma + cartridges),
+  Warm (Gemma E4B), or Forge (Claude Code for meta-work only). Forge never runs
+  user goals directly.
+
+## Policies (shared, non-skill)
+| File | Purpose |
+|------|---------|
+| `orchestration/provider-router.md` | Tier selection (Hot/Warm/Forge), budget, offline gate |
+| `orchestration/base.md` | Delegation protocol, state management, logging |

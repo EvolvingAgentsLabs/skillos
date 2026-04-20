@@ -89,7 +89,7 @@ class AgentRuntime:
             "base_url_env": "OLLAMA_BASE_URL",
             "api_key_env": "OLLAMA_API_KEY",
             "api_key_default": "ollama",
-            "model": "gemma4",
+            "model": "gemma4:e2b",
             "model_env": "GEMMA_MODEL",
             "manifest": "GEMINI.md",
             "cache_headers": {"Bypass-Tunnel-Reminder": "true"},
@@ -114,6 +114,8 @@ class AgentRuntime:
         "gemini-2.5-pro":            {"tier": "high", "recommended_strategy": "agentic"},
         "google/gemma-4-26b-a4b-it": {"tier": "mid",  "recommended_strategy": "cognitive_pipeline"},
         "gemma4":                    {"tier": "mid",  "recommended_strategy": "cognitive_pipeline"},
+        "gemma4:e2b":                {"tier": "low",  "recommended_strategy": "cartridge_only"},
+        "gemma4:e4b":                {"tier": "mid",  "recommended_strategy": "cognitive_pipeline"},
         "qwen/qwen3.6-plus:free":    {"tier": "low",  "recommended_strategy": "pipeline"},
     }
     _DEFAULT_CAPABILITY = {"tier": "mid", "recommended_strategy": "cognitive_pipeline"}
