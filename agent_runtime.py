@@ -16,6 +16,7 @@ import random
 import asyncio
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 from openai import OpenAI, APIStatusError, APIConnectionError, APITimeoutError
 from dotenv import load_dotenv
 from permission_policy import PermissionPolicy, PermissionMode, SKILLOS_DEFAULT_POLICY, get_policy
@@ -1295,6 +1296,138 @@ Produce comprehensive, detailed output with at least 2000 characters.
                 "output": output_match.group(1).strip() if output_match else "",
             })
         return steps
+
+    def route_and_execute(self, goal: str,
+                          project_path: str | os.PathLike | None = None,
+                          *,
+                          candidate_cartridge: str | None = None,
+                          candidate_skill_manifest: str | os.PathLike | None = None,
+                          recent_pass_rate: float | None = None,
+                          recent_sample_size: int = 0,
+                          user_requested_forge: bool = False) -> dict:
+        """Dispatch a goal through the forge ProviderRouter.
+
+        This is the new entry point that enforces the two-tier runtime:
+        the existing ``execute_scenario``/``run_goal`` methods run the hot
+        tier, and forge-tier calls are delegated to ``forge.executor``.
+
+        The method returns a small dict describing what happened so callers
+        (system-agent, the HTTP API, the desktop UI) can render it uniformly::
+
+            {
+              "tier":    "hot" | "warm" | "forge" | "escalate",
+              "kind":    <RouteKind value>,
+              "target":  <cartridge name | skill path | forge family>,
+              "status":  "executed" | "blocked" | "forge_pass" | "forge_fail",
+              "result":  <string result or None>,
+              "job_id":  <forge job id or None>,
+              "rationale": <router rationale>,
+            }
+
+        The hot-tier branch reuses ``run_goal``.  The forge branch creates
+        a ``ForgeJobSpec`` and calls ``ForgeExecutor.run``.  The escalate
+        branch returns without executing so the caller can surface the
+        block reason to the user.
+        """
+        try:
+            from forge.router import (
+                ProviderRouter, RouteRequest, RouteKind, Tier,
+            )
+            from forge.executor import ForgeExecutor, ForgeJobSpec
+        except ImportError as exc:
+            return {
+                "tier": "escalate",
+                "kind": "no_route",
+                "target": "",
+                "status": "blocked",
+                "result": None,
+                "job_id": None,
+                "rationale": f"forge package unavailable: {exc}",
+            }
+
+        project = Path(project_path) if project_path else None
+        req = RouteRequest(
+            goal=goal,
+            project_path=project,
+            target_model=self.model if self.provider_name.startswith("gemma")
+                          else os.environ.get("GEMMA_MODEL", "gemma4:e2b"),
+            fallback_model=os.environ.get("GEMMA_FALLBACK_MODEL",
+                                          "gemma4:e4b"),
+            candidate_cartridge=candidate_cartridge,
+            candidate_skill_manifest=(
+                Path(candidate_skill_manifest)
+                if candidate_skill_manifest else None
+            ),
+            recent_pass_rate=recent_pass_rate,
+            recent_sample_size=recent_sample_size,
+            user_requested_forge=user_requested_forge,
+        )
+        decision = ProviderRouter().route(req)
+
+        base_payload = {
+            "tier": decision.tier.value,
+            "kind": decision.kind.value,
+            "target": decision.target,
+            "rationale": decision.rationale,
+            "result": None,
+            "job_id": None,
+        }
+
+        if decision.tier is Tier.ESCALATE:
+            base_payload["status"] = "blocked"
+            return base_payload
+
+        if decision.tier in (Tier.HOT, Tier.WARM):
+            # Warm tier uses a larger Gemma tag; swap for the duration of
+            # this call without mutating shared state.
+            if decision.tier is Tier.WARM and decision.model:
+                prior = self.model
+                self.model = decision.model
+                try:
+                    result = self.run_goal(goal)
+                finally:
+                    self.model = prior
+            else:
+                result = self.run_goal(goal)
+            base_payload["status"] = "executed"
+            base_payload["result"] = result
+            return base_payload
+
+        # Forge tier.
+        if project is None:
+            base_payload["status"] = "blocked"
+            base_payload["rationale"] = (
+                "forge tier requires project_path; refused"
+            )
+            return base_payload
+
+        job_kind = decision.kind
+        if job_kind not in {RouteKind.GENERATE, RouteKind.EVOLVE}:
+            # VALIDATE is handled by the validator skill, not the executor.
+            base_payload["status"] = "blocked"
+            base_payload["rationale"] = (
+                f"router requested {job_kind.value}; handled outside executor"
+            )
+            return base_payload
+
+        spec = ForgeJobSpec(
+            goal=goal,
+            project_path=project,
+            kind=job_kind,
+            trigger="user_request" if user_requested_forge else "gap",
+            target_model=req.target_model,
+        )
+        executor = ForgeExecutor()
+        outcome = executor.run(spec)
+        base_payload["job_id"] = outcome.job_id
+        base_payload["status"] = (
+            "forge_pass" if outcome.outcome == "pass" else "forge_fail"
+        )
+        base_payload["result"] = outcome.notes or None
+        base_payload["candidates_path"] = (
+            str(outcome.candidates_path) if outcome.candidates_path else None
+        )
+        return base_payload
 
     def execute_scenario(self, scenario_path: str, problem_context: str, *,
                          max_turns: int = 10, max_turns_per_step: int = 5,

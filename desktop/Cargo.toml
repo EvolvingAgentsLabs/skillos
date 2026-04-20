@@ -1,0 +1,11 @@
+[workspace]
+# Intentionally empty — src-tauri/ is the only crate.  This lets
+# `cargo tauri dev` work from the `desktop/` directory.
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+
+[workspace.metadata]
+description = "SkillOS desktop shell scaffolding.  Not yet buildable — see desktop/README.md."

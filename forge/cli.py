@@ -193,7 +193,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_route.add_argument("--json", action="store_true")
     p_route.set_defaults(func=cmd_route)
 
+    p_serve = sub.add_parser("serve",
+                             help="start the forge HTTP API (loopback only by default)")
+    p_serve.add_argument("--host", default="127.0.0.1")
+    p_serve.add_argument("--port", type=int, default=8765)
+    p_serve.add_argument("--bind-any", action="store_true")
+    p_serve.set_defaults(func=cmd_serve)
+
     return parser
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    from forge.server import serve_main
+    extra: list[str] = ["--host", args.host, "--port", str(args.port)]
+    if args.bind_any:
+        extra.append("--bind-any")
+    return serve_main(extra)
 
 
 def main(argv: list[str] | None = None) -> int:

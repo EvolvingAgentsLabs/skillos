@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SkillOS</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">SkillOS</div>
+    <nav>
+      <button data-view="route" class="active">Route</button>
+      <button data-view="journal">Journal</button>
+      <button data-view="budget">Budget</button>
+      <button data-view="audit">Attestations</button>
+    </nav>
+    <div class="status" id="backend-status">connecting…</div>
+  </header>
+
+  <main>
+    <section id="view-route" class="view active">
+      <h1>Route a goal</h1>
+      <p class="lede">
+        Show which tier would handle this goal.  No execution — just the
+        decision from the forge <code>ProviderRouter</code>.
+      </p>
+      <form id="route-form">
+        <label>Goal
+          <input name="goal" required
+                 placeholder="e.g. sort these SemVer strings">
+        </label>
+        <label>Project path (optional)
+          <input name="project"
+                 placeholder="projects/Project_my_thing">
+        </label>
+        <label>Candidate cartridge (optional)
+          <input name="cartridge" placeholder="cooking">
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="force_forge">
+          Force forge (ignore existing skills)
+        </label>
+        <button type="submit">Decide</button>
+      </form>
+      <pre id="route-output" class="output"></pre>
+    </section>
+
+    <section id="view-journal" class="view">
+      <h1>Forge journal</h1>
+      <form id="journal-form">
+        <label>Project path
+          <input name="project" required
+                 placeholder="projects/Project_my_thing">
+        </label>
+        <button type="submit">Load</button>
+      </form>
+      <div id="journal-output"></div>
+    </section>
+
+    <section id="view-budget" class="view">
+      <h1>Budget ledger</h1>
+      <form id="budget-form">
+        <label>Project path
+          <input name="project" required>
+        </label>
+        <button type="submit">Load</button>
+      </form>
+      <pre id="budget-output" class="output"></pre>
+    </section>
+
+    <section id="view-audit" class="view">
+      <h1>Cartridge attestations</h1>
+      <form id="audit-form">
+        <label>Target model
+          <input name="model" value="gemma4:e2b">
+        </label>
+        <button type="submit">Audit</button>
+      </form>
+      <table id="audit-table">
+        <thead><tr><th>Cartridge</th><th>Status</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

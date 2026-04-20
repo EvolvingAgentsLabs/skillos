@@ -171,9 +171,17 @@ platform** without a cloud backend for execution:
 - Multica's "self-hostable" → one binary + Ollama + Claude API key (optional).
 
 ## Roadmap
-- [ ] `agent_runtime.py` — add a `ProviderRouter` class that reads
-  `provider-router.md` and dispatches.
-- [ ] `cartridge_runtime.py` — expose a `gemma_compat` check hook used at load time.
-- [ ] `forge/budget.py` — concrete ledger implementation + enforcement in the router.
-- [ ] `forge/journal/` schema + CLI viewer (`skillos forge log`).
-- [ ] UI integration (Tauri desktop shell) — see the branch plan in the conversation log.
+- [x] `forge/router.py` — `ProviderRouter` reads `provider-router.md` and dispatches.
+- [x] `forge/budget.py` — ledger with per-job and per-day caps.
+- [x] `forge/journal.py` — append-only log + loop-detector query.
+- [x] `forge/attestation.py` — `gemma_compat` parse + freshness/model checks.
+- [x] `forge/cli.py` — `python -m forge {log, budget, audit, route, serve}`.
+- [x] `forge/claude_bridge.py` — Anthropic SDK / Claude CLI / mock backends.
+- [x] `forge/executor.py` — end-to-end forge job runner (prompt → artifacts → budget → journal).
+- [x] `forge/server.py` — HTTP API (`/api/route`, `/api/forge/run`, …).
+- [x] `cartridge_runtime.py` — `gemma_compat` hook + `check_attestations`.
+- [x] `agent_runtime.AgentRuntime.route_and_execute` — runtime entry point.
+- [x] Desktop shell scaffold — `desktop/` (Tauri 2 + vanilla JS UI).
+- [ ] Desktop packaging (bundled Ollama + Gemma4:e2b weights).
+- [ ] Cartridge precompile hook invoked by `forge/compile/forge-compile-cartridge-tool`.
+- [ ] Board view in the UI (Multica-style task list).
