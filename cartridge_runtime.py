@@ -246,6 +246,46 @@ class CartridgeManifest:
     variables: dict[str, Any] = field(default_factory=dict)
     type: str = "standard"           # "standard" (LLM agents) or "js-skills"
     skills_source: str = ""          # path to Gallery skills directory (for js-skills)
+    gemma_compat: dict[str, Any] = field(default_factory=dict)  # attestation block from manifest
+
+
+def _load_gemma_compat(cartridge_dir: Path) -> dict[str, Any]:
+    """Return the cartridge's gemma_compat attestation, if any.
+
+    Attestations may live in either the top-level ``cartridge.yaml`` (written
+    by ``forge/validate/forge-validate-agent`` as part of the cartridge
+    metadata) or in a sibling ``gemma_compat.yaml`` for cartridges that want
+    to keep the attestation separate from authored metadata.
+    """
+    candidates = [
+        cartridge_dir / "gemma_compat.yaml",
+        cartridge_dir / "gemma_compat.yml",
+    ]
+    for path in candidates:
+        if path.exists() and yaml is not None:
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+    return {}
+
+
+def cartridge_attestation(manifest: CartridgeManifest):
+    """Return a forge.attestation.GemmaCompat for this cartridge or None.
+
+    Kept as a module-level helper so external callers (the router, the CLI)
+    can re-use attestation parsing without pulling the full runtime in.
+    """
+    try:
+        from forge.attestation import parse_gemma_compat
+    except Exception:
+        return None
+    block = dict(manifest.gemma_compat or {})
+    if not block:
+        return None
+    return parse_gemma_compat({"gemma_compat": block})
 
 
 def _parse_flow_steps(raw: list) -> list:
@@ -344,6 +384,11 @@ class CartridgeRegistry:
             resolved = (cartridge_dir / skills_source).resolve()
             skills_source = str(resolved)
 
+        # gemma_compat may be inline on cartridge.yaml OR in a sibling file.
+        gemma_compat_block = dict(data.get("gemma_compat") or {})
+        if not gemma_compat_block:
+            gemma_compat_block = _load_gemma_compat(cartridge_dir)
+
         manifest = CartridgeManifest(
             name=data.get("name", cartridge_dir.name),
             path=str(cartridge_dir),
@@ -358,6 +403,7 @@ class CartridgeRegistry:
             variables=dict(data.get("variables", {}) or {}),
             type=data.get("type", "standard"),
             skills_source=skills_source,
+            gemma_compat=gemma_compat_block,
         )
         if not manifest.default_flow and manifest.flows:
             manifest.default_flow = next(iter(manifest.flows.keys()))
@@ -373,6 +419,47 @@ class CartridgeRegistry:
 
     def get(self, name: str) -> CartridgeManifest | None:
         return self._manifests.get(name)
+
+    def check_attestations(self, *, model: str,
+                           strict: bool = False) -> dict[str, str]:
+        """Return ``{cartridge_name: status}`` for every loaded cartridge.
+
+        ``status`` is one of ``ok`` | ``weak`` | ``stale`` | ``missing`` |
+        ``model_mismatch``.  When ``strict=True``, ``weak`` also counts as a
+        warning.  Used by the router and by the ``skillos forge audit`` CLI.
+        """
+        try:
+            from forge.attestation import (
+                parse_gemma_compat, attestation_ok, AttestationStrength,
+            )
+        except Exception:
+            return {}
+        out: dict[str, str] = {}
+        for name, manifest in self._manifests.items():
+            if not manifest.gemma_compat:
+                out[name] = "missing"
+                continue
+            compat = parse_gemma_compat({"gemma_compat": manifest.gemma_compat})
+            if compat is None:
+                out[name] = "missing"
+                continue
+            if not compat.matches_model(model):
+                out[name] = "model_mismatch"
+                continue
+            if compat.is_stale():
+                out[name] = "stale"
+                continue
+            if compat.attestation_strength == AttestationStrength.NONE:
+                out[name] = "missing"
+                continue
+            if compat.attestation_strength == AttestationStrength.WEAK:
+                out[name] = "weak"
+                continue
+            out[name] = "ok" if attestation_ok(compat, model=model) else "stale"
+        if strict:
+            # elevate any weak to a warning — callers can filter
+            out = {k: ("weak" if v == "weak" else v) for k, v in out.items()}
+        return out
 
     def load_agent(self, cartridge: str, agent_name: str) -> AgentSpec | None:
         cache_key = (cartridge, agent_name)

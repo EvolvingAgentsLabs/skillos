@@ -182,10 +182,18 @@ class TestStrategyRouter:
                 assert info["recommended_strategy"] == "cognitive_pipeline"
 
     def test_low_tier_routes_to_pipeline(self, rt_mod):
+        # Low-tier models route to a closed-plan-space strategy.  "pipeline"
+        # is the default; "cartridge_only" is a stricter variant used for
+        # very small models (e.g. gemma4:e2b) where only pre-sealed
+        # cartridges are safe.
         caps = rt_mod.AgentRuntime.MODEL_CAPABILITIES
+        allowed = {"pipeline", "cartridge_only"}
         for model, info in caps.items():
             if info["tier"] == "low":
-                assert info["recommended_strategy"] == "pipeline"
+                assert info["recommended_strategy"] in allowed, (
+                    f"{model}: unexpected low-tier strategy "
+                    f"{info['recommended_strategy']!r}"
+                )
 
     def test_strategy_override_in_source(self):
         """strategy_override takes precedence in execute_scenario."""
