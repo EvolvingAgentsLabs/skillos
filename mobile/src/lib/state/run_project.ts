@@ -6,10 +6,15 @@
 
 import { CartridgeRegistry } from "../cartridge/registry";
 import { CartridgeRunner, type RunEvent } from "../cartridge/runner";
-import { LLMClient } from "../llm/client";
-import { resolveProvider } from "../llm/providers";
+import type { ProviderBundle } from "../cartridge/routing";
+import { buildProvider } from "../llm/build_provider";
 import { recordExperience } from "../memory/smart_memory";
-import { loadProviderConfig, type ProviderConfigStored } from "./provider_config";
+import {
+  loadProjectRouting,
+  loadProviderConfig,
+  type ProviderConfigStored,
+} from "./provider_config";
+import { clearCheckpoint, loadCheckpoint, saveCheckpoint } from "./run_checkpoint";
 import {
   addCard,
   moveCard,
@@ -28,6 +33,11 @@ export interface RunProjectOptions {
   /** Shared registry — will be created if omitted. */
   registry?: CartridgeRegistry;
   signal?: AbortSignal;
+  /**
+   * If true and a checkpoint exists for this project, resume from it rather
+   * than starting fresh. Default false — callers explicitly opt in.
+   */
+  resume?: boolean;
 }
 
 export interface RunOutcome {
@@ -59,7 +69,12 @@ export async function runProject(
     };
   }
 
-  const cfg = opts.providerConfig ?? (await loadProviderConfig(projectId));
+  // Prefer the full routing (primary + fallback) from M11; fall back to
+  // the legacy primary-only path when an explicit providerConfig is passed.
+  const routing = opts.providerConfig
+    ? { primary: opts.providerConfig }
+    : await loadProjectRouting(projectId);
+  const cfg = routing?.primary ?? (await loadProviderConfig(projectId));
   if (!cfg) {
     return {
       ok: false,
@@ -80,13 +95,18 @@ export async function runProject(
   const registry = opts.registry ?? new CartridgeRegistry();
   if (!registry.get(cartridgeName)) await registry.init();
 
-  const provider = resolveProvider(cfg.providerId, {
-    baseUrl: cfg.baseUrl,
-    model: cfg.model,
-    apiKey: cfg.apiKey,
-  });
-  const llm = new LLMClient(provider);
-  const runner = new CartridgeRunner(registry, llm);
+  const bundle: ProviderBundle = { primary: await buildProvider(cfg) };
+  if (routing?.fallback) {
+    try {
+      bundle.fallback = await buildProvider(routing.fallback);
+    } catch (err) {
+      console.warn("fallback provider unavailable:", err);
+    }
+  }
+  const runner = new CartridgeRunner(registry, bundle);
+
+  // M17: if the caller asked to resume and a checkpoint exists, load it.
+  const checkpoint = opts.resume ? await loadCheckpoint(projectId) : undefined;
 
   beginRun(projectId);
   const stepCardByAgent = new Map<string, string>(); // agent → card id
@@ -136,6 +156,25 @@ export async function runProject(
   try {
     const result = await runner.run(cartridgeName, goal, {
       signal: opts.signal,
+      projectId,
+      resumeFrom: checkpoint
+        ? {
+            completed_steps: checkpoint.completed_steps,
+            blackboard: checkpoint.blackboard as never,
+          }
+        : undefined,
+      onStepCommitted: async ({ completedSteps, blackboard }) => {
+        await saveCheckpoint({
+          projectId,
+          cartridge: cartridgeName,
+          flow: result.flow ?? "",
+          goal,
+          blackboard,
+          completedSteps,
+          providerId: cfg.providerId,
+          providerModel: cfg.model,
+        }).catch((err) => console.warn("checkpoint save failed:", err));
+      },
       onEvent: (e) => {
         // Fire-and-forget; the handler is ordered by awaiting each addCard
         // inside the switch, but we don't block the runner. Mutations are
@@ -156,6 +195,8 @@ export async function runProject(
       duration_seconds: duration,
       output_summary: result.final_summary,
     });
+    // On successful run, clear the checkpoint — nothing to resume.
+    if (result.ok) await clearCheckpoint(projectId).catch(() => {});
     endRun();
     return {
       ok: result.ok,

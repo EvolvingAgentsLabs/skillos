@@ -12,7 +12,9 @@
  * pure-PWA case (M7).
  */
 
-export type ProviderId = "openrouter-qwen" | "gemini" | "ollama" | "openrouter-gemma";
+export type CloudProviderId = "openrouter-qwen" | "gemini" | "ollama" | "openrouter-gemma";
+export type LocalProviderId = "wllama-local" | "litert-local" | "chrome-prompt-api";
+export type ProviderId = CloudProviderId | LocalProviderId;
 
 export interface ProviderConfig {
   id: ProviderId;
@@ -22,7 +24,18 @@ export interface ProviderConfig {
   defaultHeaders: Record<string, string>;
   defaultApiKey: string; // used when no key is configured (e.g. "ollama" for local)
   requiresKey: boolean;
+  /** Requires cleartext LAN access — Capacitor native only. */
   lanOnly: boolean;
+  /** Runs entirely on-device; pairs with a model chosen from `model_catalog.ts`. */
+  localOnly: boolean;
+  /** Native-only (requires a Capacitor plugin that isn't shimmed in pure-PWA). */
+  nativeOnly?: boolean;
+}
+
+export function isLocalProvider(id: ProviderId): id is LocalProviderId {
+  return (
+    id === "wllama-local" || id === "litert-local" || id === "chrome-prompt-api"
+  );
 }
 
 export const PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
@@ -38,6 +51,7 @@ export const PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
     defaultApiKey: "",
     requiresKey: true,
     lanOnly: false,
+    localOnly: false,
   },
   gemini: {
     id: "gemini",
@@ -48,6 +62,7 @@ export const PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
     defaultApiKey: "",
     requiresKey: true,
     lanOnly: false,
+    localOnly: false,
   },
   ollama: {
     id: "ollama",
@@ -58,6 +73,7 @@ export const PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
     defaultApiKey: "ollama",
     requiresKey: false,
     lanOnly: true,
+    localOnly: false,
   },
   "openrouter-gemma": {
     id: "openrouter-gemma",
@@ -71,6 +87,42 @@ export const PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
     defaultApiKey: "",
     requiresKey: true,
     lanOnly: false,
+    localOnly: false,
+  },
+  // ── Local (on-device) providers — M9/M10 ─────────────────────────────
+  "wllama-local": {
+    id: "wllama-local",
+    label: "On-device · wllama (WASM)",
+    defaultBaseUrl: "",
+    defaultModel: "qwen2.5-1.5b-instruct-q4_k_m",
+    defaultHeaders: {},
+    defaultApiKey: "",
+    requiresKey: false,
+    lanOnly: false,
+    localOnly: true,
+  },
+  "litert-local": {
+    id: "litert-local",
+    label: "On-device · LiteRT (Android)",
+    defaultBaseUrl: "",
+    defaultModel: "gemma-2-2b-it-litertlm",
+    defaultHeaders: {},
+    defaultApiKey: "",
+    requiresKey: false,
+    lanOnly: false,
+    localOnly: true,
+    nativeOnly: true,
+  },
+  "chrome-prompt-api": {
+    id: "chrome-prompt-api",
+    label: "On-device · Chrome Prompt API",
+    defaultBaseUrl: "",
+    defaultModel: "",
+    defaultHeaders: {},
+    defaultApiKey: "",
+    requiresKey: false,
+    lanOnly: false,
+    localOnly: true,
   },
 };
 
@@ -107,5 +159,6 @@ export function isProviderAvailable(id: ProviderId, isNativeApp: boolean): boole
   const cfg = PROVIDER_CONFIGS[id];
   if (!cfg) return false;
   if (cfg.lanOnly && !isNativeApp) return false;
+  if (cfg.nativeOnly && !isNativeApp) return false;
   return true;
 }

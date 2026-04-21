@@ -1,183 +1,341 @@
-# SkillOS Mobile — Pure-JS Port
+# SkillOS Mobile — Pure-JS Port (v1)
 
-**Status**: v1 — experiment
+**Status**: v1 experimental — code-complete; device validation pending.
 **Module**: `mobile/` (Vite + Svelte 5 + TypeScript + Capacitor)
-**Requires**: Node.js 18+ for building. Runs as a PWA in any modern browser; wraps for iOS/Android via Capacitor.
+**Requires**: Node.js 18+ for building. Runs as a PWA in any modern browser; wraps for iOS / Android via Capacitor. On-device LLMs require ~1–2 GB of IndexedDB storage for the model blob.
 
 ---
 
 ## What this is
 
-SkillOS Mobile is a full-stack port of the SkillOS runtime to the browser. Every component that used to run on Python on a developer's workstation — Blackboard, CartridgeRegistry, CartridgeRunner, agent runtime, tool-call parser, Gallery skill executor, SmartMemory — now runs on the phone. The Python repo becomes an **authoring environment** for cartridges, schemas, validators, and skills; the mobile app is a **runtime** that executes them.
+SkillOS Mobile is a full-stack port of the SkillOS runtime to the browser, plus an authoring environment on top of it. Everything that used to run on Python on a workstation — Blackboard, CartridgeRegistry, CartridgeRunner, agent runtime, tool-call parser, Gallery skill executor, SmartMemory, compactor — now runs on the phone. Every cartridge file, agent markdown, JSON Schema, and Gallery `SKILL.md` ships verbatim as a static asset, seeds into IndexedDB on first boot, and is parsed at runtime by the same ajv / js-yaml / gray-matter path that the desktop runtime uses.
 
-The "markdown is the program" principle is preserved intact. Every `cartridges/**/*.{md,yaml,schema.json}` file and `system/SmartMemory.md` ships verbatim as a static asset, seeds into IndexedDB on first boot, and is parsed at runtime by the same ajv / js-yaml / gray-matter-equivalent path that the desktop runtime uses.
+The "markdown is the program" principle is preserved intact, then three v1 additions (on-device LLM, smart routing, in-app authoring) turn the phone from a thin runtime into a fully sovereign pocket operating system.
 
 ---
 
-## Why this matters
+## Why v1 matters
 
-Three things a mobile port buys that the Python runtime cannot:
+Three things a v1 mobile port buys that v0 and the Python runtime cannot:
 
-1. **On-device privacy.** Ollama over LAN from the user's laptop, or any OpenAI-compatible provider keyed per project. Prompts and outputs never touch a SkillOS server because there is no SkillOS server.
-2. **Billions of devices.** Capacitor packages the same Svelte bundle as a native iOS / Android app with one command. The app stores its entire state (projects, blackboards, memory, secrets, seeded cartridges) in IndexedDB — works offline after the first launch.
-3. **A visual representation of autonomous agent work.** The desktop runtime surfaces agent activity as streaming terminal text. On mobile the same runtime drives a three-lane Kanban per project — cards appear in *Planned*, slide into *In Execution*, land in *Done* as each agent's `<produces>{…}</produces>` validates. The user can see what the system is doing without reading log output.
+1. **On-device sovereignty.** Download Gemma 2 2B or Qwen 2.5 1.5B once; the runtime executes cartridges without touching the network. Capacitor-Android additionally loads LiteRT-LM for 5–15× faster inference on the same `.litertlm` models the AI Edge Gallery ships.
+2. **Smart delegation instead of cost/quality trade-offs.** The runner uses a local model by default and escalates to the cloud only when the cartridge declares `preferred_tier: cloud`, an agent marks itself `tier: capable`, or the cheap tier fails schema validation. You stop paying cloud tokens for tasks Gemma can handle.
+3. **Full authoring on the device.** Clone, edit, and run new cartridges / agents / Gallery skills from the phone. The CodeMirror editors are lazy-loaded so v0 users pay zero extra bundle until they opt in.
+
+---
+
+## v0 → v1 milestones
+
+```mermaid
+gantt
+  title  SkillOS Mobile roadmap (M0–M19)
+  dateFormat  X
+  axisFormat  %s
+
+  section v0 — runtime
+  M0  Skeleton + seeded IndexedDB       :done, m0, 0, 1
+  M1  Blackboard + Registry TS ports    :done, m1, 1, 2
+  M2  Visual UX shell                   :done, m2, 2, 3
+  M3  LLM client + tool loop            :done, m3, 3, 4
+  M4  Iframe skill host                 :done, m4, 4, 5
+  M5  CartridgeRunner                   :done, m5, 5, 6
+  M6  Lifecycle wiring + SmartMemory    :done, m6, 6, 7
+  M7  Capacitor + file sync             :done, m7, 7, 8
+  M8  Onboarding + evals                :done, m8, 8, 9
+
+  section v1 — sovereign OS
+  M9  Local LLM core + wllama           :done, m9, 9, 11
+  M10 LiteRT Capacitor plugin           :done, m10, 11, 13
+  M11 Smart routing                     :done, m11, 13, 14
+  M12 Library + CRUD                    :done, m12, 14, 15
+  M13 CodeMirror editors                :done, m13, 15, 17
+  M14 JS skill editor + Test panel      :done, m14, 17, 18
+  M15 New-from-blank wizard             :done, m15, 18, 19
+  M16 LLM-powered compaction            :done, m16, 19, 20
+  M17 Checkpoint + resume               :done, m17, 20, 21
+  M18 Offline queue + retry             :done, m18, 21, 22
+  M19 iOS WKWebView fallback            :done, m19, 22, 23
+```
 
 ---
 
 ## Architecture
 
+Everything under `mobile/` fits in one picture:
+
+```mermaid
+flowchart TB
+  subgraph Phone["📱 Phone — self-contained after first boot"]
+    direction TB
+
+    subgraph UI["Svelte 5 app · Vite PWA / Capacitor native"]
+      Swiper[ProjectSwiper<br/>→ Column → Lane → Card]
+      Library[LibraryScreen<br/>authoring_mode]
+      Wizard[CartridgeWizard<br/>5-step scaffold]
+      Settings[SettingsSheet<br/>flags + model mgr]
+      RunLog[RunLogDrawer<br/>event stream]
+      Iframe[(Sandboxed iframe<br/>allow-scripts · null origin)]
+    end
+
+    subgraph Editors["CodeMirror 6 editors · lazy chunk"]
+      YamlEd[YAML<br/>manifest + agents]
+      MdEd[Markdown<br/>frontmatter + body]
+      JsonEd[JSON<br/>schemas + live ajv]
+      JsEd[JavaScript<br/>Gallery skills]
+      TestPanel[Test-in-iframe<br/>sandboxed LLM proxy]
+    end
+
+    subgraph LLMLayer["LLM layer"]
+      Provider[LLMProvider<br/>interface]
+      Cloud[HttpLLMClient]
+      Local[LocalLLMClient]
+      Wllama[WllamaBackend<br/>WASM Web Worker]
+      LiteRT[LiteRTBackend<br/>Kotlin plugin]
+      Router[SmartRouter<br/>resolveProvider]
+      Compactor[LLM-Powered<br/>Compactor]
+      Retry[withRetry<br/>+ OfflineQueue]
+      Runner[CartridgeRunner]
+      Checkpoint[RunCheckpoint]
+    end
+
+    subgraph IDB["IndexedDB · idb · schema v3"]
+      files[(files)]
+      projects[(projects)]
+      blackboards[(blackboards)]
+      memory[(memory)]
+      secrets[(secrets)]
+      meta[(meta · flags · queue)]
+      models[(models<br/>GGUF · litertlm)]
+      checkpoints[(checkpoints)]
+    end
+  end
+
+  subgraph Native["Capacitor plugins"]
+    Filesystem[Filesystem<br/>@capacitor/filesystem]
+    LiteRTPlugin[LiteRT-LM<br/>@skillos/capacitor-litert-lm<br/>Kotlin]
+  end
+
+  Cloud -. fetch + SSE .-> OpenRouter[(OpenRouter<br/>Gemini<br/>Ollama LAN)]
+  Wllama -. load .-> GGUF[GGUF files<br/>Hugging Face]
+  LiteRT -. bridge .-> LiteRTPlugin
+  LiteRTPlugin -. JNI .-> GemmaNative[LiteRT-LM<br/>native .litertlm]
+
+  UI --> LLMLayer
+  UI --> IDB
+  UI --> Editors
+  Editors --> IDB
+  Editors --> Iframe
+  Iframe <-. postMessage .-> Runner
+  LLMLayer --> IDB
+  Runner --> Router
+  Router --> Provider
+  Provider -.- Cloud
+  Provider -.- Local
+  Local -.- Wllama
+  Local -.- LiteRT
+  Runner --> Checkpoint
+  Checkpoint -.- checkpoints
+  Retry --> Cloud
+  Native -.- Filesystem
+  Filesystem -. Documents/SkillOS .-> Desktop[(Desktop Python<br/>Round-trip)]
 ```
-Phone (self-contained after first boot)
-├── Svelte 5 app (Vite-built PWA, Capacitor-wrapped for native)
-│   ├── ProjectSwiper  → ProjectColumn → Lane → Card
-│   ├── GoalComposer · ProviderSettingsSheet · SettingsSheet
-│   ├── EvalsScreen · Onboarding · RunLogDrawer
-│   └── Hidden sandboxed iframe (Gallery skill runtime)
-│
-├── IndexedDB  (via idb — schema v1)
-│   ├── files        seeded markdown + user edits
-│   ├── projects     per-project state snapshots
-│   ├── blackboards  cartridge run outputs
-│   ├── memory       SmartMemory experience log
-│   └── secrets      provider keys + per-skill secrets
-│
-└── LLM client → OpenRouter · Gemini · Ollama (LAN, Capacitor only)
-```
 
-Below the UI layer the codebase mirrors the Python runtime one-for-one:
+### Load-bearing files
 
-| Python module | TS port | Role |
-|---|---|---|
-| `cartridge_runtime.py:47-190` (Blackboard) | `mobile/src/lib/cartridge/blackboard.ts` | Typed KV store with pluggable validator |
-| `cartridge_runtime.py:192-452` (Registry, frontmatter, flow parser) | `mobile/src/lib/cartridge/registry.ts` + `types.ts` | Loads cartridges from IndexedDB `files` |
-| `cartridge_runtime.py:480-1274` (CartridgeRunner) | `mobile/src/lib/cartridge/runner.ts` | Standard / agentic / js-skills flows |
-| `cartridges/cooking/validators/*.py` | `mobile/src/lib/cartridge/validators_builtin.ts` | TS siblings, registered by filename |
-| `agent_runtime.py:68-108` (PROVIDER_CONFIGS) | `mobile/src/lib/llm/providers.ts` | OpenRouter / Gemini / Ollama configs |
-| `agent_runtime.py:1055-1086` (_parse_tool_calls) | `mobile/src/lib/llm/tool_parser.ts` | All 5 dialects + repair + JSON extractor |
-| `agent_runtime.py:1088-1235` (run_goal) | `mobile/src/lib/llm/run_goal.ts` | Multi-turn loop with FIFO compaction |
-| `experiments/gemma4-skills/skill_loader.py` | `mobile/src/lib/skills/skill_loader.ts` | SKILL.md frontmatter parser |
-| `experiments/gemma4-skills/runner.js` (Node) | `mobile/public/iframe/skill-host.js` | Browser-side: polyfills dropped, `__skillos` kept |
-| `experiments/gemma4-skills/js_executor.py` (SkillResult) | `mobile/src/lib/skills/skill_result.ts` | Type + helpers |
-| `system/SmartMemory.md` | `mobile/src/lib/memory/smart_memory.ts` | Append-only log with markdown round-trip |
+Every v1 milestone touches at least one of these five:
 
-The important thing: **no cartridge is rewritten**. The YAML manifests, agent markdown, JSON Schemas, and Gallery SKILL.md files that the Python runtime consumes are the same bytes the mobile app reads.
+- `mobile/src/lib/llm/client.ts` — M9 widens this to `implements LLMProvider`.
+- `mobile/src/lib/cartridge/runner.ts` — M11 accepts `ProviderBundle`; M17 emits `onStepCommitted`.
+- `mobile/src/lib/cartridge/registry.ts` — M12 adds `reloadCartridge`, `invalidateAgent`, `invalidateValidator`, `forget`.
+- `mobile/src/lib/state/provider_config.ts` — M11 gains `ProjectRouting = {primary, fallback?}` with auto-migration.
+- `mobile/src/lib/storage/db.ts` — DB v2 (M9 `models`), DB v3 (M17 `checkpoints`).
 
 ---
 
 ## Cross-cutting design decisions
 
-### 1. The tool-call dialect is preserved
+### 1. `LLMProvider` is the unifying contract
 
-`agent_runtime.py`'s `_parse_tool_calls` recognizes five on-wire forms: `<tool_call name="x">{…}</tool_call>`, unclosed variants terminated at the next tag, bare `<tool_call>` with name inferred from keys, `<tool_call>\nname\n{…}\n</tool_call>`, and JSON arrays inside ```json fences. Every cartridge agent was authored against this dialect; Gemma and Qwen don't reliably emit OpenAI-style `tool_calls`. The TS port is verbatim so every cartridge runs unchanged.
+v0's `LLMClient` already had the right shape; v1 extracts it into an interface. Both `LLMClient` (cloud) and `LocalLLMClient` implement it identically, so `runGoal` and `CartridgeRunner` don't branch.
 
-### 2. Ollama over LAN is Capacitor-only
+```ts
+export interface LLMProvider {
+  chat(messages: ChatMessage[], opts?: ChatOptions): Promise<ChatResult>;
+  testConnection(): Promise<{ ok: boolean; message: string }>;
+}
+```
 
-A PWA served over `https://` cannot `fetch()` `http://192.168.x.y:11434` — browsers block mixed content without override. Capacitor's native WebView exposes `android:usesCleartextTraffic="true"` plus a `network_security_config.xml` that permits cleartext only to RFC-1918 ranges; iOS takes `NSAppTransportSecurity.NSAllowsArbitraryLoadsInWebContent`. In pure-PWA mode the provider picker greys out *Ollama (LAN)* and surfaces only OpenRouter + Gemini. The shipped config fragments under `mobile/capacitor-resources/` are pre-written; the install step is "copy them into the native project after `cap add`."
+`buildProvider(cfg)` is the single factory. `ProviderId` widens from 4 cloud options to include `wllama-local`, `litert-local`, and `chrome-prompt-api`.
 
-### 3. Gallery skills run in a null-origin iframe
+### 2. Smart routing is a pure function
 
-One long-lived hidden `<iframe>` at `mobile/public/iframe/skill-host.html`, sandboxed with `sandbox="allow-scripts"` **without** `allow-same-origin`. The iframe therefore has a null origin: it cannot read the app's IndexedDB, its localStorage, or its secrets.
+`resolveProvider(agent, manifest, {primary, fallback?}, ctx)` picks a provider per-turn. Rules, in order:
 
-The host loads the skill's JavaScript into the iframe via a Blob URL `<script>` tag — no `'unsafe-eval'` required, CSP `script-src 'self' blob:` is enough. The skill calls `window.ai_edge_gallery_get_result(data, secret)` exactly as on Gallery's Android app. LLM sub-calls from the skill (`__skillos.llm.chat/chatJSON`) proxy back to the host over `postMessage`, so the iframe never sees the real API key.
+1. Agent `tier: capable` + fallback exists → fallback.
+2. Manifest `preferred_tier: cloud` + fallback exists → fallback.
+3. `ctx.previousFailure === "validation"` + not yet on fallback → escalate.
+4. Otherwise → primary.
 
-State persistence (`__skillos.state.save/load`) is replaced with a postMessage RPC to the host, which writes to IndexedDB under `skill-state/<name>`.
+One escalation max per step, capped hard so a broken run never oscillates.
 
-### 4. Live UI via Svelte 5 runes
+```mermaid
+sequenceDiagram
+  participant R as CartridgeRunner
+  participant RR as resolveProvider
+  participant P as Primary (wllama)
+  participant F as Fallback (OpenRouter)
+  participant V as ajv validator
+  participant UI as RunLogDrawer
 
-`CartridgeRunner` takes an `onEvent(e)` callback; a single `run_events.svelte.ts` rune store pushes events (`run-start`, `step-start`, `llm-turn`, `tool-call`, `tool-result`, `blackboard-put`, `step-end`, `validator`, `run-end`). Components read `$derived` slices. Card lane transitions happen as side-effects of each event — no generators, no event-bus library, no Redux-shaped plumbing.
+  R->>RR: agent · attempt 1 · ctx={}
+  RR-->>R: use Primary (default)
+  R->>P: chat
+  P-->>R: <produces>{…bad shape…}</produces>
+  R->>V: validate
+  V-->>R: FAIL
+  R->>RR: agent · attempt 2 · ctx={previousFailure: validation}
+  RR-->>R: escalate → Fallback
+  R-->>UI: emit RunEvent { type: tier-switch, from: primary, to: fallback }
+  R->>F: chat with retry feedback
+  F-->>R: <produces>{…valid…}</produces>
+  R->>V: validate
+  V-->>R: ok
+  R-->>UI: emit step-end (validated=true)
+```
 
-### 5. Validators port to TypeScript
+### 3. On-device LLM picks between two backends
 
-The Python runtime can import `.py` files at runtime. Mobile cannot. The ~50 LOC of `cartridges/cooking/validators/*.py` are ported 1:1 to TS and registered by filename in `validators_builtin.ts`. When `manifest.validators` declares `menu_complete.py`, the TS runner resolves it to the TS implementation; the Python runner keeps using the `.py`. Both coexist; determinism is preserved on both sides.
+A `LocalLLMBackend` interface abstracts away the inference engine. `pickBackendForModel()` selects based on the catalog entry and platform:
 
-### 6. Compaction is deferred
+```mermaid
+flowchart LR
+  Model[Model catalog entry] --> Check{{entry.backend}}
+  Check -- wllama --> W[WllamaBackend<br/>Web Worker + WASM]
+  Check -- litert + Android native --> L[LiteRTBackend<br/>Kotlin plugin]
+  Check -- litert + non-Android --> NA[Error:<br/>LiteRT is Android-only]
+  Check -- chrome-prompt-api --> NotYet[Reserved for future]
 
-Full LLM-powered compaction (Python `compactor.py`) didn't make the first cut. The TS runner uses a tiny FIFO rule: when the conversation grows past 40 messages, drop the oldest `Tool '…' returned:` entries until back under. Good enough for single-run cartridge flows; insufficient for long-running agentic loops. Post-v1 work.
+  W -. loadModelFromBlob .-> GGUF["Gemma 2 2B Q4_K_M (~1.3 GB)<br/>Qwen 2.5 1.5B Q4_K_M (~900 MB)"]
+  L -. init via native path .-> LiteRTBlob["Gemma 2 2B .litertlm (~1.6 GB)<br/>from litert-community/*"]
+```
+
+Wllama runs in a dedicated Web Worker (main-thread generation would block the Svelte UI). LiteRT calls through the `@skillos/capacitor-litert-lm` plugin, which wraps the Kotlin SDK and emits token events back through `postMessage`.
+
+### 4. Checkpoint + resume lives between turns
+
+`CartridgeRunner.RunOptions.onStepCommitted` fires after each validated step with the blackboard snapshot and the list of completed step names. `run_project.ts` wires it to `saveCheckpoint(projectId, {cartridge, flow, blackboard, completed_steps, provider_id, provider_model})`. On the next `runProject` call with `opts.resume = true`, the runner rehydrates the blackboard and **skips** any step already in `completed_steps`.
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant A as App
+  participant R as CartridgeRunner
+  participant C as RunCheckpoint store
+  participant BB as Blackboard
+
+  User->>A: run project (cartridge=cooking)
+  A->>R: run({projectId, onStepCommitted})
+  R->>BB: put user_goal
+  R->>R: step 1 · menu-planner → validated
+  R->>A: onStepCommitted(menu-planner, bb snapshot)
+  A->>C: saveCheckpoint({completed: [menu-planner]})
+  Note over User,A: 🌙 User backgrounds the app<br/>iOS kills JS
+  User->>A: reopens project
+  A->>C: loadCheckpoint(projectId)
+  C-->>A: {completed: [menu-planner], bb snapshot}
+  User->>A: Resume?
+  A->>R: run({resumeFrom: checkpoint})
+  R->>BB: rehydrate from snapshot (validate=false)
+  R->>R: skip menu-planner (in completed_steps)
+  R->>R: step 2 · shopping-list-builder → validated
+  R->>A: onStepCommitted([menu-planner, shopping-list-builder])
+  R->>R: step 3 · recipe-writer → validated
+  R->>A: run-end ok
+  A->>C: clearCheckpoint
+```
+
+### 5. Compaction is pluggable
+
+`runGoal` accepts `compactionStrategy: "fifo" | "llm"`. Default is `"fifo"` (drop oldest tool-result turns). With `"llm"` the ported `compactor.py` summarizes removed turns into a single user message via a cheap-tier provider. This unlocks 2K–4K context local models on long runs. Context-window defaults come from `MODEL_CONTEXT_WINDOWS` (reproduces the Python lookup table + adds M9 local entries).
+
+### 6. Offline queue + exponential backoff
+
+`withRetry` wraps `chatOnce` and `chatStream` in `LLMClient`. Retriable errors (429, 5xx, `fetch failed`, `ECONNRESET`) back off 250 ms → 8 s across 5 attempts. Non-retriable (400, 401, 403, 404) fail immediately. If retries exhaust, `run_project.ts` pushes the call onto `offline_queue.ts`, which auto-flushes on `navigator.online` and drops queue entries when their project is deleted.
+
+### 7. Iframe sandbox is tighter than anything on desktop
+
+Gallery JS skills run in a long-lived hidden `<iframe>` with `sandbox="allow-scripts"` but **without** `allow-same-origin`. Null origin means the iframe cannot read the app's IndexedDB, localStorage, or secrets. Skill JS is injected through a three-strategy loader (M19): Blob URL → data URL → inline `<script>`, with a 3 s handshake timeout on each strategy and the winner logged back to the host. LLM sub-calls via `__skillos.llm.chat` are proxied through `postMessage` so the sandbox never sees the API key.
+
+```mermaid
+flowchart LR
+  A["Skill source<br/>(string from IndexedDB)"] --> Try1
+  Try1{"1. Blob URL<br/>createObjectURL"}
+  Try1 -- ok --> Loaded(("Skill loaded · logged 'blob'"))
+  Try1 -- timeout / onerror --> Try2
+  Try2{"2. data:application/javascript;base64,…"}
+  Try2 -- ok --> LoadedData(("Skill loaded · logged 'data-url'"))
+  Try2 -- timeout / onerror --> Try3
+  Try3{"3. Inline &lt;script&gt; textContent<br/>(CSP must allow unsafe-inline in sandbox)"}
+  Try3 -- ok --> LoadedInline(("Skill loaded · logged 'inline'"))
+  Try3 -- fail --> Error((All strategies failed<br/>surface error))
+```
+
+### 8. Two feature flags gate the v1 surfaces
+
+Both live in IndexedDB `meta` store, both default **off** — v0 users see no change.
+
+- `experimental_on_device_llm` exposes wllama / LiteRT / chrome-prompt-api options in the provider picker and adds a **Manage on-device models** button to Settings.
+- `authoring_mode` exposes a bottom tab bar (Projects / Library) and loads the CodeMirror chunk on first editor open.
 
 ---
 
-## Visual UX — the idea-storm made real
-
-The original feature request observed that the Python runtime "has zero real visual representation of workflows" and proposed "horizontal project swiping combined with vertical lifecycle feeds." The mobile app implements exactly that:
-
-```
-┌─────────────────────────────────────────┐
-│ SkillOS          · · ·             + │   ← app bar + page dots + new project
-├─────────────────────────────────────────┤
-│ Project: cooking-demo            ⚙ ▶  │   ← per-project header + run/settings
-│ cooking                               +│
-├──────────────────────────────────────── │
-│ PLANNED                                 │
-│   🎯 plan weekly meals                  │   ← Goal card
-├──────────────────────────────────────── │
-│ IN EXECUTION                            │
-│   🤖 menu-planner   running…            │   ← Agent card (moves Planned→Exec on step-start)
-│   🤖 shopping-list-builder  running…    │
-├──────────────────────────────────────── │
-│ DONE                                    │
-│   📄 weekly_menu   menu-planner · 7s ago │  ← Document card (appears on blackboard-put ok)
-│   📄 shopping_list shopping-list · 3s ago│
-│   📄 recipes       recipe-writer · just │
-├─────────────────────────────────────────┤
-│ ● Running…   [streaming LLM log]       │   ← RunLogDrawer (sticky bottom)
-└─────────────────────────────────────────┘
-     ← swipe left/right for other projects →
-```
-
-Cards are polymorphic: 🎯 Goal, 🤖 Agent, 🧩 Skill, 📄 Document. Their colored left border encodes `kind`; lane position encodes lifecycle state; subtitle encodes origin + schema ref. Tap a card to expand; see the raw `<produces>` payload.
-
-Horizontal swipe uses CSS `scroll-snap-type: x mandatory` + `scroll-snap-align: start`. One project per 100vw column. Overscroll is clipped with `overscroll-behavior: contain` so iOS rubber-band doesn't collide with snap.
-
----
-
-## What the mobile port unlocks
+## What v1 unlocks
 
 ### For the user
-- **Run a real multi-agent cartridge from a phone.** Type "plan weekly meals for 2 adults, vegetarian" → swipe → watch three agents populate three lanes → end up with validated `weekly_menu` / `shopping_list` / `recipes` cards. The same flow that runs on the desktop, now reachable from anywhere with a browser.
-- **Plug in your laptop's LLM.** Start `ollama serve` at home; install the Capacitor APK; point the app at `http://<laptop>:11434/v1`. Your phone becomes a frontend to whatever model fits in your GPU.
-- **Stay entirely offline.** First launch seeds 8 MB of cartridges; every run after that needs only an LLM. With Ollama LAN, nothing leaves the house.
-- **Export back to disk.** *Settings → Export to Files* writes the full state as markdown to `Documents/SkillOS/`; import rehydrates. Round-tripping between phone and desktop is a folder copy.
+
+- **Run a real multi-agent cartridge from a phone, no internet required.** Download Gemma 2 2B once (1.3 GB). Afterwards `cooking` runs ~3 tok/s on a Pixel 6 (WASM) or ~20 tok/s on a Pixel 8 Pro (LiteRT).
+- **Fork and edit a cartridge on the phone.** Clone `cooking` → rename → open `menu-planner.md` in the Markdown editor → change the agent's prompt → re-run. Every mutation goes through `putFile` with `user_edited: true` so a seed refresh won't overwrite it.
+- **Create a cartridge from zero in 5 steps.** Wizard emits manifest + agent stubs + empty schemas; the result opens in the same editors as the pre-existing cartridges.
+- **Run offline and come back later.** Checkpoint lands between every step. Offline queue flushes when the network returns. Long runs with LLM-powered compaction don't OOM on 2K-context models.
+- **Stay private by default.** Local-first means prompts never leave the device unless your cartridge explicitly opts in with `preferred_tier: cloud` or an agent declares `tier: capable`.
 
 ### For the project
-- **Cartridges become a distribution format.** Ship a new cartridge (agents + schemas + validators + evals) and it runs identically on desktop Python and on mobile JS. No second implementation.
-- **Gallery skills become first-class.** Google AI Edge Gallery's skill format is already the JS-skill contract the mobile app speaks. Any existing Gallery skill runs on SkillOS with no porting.
-- **Evaluation is portable.** `cartridges/*/evals/cases.yaml` runs through the mobile evals screen against any configured provider. The same regression gate the desktop uses.
-- **The skill sandbox story tightens.** Mobile's null-origin iframe + postMessage proxy is a harder boundary than anything the Python runtime can offer (pickles, dynamic imports, subprocess). The iframe pattern is a candidate to port *back* to desktop for defense-in-depth.
+
+- **Cartridges become a universal distribution format.** Write one cartridge folder, it runs identically on desktop Python and mobile JS.
+- **Gallery skills are first-class.** Google AI Edge Gallery's format is exactly what the mobile app speaks. Any existing Gallery skill runs unchanged.
+- **Evals run on mobile too.** `cartridges/*/evals/cases.yaml` flows through the mobile runner against any provider — including the local Gemma — so you can measure cartridge regression on the target device.
+- **The skill sandbox tightens.** Mobile's null-origin iframe + postMessage proxy + three-strategy loader is a harder boundary than Python's subprocess-based sandbox. It's a candidate to port *back* to desktop.
+- **The runtime is now swappable.** `LLMProvider` is an interface. A future M20 can add `ChromePromptApiBackend` for Gemini Nano, or a `vLLM` client, or a Claude Workbench integration, without changing the runner.
+
+### Potential directions
+
+1. **Community cartridge store on the phone.** One tap → install a cartridge folder → available in Library. Review friction drops to the cartridge level, not the OS level.
+2. **Peer-to-peer cartridge sharing.** Export-to-Files already emits the portable layout; a "share" button could zip a project + its cartridge and AirDrop it.
+3. **Fully local small-model cartridges.** The `cooking`, `residential-electrical`, and `learn` cartridges are already designed for small models. Combined with LiteRT on Android, it's a zero-cloud workflow at usable latency.
+4. **Runtime-as-product.** Python stays the authoring experience (claude-code, editor integration, shell tools). Mobile is what end users install. Authors use desktop; consumers use mobile.
 
 ---
 
 ## Limitations (today)
 
-- **No shell tools.** Mobile has no shell; any agent that needs `Bash`/`Read`/`Write` fails fast with a clear error. For cartridges that need filesystem access, author them as Gallery JS skills instead.
-- **No `runtime: browser` (Playwright) skills.** The iframe is the browser runtime.
-- **No LLM-powered compaction.** FIFO truncation only. Long agentic loops will eventually trim themselves in suboptimal ways.
-- **Pure-PWA bundle size is ~100 KB gzipped.** Fine for a phone, but ajv + js-yaml dominate. A future pass could swap ajv for a smaller schema checker and tree-shake js-yaml.
-- **iOS ATS.** `NSAllowsArbitraryLoadsInWebContent` is narrower than a global opt-out and accepted for dev-oriented apps, but App Store review may challenge it. Dev-install via Xcode is the guaranteed path.
+- **No shell tools.** Mobile has no shell. Agents needing `Bash` / `Read` / `Write` tools fail fast.
+- **No `runtime: browser` (Playwright) skills.** The iframe *is* the browser runtime.
+- **Pure-PWA bundle is ~100 KB gzipped main + model-size download.** ajv + js-yaml dominate the main chunk; a future pass could swap ajv for a smaller schema checker.
+- **iOS LiteRT SDK** is "in dev" upstream. iOS users route to wllama. Update when Google ships.
+- **Device validation pending.** M19's acceptance matrix (iPhone SE 3 / 12 / 15 Pro / iPad Pro + Pixel 6 / 8 Pro) has been code-complete since the last commit but not yet run against real hardware.
+- **iOS ATS** (`NSAllowsArbitraryLoadsInWebContent`) is narrower than a global arbitrary-loads opt-out and is accepted for dev-oriented apps, but Apple may challenge it on App Store review. Dev-install via Xcode is the guaranteed path.
 
 ---
 
-## Potential
+## Verification — current state
 
-The interesting claim the implementation makes is that **SkillOS's domain layer (cartridges) can be framework- and runtime-agnostic**. Python runs them today; JavaScript runs the same bytes tomorrow. Swift or Kotlin could run them the day after. The cartridge manifests, schemas, and agent markdown are a neutral representation that multiple runtimes interpret.
+As of branch `mobile-full-skillos`, last commit `ba02b42`:
 
-That suggests a few directions worth exploring:
-
-1. **Cartridge stores on the phone.** A small registry of community cartridges that a user installs by downloading the folder. No code review cycle for the OS itself — just for the cartridge.
-2. **Peer-to-peer cartridge sharing.** `Settings → Export to Files` already emits the portable layout; a "share" button could zip a project + its cartridge and airdrop it. Another phone imports it and runs the same flow with its own provider.
-3. **On-device-only small-model cartridges.** The Gemma cartridges (cooking, electrical, learn) are already designed for small models. Combined with Ollama, a single Capacitor build handles end-to-end execution with zero cloud calls. Latency becomes the only cost.
-4. **Runtime as the product.** The Python runtime remains the authoring experience — claude-code, editor integration, shell tools. The mobile runtime is what end users install. The split is natural: authors use desktop; consumers use mobile.
-
-The port is an experiment, not a replacement. But it validates a thesis the Python-only version couldn't: **the markdown-first architecture really does abstract over the runtime**.
-
----
-
-## Verification
-
-As of first merge:
-
-- **76 passing tests** across 13 spec files (`seed`, `blackboard`, `registry` integration vs. real seeded cartridges, `project_store`, `tool_parser` all 5 dialects + repair, `llm_client` SSE streaming, `run_goal`, `skill_loader` integration vs. all 12 demo skills, `skill_host_bridge`, `validators_builtin`, `runner` full cooking flow end-to-end, `smart_memory`, `evals`).
-- **`svelte-check` 0 errors on 363 files.**
-- **Vite bundle 301 KB JS + 15 KB CSS** (gzipped 97 KB + 3 KB).
+- **129 passing tests** across 24 spec files:
+  - v0 coverage: `seed`, `blackboard`, `registry` (integration vs. real seeded cartridges), `project_store`, `tool_parser` (all 5 dialects), `llm_client` (SSE streaming), `run_goal`, `skill_loader`, `skill_host_bridge`, `validators_builtin`, `runner`, `smart_memory`, `evals`.
+  - v1 additions: `chat_templates`, `model_store`, `local_llm_client`, `build_provider`, `routing`, `runner_fallback`, `compactor`, `retry`, `offline_queue`, `run_checkpoint`, `pause_resume`.
+- **`svelte-check` clean on 423 files.**
+- **Vite bundle 356 KB JS / 114 KB gzipped** (main) + **553 KB / 192 KB gzipped** (authoring chunk, lazy-loaded).
 - **Seed pipeline 180 files / 8.08 MB** — 4 cartridges + Project_aorta + SmartMemory.md copied verbatim.
 
-See [tutorial-mobile.md](tutorial-mobile.md) for the hands-on testing guide.
+See [tutorial-mobile.md](tutorial-mobile.md) for the hands-on testing guide, including on-device LLM setup, authoring walkthrough, and Capacitor Android build steps.

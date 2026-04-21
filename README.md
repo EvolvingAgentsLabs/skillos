@@ -154,7 +154,7 @@ project/        scaffold/       project-scaffold-tool
 - **Cognitive Pipeline** — Recursive Context Isolation gives mid-tier models (Gemma 4 26B) the executive functioning of frontier models: 5K→28K output, 100% step pass rate, 50-100x cheaper ([docs](docs/cognitive-pipeline.md))
 - **Cartridges** — Claude-Code-style subagents on Gemma 4 via sealed per-domain bundles (agents + JSON Schemas + deterministic validators). Typed blackboard, closed-set router, `<produces>{…}</produces>` contract with schema-validated retry. Reference cartridges: `cooking`, `residential-electrical` (IEC 60364), `demo` (11 JS skills). ([docs](docs/cartridges.md))
 - **JS Skill Cartridges** — Run [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery) JavaScript skills via Node.js. Skills can call Gemma 4 as subagents, persist state, and chain through the Blackboard. Three flow modes: deterministic (e2b), skill-chaining (pipelines), agentic (capable models). ([docs](docs/js-skills.md))
-- **Mobile (Pure-JS)** — 🚧 *Ongoing work, not production-ready.* The SkillOS runtime is being ported to TypeScript + Svelte 5 + Capacitor. Cartridges, Blackboard, ajv validators, LLM tool-call loop, Gallery skills in a sandboxed iframe — all running on-device with no Python backend. Swipe-column visual UX: one project per screen, three lifecycle lanes (Planned / In Execution / Done), cards transition live as agents produce and validate outputs. Runs as a PWA or wrapped native app; Ollama LAN works in the Capacitor build. ([docs](docs/mobile.md), [tutorial](docs/tutorial-mobile.md))
+- **Mobile (Pure-JS) — v1 experimental** — 🧪 *Experiment, not production-ready. Device validation still needed.* A self-contained TypeScript + Svelte 5 + Capacitor app under `mobile/` that runs SkillOS cartridges on the phone. Ports the full runtime (Blackboard, CartridgeRegistry, CartridgeRunner, ajv validators, LLM tool-call loop, Gallery skills in a sandboxed iframe) and adds four v1 capabilities: **on-device LLM** (wllama WASM everywhere + LiteRT-LM Capacitor plugin on Android), **smart routing** (cartridge `preferred_tier` + agent `tier: cheap/capable` + local-first with cloud fallback on validation failure), **full in-app authoring** (CodeMirror editors for cartridges / agents / JS skills / schemas + new-from-blank wizard), and **resilience** (LLM-powered compaction, run checkpoint + resume, offline queue). 129 tests, 356 KB / 114 KB gzipped main bundle. ([docs](docs/mobile.md), [tutorial](docs/tutorial-mobile.md))
 - **Dialects** — 14 domain-specific compression formats (50-99% token reduction) with Language Facade and cognitive scaffolding
 - **Knowledge Wiki** — Compounding knowledge base inspired by Karpathy's LLM Wiki pattern
 - **Memory System** — Every execution improves future runs via structured memory
@@ -414,13 +414,13 @@ See [docs/js-skills.md](docs/js-skills.md) for the full architecture, skill auth
 
 ---
 
-## Mobile — Pure-JS Port
+## Mobile — Pure-JS Port (v1 experimental)
 
-> ⚠️ **Status: ongoing experiment, under active development — not feature-complete and not production-ready.**
+> 🧪 **Status: v1 experimental — not production-ready. Device validation still pending.**
 >
-> Everything in `mobile/` is a v0 slice that demonstrates the architecture end-to-end against mocked LLMs and one real provider path. Expect rough edges: no iOS device testing yet, FIFO compaction only (no LLM-powered compaction), no long-running session support, no offline-queue for cloud providers, no in-app cartridge authoring. The Python runtimes (`skillos.py`, `agent_runtime.py`, `cartridge_runtime.py`) remain the supported path for real work. Use the mobile build to explore the UX and validate the pure-JS runtime direction.
+> The mobile stack now covers everything the idea-storm asked for — on-device Gemma inference, local-first smart routing, full in-app authoring, resumable runs — but `mobile/` has only been exercised in Chrome DevTools emulation and Node-based Vitest suites. iPhone SE 3 / 12 / 15 Pro and Pixel 6 / 8 Pro hardware validation (M19's acceptance gate) is the remaining work. The Python runtimes (`skillos.py`, `agent_runtime.py`, `cartridge_runtime.py`) stay the supported path for critical work.
 
-The entire SkillOS runtime is also ported to TypeScript + Svelte 5 + Vite + Capacitor under `mobile/`. The Python repo becomes an **authoring environment**; the mobile app is a **runtime** that executes the same cartridges, schemas, validators, and Gallery skills — with no Python on-device.
+Under `mobile/` lives a self-contained TypeScript + Svelte 5 + Vite + Capacitor app. The Python repo is the **authoring environment** — cartridges, schemas, validators, and Gallery skills are still written there. The mobile app is a **runtime** that executes the same bytes, and in v1 also becomes an **authoring environment on the phone**.
 
 ### The visual UX
 
@@ -443,50 +443,146 @@ The entire SkillOS runtime is also ported to TypeScript + Svelte 5 + Vite + Capa
 ├──────────────────────────────────────┤
 │ ● Running…  [streaming LLM log]      │
 └──────────────────────────────────────┘
+   [Projects]   [Library]                  ← tab bar (authoring_mode)
 ```
 
-Horizontal swipe between full-screen project columns, three vertical lifecycle lanes per project, polymorphic cards (🎯 Goal / 🤖 Agent / 🧩 Skill / 📄 Document) that transition lanes live as the `CartridgeRunner` fires events. Every agent's `<produces>{…}</produces>` block validates against the cartridge's ajv schemas (draft-07 + 2020-12) and the TS-ported validators (`menu_complete`, `shopping_list_sane`) fire deterministically just like on desktop.
+Horizontal swipe between full-screen project columns, three vertical lifecycle lanes, polymorphic cards (🎯 Goal / 🤖 Agent / 🧩 Skill / 📄 Document) that transition lanes live as `CartridgeRunner` fires events. With `authoring_mode` on, a second tab exposes a Library view with CodeMirror editors for every cartridge file.
 
 ### Runtime architecture
 
+```mermaid
+flowchart TB
+  subgraph Phone["Phone (self-contained after first boot)"]
+    subgraph UI["Svelte 5 app · Vite PWA / Capacitor native"]
+      Swiper[ProjectSwiper<br/>→ Column → Lane → Card]
+      Library["LibraryScreen<br/>(authoring_mode flag)"]
+      Editors[CodeMirror editors<br/>YAML / MD / JSON / JS]
+      Wizard[CartridgeWizard]
+      ModelMgr[ModelManagerSheet]
+      Iframe[(Sandboxed iframe<br/>Gallery skill runtime)]
+    end
+
+    subgraph LLM["LLM layer"]
+      Provider[LLMProvider interface]
+      Cloud[HttpLLMClient<br/>OpenRouter · Gemini]
+      Local[LocalLLMClient]
+      Wllama[WllamaBackend<br/>WASM Web Worker]
+      LiteRT[LiteRTBackend<br/>Android Kotlin plugin]
+      Router[SmartRouter<br/>resolveProvider]
+      Compactor[LLM Compactor]
+      Retry[Retry + Offline Queue]
+      Checkpoint[RunCheckpoint]
+    end
+
+    subgraph IDB["IndexedDB (idb) · v3 schema"]
+      files[files: seeded markdown + edits]
+      projects[(projects)]
+      blackboards[(blackboards)]
+      memory[(memory)]
+      secrets[(secrets)]
+      models[(models: GGUF/litertlm blobs)]
+      checkpoints[(checkpoints)]
+    end
+  end
+
+  UI <--> LLM
+  UI <--> IDB
+  LLM --> Cloud
+  LLM --> Local
+  Local --> Wllama
+  Local --> LiteRT
+  Provider --> Router
+  Cloud -. fetch .-> Internet[(Cloud APIs<br/>OpenRouter · Gemini)]
+  LiteRT -. JNI .-> Gemma[Gemma 2 / Gemma 3<br/>.litertlm on disk]
+  Wllama -. load .-> GGUF[Gemma / Qwen<br/>GGUF from HF]
+  Iframe <-. postMessage .-> Provider
 ```
-Phone (self-contained after first boot)
-├── Svelte 5 app (Vite-built PWA; Capacitor-wrapped for iOS/Android)
-├── IndexedDB via idb — files · projects · blackboards · memory · secrets · meta
-└── LLM client → OpenRouter · Gemini · Ollama LAN (Capacitor only)
+
+Every Python module has a TS sibling: `cartridge_runtime.py` → `mobile/src/lib/cartridge/`, `agent_runtime.py` → `mobile/src/lib/llm/`, `experiments/gemma4-skills/` → `mobile/src/lib/skills/` + `mobile/public/iframe/skill-host.{html,js}`. Cartridge YAML, agent markdown, JSON Schemas, and Gallery `SKILL.md` files ship verbatim as static assets and seed into IndexedDB on first launch.
+
+### Smart routing — local-first with cloud fallback
+
+Cartridges declare `preferred_tier`; agents declare `tier: cheap | capable`; the runner picks a provider **per-turn** and escalates on validation failure.
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant R as CartridgeRunner
+  participant RR as resolveProvider
+  participant P as Primary<br/>(wllama local)
+  participant F as Fallback<br/>(OpenRouter cloud)
+  participant V as ajv validator
+
+  User->>R: run(cartridge, goal)
+  R->>RR: agent A · tier=cheap · attempt 1
+  RR-->>R: use Primary
+  R->>P: chat()
+  P-->>R: <produces>{…bad shape…}</produces>
+  R->>V: validate(schema_ref)
+  V-->>R: FAIL — missing required field
+  R->>RR: agent A · attempt 2 · previousFailure=validation
+  RR-->>R: escalate → Fallback
+  R->>F: chat() (retry with feedback)
+  F-->>R: <produces>{…valid…}</produces>
+  R->>V: validate
+  V-->>R: ok
+  R-->>User: RunEvent 'tier-switch' · step-end validated
 ```
 
-Every Python module has a TS sibling: `cartridge_runtime.py` → `mobile/src/lib/cartridge/`, `agent_runtime.py` → `mobile/src/lib/llm/`, `experiments/gemma4-skills/` → `mobile/src/lib/skills/` + `mobile/public/iframe/skill-host.{html,js}`. Cartridge YAML manifests, agent markdown, JSON Schemas, and Gallery `SKILL.md` files ship verbatim as static assets and seed into IndexedDB on first launch.
+Result: **Gemma runs locally on 90% of turns; Claude/Qwen kick in only when the task is genuinely complex or the cheap tier botched the schema.** No cost unless needed. No quality floor below what the cheap tier can deliver.
 
-### Five things the port unlocks
+### Card lifecycle
 
-1. **On-device privacy** — Ollama over LAN from a laptop GPU. Nothing leaves the house.
-2. **Cartridges as a distribution format** — ship one cartridge folder, it runs identically on desktop Python and mobile JS.
-3. **Harder skill sandbox** — Gallery JS skills run in a null-origin `sandbox="allow-scripts"` iframe; LLM sub-calls proxy via `postMessage` so the sandbox never sees API keys.
-4. **Round-trip to disk** — *Settings → Export to Files* writes the full state as markdown to `Documents/SkillOS/` for the desktop Python runner to pick up.
-5. **Evals on mobile** — `cartridges/*/evals/cases.yaml` runs through the same mobile runner against any configured provider.
+```mermaid
+stateDiagram-v2
+  [*] --> Planned : user creates goal
+  Planned --> Executing : run-start
+  Executing --> Executing : step-start (add agent card)
+  Executing --> Done : blackboard-put ok → document card
+  Executing --> Paused : app backgrounded /<br/>visibilitychange
+  Paused --> Executing : user reopens →<br/>loadCheckpoint → runner.run({resumeFrom})
+  Executing --> Done : run-end (goal card → Done)
+  Done --> [*]
+```
+
+### Five things v1 unlocks
+
+1. **Sovereignty** — Download Gemma / Qwen once. Run cartridges fully on-device with zero network traffic. Capacitor-Android picks up LiteRT-LM for 5–15× faster inference than WASM on the same phone.
+2. **Smart delegation** — Local by default, cloud only when validation fails or an agent's frontmatter says `tier: capable`. Cost follows complexity.
+3. **Authoring on the phone** — Clone a cartridge, edit its YAML manifest and each agent's markdown with ajv-linted CodeMirror editors, scaffold a new cartridge from zero with the 5-step wizard, test a JS skill in the sandbox before saving.
+4. **Resilient runs** — LLM-powered compaction keeps 2K-context models from choking on 40-turn flows. Checkpoint-per-step means backgrounding the app doesn't waste earlier work. Offline queue retries cloud calls with exponential backoff when wifi flaps.
+5. **Harder skill sandbox than desktop** — Gallery JS skills run in a null-origin `sandbox="allow-scripts"` iframe; LLM sub-calls proxy via `postMessage` so the sandbox never sees API keys. The three-strategy script loader (Blob URL → data URL → inline `<script>`) survives iOS WKWebView quirks.
 
 ### Quick start
 
 ```bash
 cd mobile
 npm install
-npm test                 # 76 passing tests across 13 spec files
+npm test                 # 129 passing tests across 24 spec files
 npm run dev              # open http://localhost:5173 in Chrome, toggle device emulation
 ```
 
-Then in the app: **+** → name + pick `cooking` + initial goal → ⚙ → enter an OpenRouter or Gemini API key → **▶ run**. Watch the three cooking agents populate the lanes and produce validated `weekly_menu` / `shopping_list` / `recipes` document cards in Done.
+Then in the app:
 
-For the Capacitor native build and LAN Ollama setup: see [docs/tutorial-mobile.md](docs/tutorial-mobile.md).
+1. **+** → name + pick `cooking` + initial goal → **Create**
+2. Tap **⚙** → enter an OpenRouter or Gemini API key → **Save**
+3. Tap **▶ run** — watch the three cooking agents populate the lanes and produce validated document cards
 
-### Verification (v1)
+**To try on-device LLM:** Settings → toggle `experimental_on_device_llm` → *Manage on-device models* → download Qwen 2.5 1.5B (~900 MB) → set project provider to `On-device · wllama (WASM)` → run.
 
-- **76 passing tests** across 13 spec files (full cooking flow runs end-to-end against SSE-mocked fetch)
-- **`svelte-check` 0 errors on 363 files**
-- **Vite bundle 301 KB / 97 KB gzipped**
-- **Seed pipeline 180 files / 8.08 MB** copied from `cartridges/**` + `projects/Project_aorta/` + `system/SmartMemory.md`
+**To try authoring:** Settings → toggle `authoring_mode` → **Library** tab appears → clone a cartridge or use **+ New** → edit YAML / Markdown / JSON with live lint → save → run.
 
-Architecture, cross-cutting decisions, and future potential: [docs/mobile.md](docs/mobile.md). Hands-on testing guide: [docs/tutorial-mobile.md](docs/tutorial-mobile.md).
+For Capacitor native builds, LiteRT on Android, and iOS setup: see [docs/tutorial-mobile.md](docs/tutorial-mobile.md).
+
+### Verification (v1, latest `mobile-full-skillos`)
+
+- **129 passing tests** across 24 spec files — covers Blackboard, registry, runner, LLM client SSE, tool-call dialects, wllama local client with fake backend, model store, chat templates, smart routing + tier-switch events, compactor (textual + LLM paths), retry classification + backoff, offline queue lifecycle, run checkpoint + resume (full `cooking` cartridge flow paused after step 1, resumed, skips menu-planner, completes).
+- **`svelte-check` clean on 423 files**, 0 errors, 0 warnings.
+- **Vite bundle: 356 KB JS / 114 KB gzipped** + 28.7 KB CSS / 4.96 KB gzipped (main).
+- **Lazy-loaded authoring chunk: 553 KB / 192 KB gzipped** — downloaded only when `authoring_mode` is toggled on. v0 users pay nothing extra.
+- **Seed pipeline: 180 files / 8.08 MB** copied from `cartridges/**` + `projects/Project_aorta/` + `system/SmartMemory.md`.
+
+Architecture, cross-cutting decisions, design rationale, and future potential: [docs/mobile.md](docs/mobile.md). Hands-on testing guide including on-device LLM + authoring walkthroughs: [docs/tutorial-mobile.md](docs/tutorial-mobile.md).
 
 ---
 

@@ -130,4 +130,15 @@ export class SkillRegistry {
     }
     return lines.join("\n");
   }
+
+  /** M12 — reload a single skill after a save. */
+  async reloadSkill(skillDir: string): Promise<void> {
+    const s = await loadSkill(skillDir);
+    if (s) this._skills.set(s.name, s);
+  }
+
+  /** M12 — drop a skill from the registry (after deleteSkill). */
+  forget(skillName: string): void {
+    this._skills.delete(skillName);
+  }
 }

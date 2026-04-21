@@ -12,12 +12,47 @@
 
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
 
+export interface ModelBlobRecord {
+  id: string;
+  blob: ArrayBuffer;
+  size: number;
+  sha256?: string;
+  downloaded_at: string;
+  /** Backend the blob is for; duplicated from catalog for resilience. */
+  backend: "wllama" | "litert" | "chrome-prompt-api";
+  /** Optional native file path for LiteRT (M10 fills this after copy to cache). */
+  native_path?: string;
+}
+
+export interface CheckpointRecord {
+  /** Equal to `project_id` — one live checkpoint per project. */
+  id: string;
+  project_id: string;
+  cartridge: string;
+  flow: string;
+  goal: string;
+  /** Blackboard snapshot at the last completed step boundary. */
+  blackboard: Record<string, unknown>;
+  /** Names of steps that have completed successfully so far. */
+  completed_steps: string[];
+  /** Which provider the run was using (id + model only; keys never serialized). */
+  provider_id?: string;
+  provider_model?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FileRecord {
   path: string;
   content: ArrayBuffer;
   sha1: string;
   size: number;
   updated_at: string;
+  /**
+   * M12: true when a user edit wrote this file. Seed-refresh skips paths
+   * with this flag so we don't overwrite customizations on app updates.
+   */
+  user_edited?: boolean;
 }
 
 export interface ProjectRecord {
@@ -92,10 +127,18 @@ interface SkillOSDB extends DBSchema {
     key: string;
     value: MetaRecord;
   };
+  models: {
+    key: string;
+    value: ModelBlobRecord;
+  };
+  checkpoints: {
+    key: string;
+    value: CheckpointRecord;
+  };
 }
 
 const DB_NAME = "skillos";
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 let _dbPromise: Promise<IDBPDatabase<SkillOSDB>> | null = null;
 
@@ -107,7 +150,7 @@ export function _resetDBForTests(): void {
 export function getDB(): Promise<IDBPDatabase<SkillOSDB>> {
   if (!_dbPromise) {
     _dbPromise = openDB<SkillOSDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, _oldVersion) {
         if (!db.objectStoreNames.contains("files")) {
           const store = db.createObjectStore("files", { keyPath: "path" });
           store.createIndex("by-prefix", "path");
@@ -129,10 +172,65 @@ export function getDB(): Promise<IDBPDatabase<SkillOSDB>> {
         if (!db.objectStoreNames.contains("meta")) {
           db.createObjectStore("meta", { keyPath: "key" });
         }
+        // v2: on-device model blob store. Separate from `files` because
+        // entries are 0.5–2 GB and would skew the sha1/path contract.
+        if (!db.objectStoreNames.contains("models")) {
+          db.createObjectStore("models", { keyPath: "id" });
+        }
+        // v3: partial-run checkpoints (M17). Keyed by project id.
+        if (!db.objectStoreNames.contains("checkpoints")) {
+          db.createObjectStore("checkpoints", { keyPath: "id" });
+        }
       },
     });
   }
   return _dbPromise;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Model blob helpers (v2)
+
+export async function putModelBlob(rec: ModelBlobRecord): Promise<void> {
+  const db = await getDB();
+  await db.put("models", rec);
+}
+
+export async function getModelBlob(id: string): Promise<ModelBlobRecord | undefined> {
+  const db = await getDB();
+  return db.get("models", id);
+}
+
+export async function listModelBlobs(): Promise<ModelBlobRecord[]> {
+  const db = await getDB();
+  return db.getAll("models");
+}
+
+export async function deleteModelBlob(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("models", id);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Checkpoint helpers (v3) — one live checkpoint per project.
+
+export async function putCheckpoint(rec: CheckpointRecord): Promise<void> {
+  const db = await getDB();
+  await db.put("checkpoints", rec);
+}
+
+export async function getCheckpoint(projectId: string): Promise<CheckpointRecord | undefined> {
+  const db = await getDB();
+  return db.get("checkpoints", projectId);
+}
+
+export async function listCheckpoints(): Promise<CheckpointRecord[]> {
+  const db = await getDB();
+  return db.getAll("checkpoints");
+}
+
+export async function deleteCheckpoint(projectId: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("checkpoints", projectId);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -154,7 +252,7 @@ async function toArrayBuffer(input: Blob | string | ArrayBuffer | Uint8Array): P
 export async function putFile(
   filePath: string,
   content: Blob | string | ArrayBuffer | Uint8Array,
-  opts: { sha1?: string } = {},
+  opts: { sha1?: string; user_edited?: boolean } = {},
 ): Promise<void> {
   const buf = await toArrayBuffer(content);
   const record: FileRecord = {
@@ -163,9 +261,15 @@ export async function putFile(
     sha1: opts.sha1 ?? "",
     size: buf.byteLength,
     updated_at: new Date().toISOString(),
+    user_edited: opts.user_edited === true ? true : undefined,
   };
   const db = await getDB();
   await db.put("files", record);
+}
+
+export async function deleteFile(filePath: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("files", filePath);
 }
 
 export async function getFile(filePath: string): Promise<FileRecord | undefined> {

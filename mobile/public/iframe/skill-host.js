@@ -32,8 +32,16 @@
     return "iid_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
   }
 
-  // Inject a skill's source into the current document via a Blob URL <script>.
+  // M19: inject via the three-strategy loader in skill-host-loader.js.
+  // Blob URL → data URL → inline <script>. The first strategy that works
+  // on the current device is logged back to the host for telemetry.
   function injectScript(source) {
+    var loader = self.injectSkillSource;
+    if (typeof loader === "function") {
+      return loader(source);
+    }
+    // Fallback path for environments where the loader didn't load (test
+    // harnesses, etc.) — replicate the old Blob-URL behaviour.
     return new Promise(function (resolve, reject) {
       try {
         var blob = new Blob([source], { type: "application/javascript" });
