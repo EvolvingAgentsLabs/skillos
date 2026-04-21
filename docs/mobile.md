@@ -14,6 +14,120 @@ The "markdown is the program" principle is preserved intact, then three v1 addit
 
 ---
 
+## Architectural assessment
+
+> *"This implementation is **production-grade in its architecture**. It completely shifts SkillOS from a Python desktop experiment into a sovereign, on-device AI operating system. By wrapping **LiteRT-LM** in a Capacitor plugin, sandboxing JS tools in an **Iframe**, and using **IndexedDB** as the virtual file system, this app can generate its own skills, execute them locally using Gemma 4B, and seamlessly fall back to Cloud APIs only when absolutely necessary."*
+>
+> — external architectural review, after reading the `mobile-full-skillos` branch
+
+The claim the review makes is that four primitives, stacked together, convert the phone from a viewer of a remote agent pipeline into an autonomous AI operating system. Here they are in detail:
+
+### Pillar 1 — IndexedDB as the virtual file system
+
+The desktop runtime reads cartridges, agents, and schemas from a directory tree. The mobile port puts the same tree in IndexedDB and preserves every path.
+
+```mermaid
+flowchart LR
+  subgraph Python["Desktop (Python)"]
+    DiskTree["cartridges/cooking/<br/>├── cartridge.yaml<br/>├── agents/*.md<br/>├── schemas/*.schema.json<br/>└── validators/*.py"]
+  end
+  subgraph Mobile["Mobile (IndexedDB)"]
+    Files["files store<br/>path: cartridges/cooking/cartridge.yaml<br/>path: cartridges/cooking/agents/menu-planner.md<br/>path: cartridges/cooking/schemas/weekly_menu.schema.json<br/>…"]
+    Projects["(projects)"]
+    Blackboards["(blackboards)"]
+    Memory["(memory · SmartMemory)"]
+    Secrets["(secrets · provider keys)"]
+    Meta["(meta · flags + queue)"]
+    Models["(models · GGUF + .litertlm)"]
+    Checkpoints["(checkpoints · partial runs)"]
+  end
+  DiskTree -. seed-build.mjs<br/>+ manifest.json .-> Files
+  Files -. Export to Files .-> DiskTree
+```
+
+Eight stores, schema v3. `files` carries everything the Python runtime would read from disk — including user edits (marked `user_edited: true` so seed refresh skips them). `projects`, `blackboards`, and `memory` are the runtime state. `secrets` and `meta` hold configuration + feature flags + the offline-queue summary. `models` is a separate store for 0.5–2 GB binary blobs that can't live alongside text files. `checkpoints` is per-project partial-run state.
+
+### Pillar 2 — LiteRT-LM wrapped as a first-party Capacitor plugin
+
+The same runtime the AI Edge Gallery app ships, made available to SkillOS through a Kotlin plugin under `capacitor-plugins/litert-lm/`. TypeScript sees one `LocalLLMBackend` interface; the factory picks `LiteRTBackend` on Android-native, `WllamaBackend` everywhere else.
+
+```mermaid
+flowchart LR
+  Catalog["Model catalog entry<br/>{backend: 'litert' | 'wllama'}"] --> Pick{pickBackendForModel}
+  Pick -- Capacitor + Android --> LR[LiteRTBackend<br/>TS wrapper]
+  Pick -- PWA or iOS --> WW[WllamaBackend<br/>Web Worker]
+  LR -. postMessage-like events .-> Plugin["@skillos/capacitor-litert-lm<br/>Kotlin + Swift stubs"]
+  Plugin -. JNI .-> Gemma["LiteRT-LM runtime<br/>.litertlm on disk<br/>5–15× faster on Android"]
+  WW -. dynamic import .-> WASM["@wllama/wllama<br/>GGUF from Hugging Face"]
+```
+
+iOS still routes to wllama until Google's Swift SDK leaves "in dev" status; the plugin's iOS stub reports unavailable so `pickBackendForModel` never picks it there.
+
+### Pillar 3 — Sandboxed iframe with null origin for every JS tool
+
+Gallery JS skills run inside a long-lived hidden `<iframe>` with `sandbox="allow-scripts"` but **without** `allow-same-origin`. The iframe gets a null origin: it cannot read IndexedDB, localStorage, or any app secret. LLM sub-calls via `__skillos.llm.chat` proxy back to the host through `postMessage`, so API keys never cross the boundary.
+
+```mermaid
+sequenceDiagram
+  participant App as SkillOS app (origin A)
+  participant IF as Sandboxed iframe<br/>(origin null)
+  participant Skill as Gallery skill<br/>(user code)
+  participant LLM as Host LLM client<br/>(holds API key)
+
+  App->>IF: load-skill {source as string}
+  Note over IF: Loader tries:<br/>Blob URL → data URL → inline<br/>(M19 three-strategy)
+  IF->>Skill: inject &lt;script&gt;
+  App->>IF: run {data, secret?}
+  IF->>Skill: ai_edge_gallery_get_result(data, secret)
+  Skill-->>IF: __skillos.llm.chat(prompt)
+  IF->>App: postMessage llm-request
+  Note over IF,App: Iframe never sees the key
+  App->>LLM: chat (real provider)
+  LLM-->>App: completion
+  App-->>IF: postMessage llm-response
+  IF-->>Skill: resolved content
+  Skill-->>IF: {ok, result, webview, image}
+  IF-->>App: postMessage result
+```
+
+This is a harder boundary than anything the Python runtime can currently offer (which relies on subprocess isolation). If a skill is malicious, it sees nothing — no keys, no other skills' state, no cartridge files, no SmartMemory entries.
+
+### Pillar 4 — Blackboard checkpoint after every agent turn
+
+iOS aggressively suspends JavaScript when an app backgrounds — a 30-second run can get killed halfway through. M17's answer: `CartridgeRunner` emits `onStepCommitted` after **every validated step** with the full blackboard snapshot. `saveCheckpoint` writes it to the `checkpoints` store. On reopen, `loadCheckpoint` rehydrates the blackboard and the runner **skips** any step already in `completed_steps`.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Planned : user creates goal
+  Planned --> ExecutingStep1 : run-start
+  ExecutingStep1 --> CommittedStep1 : step-end validated
+  CommittedStep1 --> ExecutingStep2 : next step
+  CommittedStep1 --> Suspended : 🌙 iOS kills JS<br/>(onStepCommitted already<br/>wrote checkpoint)
+  Suspended --> Resuming : user reopens app<br/>loadCheckpoint returns record
+  Resuming --> ExecutingStep2 : runner.run({resumeFrom})<br/>skips Step1
+  ExecutingStep2 --> CommittedStep2 : step-end validated
+  CommittedStep2 --> Done : all steps complete
+  Done --> [*] : clearCheckpoint
+```
+
+The guarantee: **you never redo a step that already validated, even across app kills.** iOS reliability becomes a three-line hook (`saveCheckpoint(stepName, completedSteps, blackboard)`) rather than an existential problem.
+
+### Combined result
+
+The reviewer's summary is the honest one: *"this app can generate its own skills, execute them locally using Gemma 4B, and seamlessly fall back to Cloud APIs only when absolutely necessary."* With the four pillars in place, the end-to-end user experience is:
+
+1. User downloads Gemma 2 2B once (~1.3 GB) via Model Manager.
+2. User opens the Library tab, clones `cooking`, edits `menu-planner.md`, saves.
+3. User creates a project attached to the fork, sets Primary = `On-device · wllama` + Fallback = `OpenRouter · Qwen`, taps ▶ run.
+4. Gemma runs every step locally. A `tier: capable` agent or a schema-failed retry transparently switches to OpenRouter.
+5. User backgrounds the app mid-run. iOS kills JS. User reopens. Runner resumes from the last committed step.
+6. User creates a brand new cartridge via the 5-step wizard, edits its new Gallery JS skill in the Test-in-iframe panel, saves, runs.
+7. Everything, including the edits, round-trips back to `Documents/SkillOS/` as markdown for the desktop Python runner to pick up.
+
+All of it without a SkillOS server.
+
+---
+
 ## Why v1 matters
 
 Three things a v1 mobile port buys that v0 and the Python runtime cannot:
