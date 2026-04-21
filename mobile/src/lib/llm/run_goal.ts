@@ -13,6 +13,11 @@
  */
 
 import type { ChatMessage } from "./client";
+import {
+  compactMessagesAsync,
+  defaultCompactionConfig,
+  type CompactionConfig,
+} from "./compactor";
 import type { LLMProvider } from "./provider";
 import {
   TOOL_ALIASES,
@@ -52,6 +57,16 @@ export interface RunGoalOptions {
   signal?: AbortSignal;
   /** Safety cap on user/tool-result message count before FIFO truncation. */
   compactThreshold?: number;
+  /**
+   * Compaction strategy:
+   *   "fifo" (default) — cheap: drop old Tool-returned user messages.
+   *   "llm"            — spend one LLM call to summarize removed turns.
+   *                      Pass `compactionConfig` to tune; pass `compactionLLM`
+   *                      to route the summary to a specific (cheap) provider.
+   */
+  compactionStrategy?: "fifo" | "llm";
+  compactionConfig?: Partial<CompactionConfig>;
+  compactionLLM?: LLMProvider;
 }
 
 const DEFAULT_MAX_TURNS = 10;
@@ -67,11 +82,28 @@ export async function runGoal(
     { role: "user", content: `My goal is: ${goal}` },
   ];
 
+  const compactionCfg: CompactionConfig = {
+    ...defaultCompactionConfig(),
+    ...(opts.compactionConfig ?? {}),
+  };
+  const strategy = opts.compactionStrategy ?? "fifo";
+
   for (let i = 0; i < maxTurns; i++) {
     if (opts.signal?.aborted) throw new Error("aborted");
     opts.onEvent?.({ type: "turn-start", turn: i + 1 });
 
-    maybeCompact(messages, opts.compactThreshold ?? DEFAULT_COMPACT_THRESHOLD);
+    if (strategy === "llm") {
+      const res = await compactMessagesAsync(
+        messages,
+        compactionCfg,
+        opts.compactionLLM ?? client,
+      );
+      if (res.compacted > 0) {
+        messages.splice(0, messages.length, ...res.messages);
+      }
+    } else {
+      maybeCompact(messages, opts.compactThreshold ?? DEFAULT_COMPACT_THRESHOLD);
+    }
 
     let assistantText = "";
     try {
