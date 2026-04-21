@@ -30,6 +30,8 @@
             {e.step.validated ? "✓" : "✗"} {e.step.agent} — {e.step.message}
           {:else if e.type === "validator"}
             {e.ok ? "✓" : "✗"} {e.message}
+          {:else if e.type === "tier-switch"}
+            ↪ {e.agent}: {e.from} → {e.to} ({e.reason})
           {:else if e.type === "run-end"}
             ■ {e.result.ok ? "ok" : "partial"}
           {/if}
@@ -108,6 +110,10 @@
   }
   .row-validator {
     color: var(--warn);
+  }
+  .row-tier-switch {
+    color: var(--accent-2);
+    font-weight: 500;
   }
   .llm {
     color: var(--fg-dim);

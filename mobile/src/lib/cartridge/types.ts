@@ -3,6 +3,8 @@
  * C:\evolvingagents\skillos\cartridge_runtime.py lines 192-248.
  */
 
+export type AgentTier = "cheap" | "capable";
+
 export interface AgentSpec {
   name: string;
   path: string;
@@ -14,6 +16,12 @@ export interface AgentSpec {
   tools: string[];
   max_turns: number;
   description: string;
+  /**
+   * Routing hint for M11 `resolveProvider`. `cheap` (default) prefers the
+   * project's primary provider; `capable` skips local-first routing and goes
+   * straight to the fallback when one is configured.
+   */
+  tier: AgentTier;
 }
 
 export interface SkillStep {
@@ -44,6 +52,8 @@ export function stepName(step: FlowStep): string {
 
 export type CartridgeType = "standard" | "js-skills";
 
+export type PreferredTier = "local" | "cloud" | "auto";
+
 export interface CartridgeManifest {
   name: string;
   path: string;
@@ -58,6 +68,13 @@ export interface CartridgeManifest {
   variables: Record<string, unknown>;
   type: CartridgeType;
   skills_source: string;
+  /**
+   * M11 routing hint. `local` asks the smart router to prefer the project's
+   * local provider; `cloud` always uses a cloud primary/fallback; `auto`
+   * (default) respects the project's primary choice and only falls back on
+   * validation failure.
+   */
+  preferred_tier: PreferredTier;
 }
 
 export interface BlackboardEntry {

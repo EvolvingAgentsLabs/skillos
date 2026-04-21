@@ -171,6 +171,11 @@ export class CartridgeRegistry {
     }
 
     const fallbackName = cartridgeDir.split("/").pop() ?? "unknown";
+    const preferredTierRaw = String(data.preferred_tier ?? "auto");
+    const preferred_tier: CartridgeManifest["preferred_tier"] =
+      preferredTierRaw === "local" || preferredTierRaw === "cloud"
+        ? preferredTierRaw
+        : "auto";
     const manifest: CartridgeManifest = {
       name: String(data.name ?? fallbackName),
       path: cartridgeDir,
@@ -185,6 +190,7 @@ export class CartridgeRegistry {
       variables: asRecord(data.variables),
       type: data.type === "js-skills" ? "js-skills" : "standard",
       skills_source,
+      preferred_tier,
     };
     if (!manifest.default_flow) {
       const firstFlow = Object.keys(manifest.flows)[0];
@@ -220,6 +226,8 @@ export class CartridgeRegistry {
     if (content === undefined) return undefined;
 
     const { frontmatter, body } = splitFrontmatter(content);
+    const tierRaw = String(frontmatter.tier ?? "cheap");
+    const tier: AgentSpec["tier"] = tierRaw === "capable" ? "capable" : "cheap";
     const spec: AgentSpec = {
       name: String(frontmatter.name ?? agentName),
       path: agentPath,
@@ -233,6 +241,7 @@ export class CartridgeRegistry {
         (Number(frontmatter.max_turns ?? manifest.max_turns_per_agent) | 0) ||
         manifest.max_turns_per_agent,
       description: String(frontmatter.description ?? ""),
+      tier,
     };
     this._agentsCache.set(key, spec);
     return spec;

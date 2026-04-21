@@ -25,6 +25,11 @@ import { skillResultToLlmString } from "../skills/skill_result";
 import { Blackboard } from "./blackboard";
 import { tokenize } from "./registry";
 import type { CartridgeRegistry } from "./registry";
+import {
+  resolveProvider as resolveRoute,
+  type ProviderBundle,
+  type RouteContext,
+} from "./routing";
 import { BUILTIN_VALIDATORS } from "./validators_builtin";
 import type {
   AgentSpec,
@@ -69,6 +74,13 @@ export type RunEvent =
   | { type: "blackboard-put"; agent: string; key: string; ok: boolean; message: string }
   | { type: "step-end"; step: StepResult }
   | { type: "validator"; message: string; ok: boolean }
+  | {
+      type: "tier-switch";
+      agent: string;
+      from: "primary" | "fallback";
+      to: "primary" | "fallback";
+      reason: string;
+    }
   | { type: "run-end"; result: RunResult };
 
 export interface RunOptions {
@@ -87,11 +99,27 @@ const PRODUCES_RE = /<produces>([\s\S]*?)<\/produces>/;
 
 export class CartridgeRunner {
   private _skillRegs = new Map<string, SkillRegistry>();
+  private readonly providers: ProviderBundle;
 
+  /** Back-compat: the provider the skill iframe's LLM proxy uses. */
+  private get llm(): LLMProvider {
+    return this.providers.primary;
+  }
+
+  /**
+   * Construction accepts either a single provider (v0 behavior) or a
+   * `{primary, fallback?}` bundle (M11). The runner treats a lone provider
+   * as `primary` with no fallback.
+   */
   constructor(
     private readonly registry: CartridgeRegistry,
-    private readonly llm: LLMProvider,
-  ) {}
+    providers: LLMProvider | ProviderBundle,
+  ) {
+    this.providers =
+      typeof (providers as LLMProvider).chat === "function"
+        ? { primary: providers as LLMProvider }
+        : (providers as ProviderBundle);
+  }
 
   async run(cartridge: string, goal: string, opts: RunOptions = {}): Promise<RunResult> {
     const manifest = this.registry.get(cartridge);
@@ -138,11 +166,16 @@ export class CartridgeRunner {
     } else {
       const maxRetries = opts.maxRetriesPerStep ?? 1;
       for (const stepDef of flowDef.steps) {
-        const primary = await this.executeFlowStep(manifest, stepDef, bb, "", opts);
+        const ctx: RouteContext = { attempt: 1 };
+        const primary = await this.executeFlowStep(manifest, stepDef, bb, "", opts, ctx);
         let step = primary;
         if (!step.validated && maxRetries > 0) {
           step.attempts += 1;
-          const retry = await this.executeFlowStep(manifest, stepDef, bb, step.message, opts);
+          const retry = await this.executeFlowStep(manifest, stepDef, bb, step.message, opts, {
+            attempt: 2,
+            previousFailure: "validation",
+            previousTarget: ctx.previousTarget,
+          });
           retry.attempts = step.attempts + retry.attempts;
           step = retry;
         }
@@ -175,12 +208,13 @@ export class CartridgeRunner {
     bb: Blackboard,
     retryFeedback: string,
     opts: RunOptions,
+    ctx: RouteContext,
   ): Promise<StepResult> {
     if (typeof stepDef === "string") {
       if (manifest.type === "js-skills" && stepDef === "js-executor") {
         return this.runJsSkill(manifest, bb, opts);
       }
-      return this.runAgent(manifest, stepDef, bb, retryFeedback, opts);
+      return this.runAgent(manifest, stepDef, bb, retryFeedback, opts, ctx);
     }
     return this.runSkillStep(manifest, stepDef, bb, opts);
   }
@@ -191,6 +225,7 @@ export class CartridgeRunner {
     bb: Blackboard,
     retryFeedback: string,
     opts: RunOptions,
+    ctx: RouteContext,
   ): Promise<StepResult> {
     const spec = await this.registry.loadAgent(manifest.name, agentName);
     if (!spec) {
@@ -202,12 +237,24 @@ export class CartridgeRunner {
     }
     opts.onEvent?.({ type: "step-start", agent: agentName });
 
+    const decision = resolveRoute(spec, manifest, this.providers, ctx);
+    if (ctx.previousTarget && ctx.previousTarget !== decision.target) {
+      opts.onEvent?.({
+        type: "tier-switch",
+        agent: agentName,
+        from: ctx.previousTarget,
+        to: decision.target,
+        reason: decision.reason,
+      });
+    }
+    ctx.previousTarget = decision.target;
+
     const inputDescriptions = bb.describe(spec.needs);
     const task = this.composeTask(spec, inputDescriptions, retryFeedback);
 
     let raw = "";
     try {
-      raw = await runGoal(this.llm, task, {
+      raw = await runGoal(decision.provider, task, {
         systemPrompt: spec.body,
         tools: {},
         maxTurns: spec.max_turns,

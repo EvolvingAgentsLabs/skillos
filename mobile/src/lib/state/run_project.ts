@@ -6,9 +6,14 @@
 
 import { CartridgeRegistry } from "../cartridge/registry";
 import { CartridgeRunner, type RunEvent } from "../cartridge/runner";
+import type { ProviderBundle } from "../cartridge/routing";
 import { buildProvider } from "../llm/build_provider";
 import { recordExperience } from "../memory/smart_memory";
-import { loadProviderConfig, type ProviderConfigStored } from "./provider_config";
+import {
+  loadProjectRouting,
+  loadProviderConfig,
+  type ProviderConfigStored,
+} from "./provider_config";
 import {
   addCard,
   moveCard,
@@ -58,7 +63,12 @@ export async function runProject(
     };
   }
 
-  const cfg = opts.providerConfig ?? (await loadProviderConfig(projectId));
+  // Prefer the full routing (primary + fallback) from M11; fall back to
+  // the legacy primary-only path when an explicit providerConfig is passed.
+  const routing = opts.providerConfig
+    ? { primary: opts.providerConfig }
+    : await loadProjectRouting(projectId);
+  const cfg = routing?.primary ?? (await loadProviderConfig(projectId));
   if (!cfg) {
     return {
       ok: false,
@@ -79,8 +89,15 @@ export async function runProject(
   const registry = opts.registry ?? new CartridgeRegistry();
   if (!registry.get(cartridgeName)) await registry.init();
 
-  const llm = await buildProvider(cfg);
-  const runner = new CartridgeRunner(registry, llm);
+  const bundle: ProviderBundle = { primary: await buildProvider(cfg) };
+  if (routing?.fallback) {
+    try {
+      bundle.fallback = await buildProvider(routing.fallback);
+    } catch (err) {
+      console.warn("fallback provider unavailable:", err);
+    }
+  }
+  const runner = new CartridgeRunner(registry, bundle);
 
   beginRun(projectId);
   const stepCardByAgent = new Map<string, string>(); // agent → card id
