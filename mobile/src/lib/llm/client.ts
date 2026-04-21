@@ -7,6 +7,7 @@
  * /v1/chat/completions.
  */
 
+import type { LLMProvider } from "./provider";
 import type { ResolvedProvider } from "./providers";
 
 export interface ChatMessage {
@@ -36,7 +37,7 @@ export interface ChatOptions {
   model?: string;
 }
 
-export class LLMClient {
+export class LLMClient implements LLMProvider {
   constructor(public readonly provider: ResolvedProvider) {}
 
   async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<ChatResult> {

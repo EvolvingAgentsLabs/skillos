@@ -1,9 +1,10 @@
 <script lang="ts">
   import { exportToFiles, importFromFiles, isFileSyncAvailable } from "$lib/storage/file_sync";
   import { seedIfNeeded } from "$lib/storage/seed";
-  import { fileCount, listFiles } from "$lib/storage/db";
+  import { fileCount, getMeta, listFiles, setMeta } from "$lib/storage/db";
   import { listExperiences } from "$lib/memory/smart_memory";
   import EvalsScreen from "$components/EvalsScreen.svelte";
+  import ModelManagerSheet from "$components/ModelManagerSheet.svelte";
   import { onMount } from "svelte";
 
   interface Props {
@@ -12,6 +13,9 @@
 
   let { oncancel }: Props = $props();
   let evalsOpen = $state(false);
+  let modelsOpen = $state(false);
+  let onDeviceFlag = $state(false);
+  let authoringFlag = $state(false);
 
   let fileTotal = $state(0);
   let projectCount = $state(0);
@@ -28,7 +32,21 @@
     const projectPaths = await listFiles("projects/");
     projectCount = new Set(projectPaths.map((p) => p.split("/")[1]).filter(Boolean)).size;
     experienceCount = (await listExperiences()).length;
+    onDeviceFlag = Boolean(await getMeta("experimental_on_device_llm"));
+    authoringFlag = Boolean(await getMeta("authoring_mode"));
   });
+
+  async function toggleOnDevice(e: Event) {
+    const v = (e.currentTarget as HTMLInputElement).checked;
+    onDeviceFlag = v;
+    await setMeta("experimental_on_device_llm", v);
+  }
+
+  async function toggleAuthoring(e: Event) {
+    const v = (e.currentTarget as HTMLInputElement).checked;
+    authoringFlag = v;
+    await setMeta("authoring_mode", v);
+  }
 
   async function onResync() {
     busy = true;
@@ -116,6 +134,35 @@
     </div>
   </div>
 
+  <h3 class="section-title">Experimental</h3>
+
+  <label class="toggle-row">
+    <input type="checkbox" checked={onDeviceFlag} onchange={toggleOnDevice} />
+    <div>
+      <div class="toggle-label">On-device LLM providers</div>
+      <div class="hint">
+        Exposes wllama (WASM) + LiteRT (Android) in the Provider picker. Download a model to use them.
+      </div>
+    </div>
+  </label>
+
+  {#if onDeviceFlag}
+    <div class="row">
+      <button onclick={() => (modelsOpen = true)}>Manage on-device models…</button>
+      <div class="hint">Download, delete, and check storage for local Gemma / Qwen builds.</div>
+    </div>
+  {/if}
+
+  <label class="toggle-row">
+    <input type="checkbox" checked={authoringFlag} onchange={toggleAuthoring} />
+    <div>
+      <div class="toggle-label">Authoring mode</div>
+      <div class="hint">
+        Unlocks the Library tab (M12) and cartridge / skill editors (M13+). Off in v1 until editors ship.
+      </div>
+    </div>
+  </label>
+
   <div class="actions">
     <button class="ghost" onclick={oncancel}>Close</button>
   </div>
@@ -123,6 +170,10 @@
 
 {#if evalsOpen}
   <EvalsScreen oncancel={() => (evalsOpen = false)} />
+{/if}
+
+{#if modelsOpen}
+  <ModelManagerSheet oncancel={() => (modelsOpen = false)} />
 {/if}
 
 <style>
@@ -216,5 +267,31 @@
   }
   .ghost {
     background: transparent;
+  }
+  .section-title {
+    margin: 0.5rem 0 0;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-dim);
+  }
+  .toggle-row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-3);
+    cursor: pointer;
+  }
+  .toggle-row input {
+    margin-top: 0.2rem;
+    transform: scale(1.1);
+    accent-color: var(--accent);
+  }
+  .toggle-label {
+    font-size: 0.9rem;
+    color: var(--fg);
   }
 </style>

@@ -13,6 +13,11 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
+  worker: {
+    // ES-module workers so Vite can code-split dynamic imports (e.g. wllama
+    // is dynamically imported inside wllama_worker.ts).
+    format: "es",
+  },
   test: {
     environment: "happy-dom",
     include: ["tests/**/*.spec.ts"],

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 public/seed/
+public/wllama/
 .DS_Store
 .vite/
 *.log

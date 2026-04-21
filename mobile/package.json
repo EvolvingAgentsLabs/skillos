@@ -5,8 +5,8 @@
   "type": "module",
   "description": "SkillOS Mobile — Pure-JS port with swipe-column visual UX. Runs cartridges and Gallery skills on-device.",
   "scripts": {
-    "prebuild": "node scripts/seed-build.mjs",
-    "predev": "node scripts/seed-build.mjs",
+    "prebuild": "node scripts/seed-build.mjs && node scripts/copy-wllama.mjs",
+    "predev": "node scripts/seed-build.mjs && node scripts/copy-wllama.mjs",
     "dev": "vite",
     "build": "svelte-check --tsconfig ./tsconfig.json && vite build",
     "preview": "vite preview",
@@ -21,6 +21,7 @@
   "dependencies": {
     "@capacitor/core": "^6.1.2",
     "@capacitor/filesystem": "^6.0.1",
+    "@wllama/wllama": "^2.3.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "gray-matter": "^4.0.3",

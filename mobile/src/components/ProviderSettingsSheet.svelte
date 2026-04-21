@@ -1,14 +1,19 @@
 <script lang="ts">
   import {
     PROVIDER_CONFIGS,
+    isLocalProvider,
     type ProviderId,
   } from "$lib/llm/providers";
+  import { catalogFor, MODEL_CATALOG } from "$lib/llm/local/model_catalog";
+  import { isModelInstalled } from "$lib/llm/local/model_store";
   import {
     isProviderNative,
     loadProviderConfig,
     saveProviderConfig,
     type ProviderConfigStored,
   } from "$lib/state/provider_config";
+  import { getMeta } from "$lib/storage/db";
+  import ModelManagerSheet from "$components/ModelManagerSheet.svelte";
   import { onMount } from "svelte";
 
   interface Props {
@@ -20,7 +25,16 @@
   let { projectId, onsaved, oncancel }: Props = $props();
 
   const isNative = isProviderNative();
-  const providerIds = Object.keys(PROVIDER_CONFIGS) as ProviderId[];
+  let onDeviceFlag = $state(false);
+  let modelsOpen = $state(false);
+  let modelInstalled = $state<Record<string, boolean>>({});
+
+  // Show cloud/LAN providers always; local providers appear only under the flag.
+  const visibleProviderIds = $derived(
+    (Object.keys(PROVIDER_CONFIGS) as ProviderId[]).filter((id) =>
+      onDeviceFlag ? true : !isLocalProvider(id),
+    ),
+  );
 
   let providerId = $state<ProviderId>("openrouter-qwen");
   let baseUrl = $state("");
@@ -28,9 +42,33 @@
   let apiKey = $state("");
 
   const currentCfg = $derived(PROVIDER_CONFIGS[providerId]);
-  const available = $derived(!currentCfg.lanOnly || isNative);
+  const isLocal = $derived(isLocalProvider(providerId));
+  const available = $derived(
+    (!currentCfg.lanOnly || isNative) && (!currentCfg.nativeOnly || isNative),
+  );
+  const installedForProvider = $derived(
+    isLocal
+      ? catalogFor(
+          providerId === "wllama-local"
+            ? "wllama"
+            : providerId === "litert-local"
+              ? "litert"
+              : "chrome-prompt-api",
+        ).filter((m) => modelInstalled[m.id])
+      : [],
+  );
+
+  async function refreshInstalled() {
+    const out: Record<string, boolean> = {};
+    for (const m of MODEL_CATALOG) {
+      out[m.id] = await isModelInstalled(m.id);
+    }
+    modelInstalled = out;
+  }
 
   onMount(async () => {
+    onDeviceFlag = Boolean(await getMeta("experimental_on_device_llm"));
+    await refreshInstalled();
     const existing = await loadProviderConfig(projectId);
     if (existing) {
       providerId = existing.providerId;
@@ -70,52 +108,89 @@
   <label class="field">
     <span>Provider</span>
     <select bind:value={providerId} onchange={onProviderChange}>
-      {#each providerIds as id (id)}
-        <option value={id} disabled={PROVIDER_CONFIGS[id].lanOnly && !isNative}>
-          {PROVIDER_CONFIGS[id].label}{PROVIDER_CONFIGS[id].lanOnly && !isNative ? " — needs native app" : ""}
+      {#each visibleProviderIds as id (id)}
+        {@const cfg = PROVIDER_CONFIGS[id]}
+        {@const nativeNeeded = (cfg.lanOnly || cfg.nativeOnly) && !isNative}
+        <option value={id} disabled={nativeNeeded}>
+          {cfg.label}{nativeNeeded ? " — needs native app" : ""}
         </option>
       {/each}
     </select>
   </label>
 
-  <label class="field">
-    <span>Base URL <small>(override)</small></span>
-    <input
-      type="url"
-      placeholder={currentCfg.defaultBaseUrl}
-      bind:value={baseUrl}
-    />
-  </label>
-
-  <label class="field">
-    <span>Model</span>
-    <input type="text" placeholder={currentCfg.defaultModel} bind:value={model} />
-  </label>
-
-  {#if currentCfg.requiresKey}
+  {#if isLocal}
     <label class="field">
-      <span>API key</span>
+      <span>Model</span>
+      {#if installedForProvider.length > 0}
+        <select bind:value={model}>
+          <option value="">— pick a model —</option>
+          {#each installedForProvider as m (m.id)}
+            <option value={m.id}>{m.name}</option>
+          {/each}
+        </select>
+      {:else}
+        <div class="warn">
+          No local models installed.
+          <button type="button" class="link" onclick={() => (modelsOpen = true)}>
+            Open Model Manager
+          </button>
+        </div>
+      {/if}
+    </label>
+  {:else}
+    <label class="field">
+      <span>Base URL <small>(override)</small></span>
       <input
-        type="password"
-        autocomplete="off"
-        placeholder="sk-…"
-        bind:value={apiKey}
+        type="url"
+        placeholder={currentCfg.defaultBaseUrl}
+        bind:value={baseUrl}
       />
     </label>
+
+    <label class="field">
+      <span>Model</span>
+      <input type="text" placeholder={currentCfg.defaultModel} bind:value={model} />
+    </label>
+
+    {#if currentCfg.requiresKey}
+      <label class="field">
+        <span>API key</span>
+        <input
+          type="password"
+          autocomplete="off"
+          placeholder="sk-…"
+          bind:value={apiKey}
+        />
+      </label>
+    {/if}
   {/if}
 
   {#if !available}
     <div class="warn">
-      This provider requires cleartext LAN access. Install the native SkillOS app
-      (Capacitor) to use it.
+      This provider requires the native SkillOS app (Capacitor).
     </div>
   {/if}
 
   <div class="actions">
     <button type="button" class="ghost" onclick={oncancel}>Cancel</button>
-    <button type="submit" class="primary" disabled={!available}>Save</button>
+    <button
+      type="submit"
+      class="primary"
+      disabled={!available || (isLocal && !model)}
+    >
+      Save
+    </button>
   </div>
 </form>
+
+{#if modelsOpen}
+  <ModelManagerSheet
+    oncancel={async () => {
+      modelsOpen = false;
+      await refreshInstalled();
+    }}
+  />
+{/if}
 
 <style>
   .backdrop {
@@ -207,5 +282,14 @@
   small {
     color: var(--fg-dim);
     opacity: 0.8;
+  }
+  .link {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    padding: 0;
+    margin-left: 0.3rem;
+    text-decoration: underline;
+    cursor: pointer;
   }
 </style>

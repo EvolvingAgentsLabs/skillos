@@ -12,6 +12,18 @@
 
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
 
+export interface ModelBlobRecord {
+  id: string;
+  blob: ArrayBuffer;
+  size: number;
+  sha256?: string;
+  downloaded_at: string;
+  /** Backend the blob is for; duplicated from catalog for resilience. */
+  backend: "wllama" | "litert" | "chrome-prompt-api";
+  /** Optional native file path for LiteRT (M10 fills this after copy to cache). */
+  native_path?: string;
+}
+
 export interface FileRecord {
   path: string;
   content: ArrayBuffer;
@@ -92,10 +104,14 @@ interface SkillOSDB extends DBSchema {
     key: string;
     value: MetaRecord;
   };
+  models: {
+    key: string;
+    value: ModelBlobRecord;
+  };
 }
 
 const DB_NAME = "skillos";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let _dbPromise: Promise<IDBPDatabase<SkillOSDB>> | null = null;
 
@@ -107,7 +123,7 @@ export function _resetDBForTests(): void {
 export function getDB(): Promise<IDBPDatabase<SkillOSDB>> {
   if (!_dbPromise) {
     _dbPromise = openDB<SkillOSDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, _oldVersion) {
         if (!db.objectStoreNames.contains("files")) {
           const store = db.createObjectStore("files", { keyPath: "path" });
           store.createIndex("by-prefix", "path");
@@ -129,10 +145,38 @@ export function getDB(): Promise<IDBPDatabase<SkillOSDB>> {
         if (!db.objectStoreNames.contains("meta")) {
           db.createObjectStore("meta", { keyPath: "key" });
         }
+        // v2: on-device model blob store. Separate from `files` because
+        // entries are 0.5–2 GB and would skew the sha1/path contract.
+        if (!db.objectStoreNames.contains("models")) {
+          db.createObjectStore("models", { keyPath: "id" });
+        }
       },
     });
   }
   return _dbPromise;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Model blob helpers (v2)
+
+export async function putModelBlob(rec: ModelBlobRecord): Promise<void> {
+  const db = await getDB();
+  await db.put("models", rec);
+}
+
+export async function getModelBlob(id: string): Promise<ModelBlobRecord | undefined> {
+  const db = await getDB();
+  return db.get("models", id);
+}
+
+export async function listModelBlobs(): Promise<ModelBlobRecord[]> {
+  const db = await getDB();
+  return db.getAll("models");
+}
+
+export async function deleteModelBlob(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("models", id);
 }
 
 // ─────────────────────────────────────────────────────────────────────

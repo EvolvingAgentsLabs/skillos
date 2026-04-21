@@ -16,7 +16,7 @@
  * Emits RunEvent callbacks so the UI (M6) can animate card lane transitions.
  */
 
-import { type LLMClient } from "../llm/client";
+import type { LLMProvider } from "../llm/provider";
 import { runGoal, type RunGoalEvent, type ToolFunction } from "../llm/run_goal";
 import type { SkillDefinition } from "../skills/skill_loader";
 import { SkillRegistry } from "../skills/skill_loader";
@@ -90,7 +90,7 @@ export class CartridgeRunner {
 
   constructor(
     private readonly registry: CartridgeRegistry,
-    private readonly llm: LLMClient,
+    private readonly llm: LLMProvider,
   ) {}
 
   async run(cartridge: string, goal: string, opts: RunOptions = {}): Promise<RunResult> {

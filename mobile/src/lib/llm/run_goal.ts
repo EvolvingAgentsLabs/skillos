@@ -12,7 +12,8 @@
  * caller (CartridgeRunner in M5, debug screens in M3).
  */
 
-import type { LLMClient, ChatMessage } from "./client";
+import type { ChatMessage } from "./client";
+import type { LLMProvider } from "./provider";
 import {
   TOOL_ALIASES,
   extractJsonObject,
@@ -57,7 +58,7 @@ const DEFAULT_MAX_TURNS = 10;
 const DEFAULT_COMPACT_THRESHOLD = 40;
 
 export async function runGoal(
-  client: LLMClient,
+  client: LLMProvider,
   goal: string,
   opts: RunGoalOptions,
 ): Promise<string> {

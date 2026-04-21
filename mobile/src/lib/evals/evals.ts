@@ -10,8 +10,7 @@ import yaml from "js-yaml";
 import { CartridgeRegistry } from "../cartridge/registry";
 import { CartridgeRunner } from "../cartridge/runner";
 import type { BlackboardSnapshot } from "../cartridge/types";
-import { LLMClient } from "../llm/client";
-import { resolveProvider } from "../llm/providers";
+import { buildProvider } from "../llm/build_provider";
 import type { ProviderConfigStored } from "../state/provider_config";
 import { getFileText, listFiles } from "../storage/db";
 
@@ -79,13 +78,7 @@ export async function runEvalCase(
   ec: EvalCase,
 ): Promise<CaseResult> {
   const startedAt = Date.now();
-  const llm = new LLMClient(
-    resolveProvider(provider.providerId, {
-      baseUrl: provider.baseUrl,
-      model: provider.model,
-      apiKey: provider.apiKey,
-    }),
-  );
+  const llm = await buildProvider(provider);
   const runner = new CartridgeRunner(registry, llm);
 
   let run_ok = false;

@@ -6,8 +6,7 @@
 
 import { CartridgeRegistry } from "../cartridge/registry";
 import { CartridgeRunner, type RunEvent } from "../cartridge/runner";
-import { LLMClient } from "../llm/client";
-import { resolveProvider } from "../llm/providers";
+import { buildProvider } from "../llm/build_provider";
 import { recordExperience } from "../memory/smart_memory";
 import { loadProviderConfig, type ProviderConfigStored } from "./provider_config";
 import {
@@ -80,12 +79,7 @@ export async function runProject(
   const registry = opts.registry ?? new CartridgeRegistry();
   if (!registry.get(cartridgeName)) await registry.init();
 
-  const provider = resolveProvider(cfg.providerId, {
-    baseUrl: cfg.baseUrl,
-    model: cfg.model,
-    apiKey: cfg.apiKey,
-  });
-  const llm = new LLMClient(provider);
+  const llm = await buildProvider(cfg);
   const runner = new CartridgeRunner(registry, llm);
 
   beginRun(projectId);
