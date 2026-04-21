@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Sandboxed skill host — null origin, no access to app IndexedDB / secrets.
+         CSP allows inline styles (unused here but cheap), blob: for dynamic
+         script injection of the skill source, and connect-src * so skills can
+         call out to their own backends (e.g. Wikipedia API). -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' blob:; style-src 'unsafe-inline'; connect-src *; img-src *; media-src *; font-src *" />
+    <title>skill-host</title>
+  </head>
+  <body>
+    <script src="./skill-host.js"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+public/seed/
+.DS_Store
+.vite/
+*.log
+android/app/build/
+android/.gradle/
+android/build/
+ios/App/build/
+ios/App/Pods/
+ios/App/App/public/
