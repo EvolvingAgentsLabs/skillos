@@ -416,11 +416,24 @@ See [docs/js-skills.md](docs/js-skills.md) for the full architecture, skill auth
 
 ## Mobile — Pure-JS Port (v1 experimental)
 
-> 🧪 **Status: v1 experimental — not production-ready. Device validation still pending.**
+> 🧪 **Status: v1 experimental — production-grade architecture, device validation still pending.**
 >
-> The mobile stack now covers everything the idea-storm asked for — on-device Gemma inference, local-first smart routing, full in-app authoring, resumable runs — but `mobile/` has only been exercised in Chrome DevTools emulation and Node-based Vitest suites. iPhone SE 3 / 12 / 15 Pro and Pixel 6 / 8 Pro hardware validation (M19's acceptance gate) is the remaining work. The Python runtimes (`skillos.py`, `agent_runtime.py`, `cartridge_runtime.py`) stay the supported path for critical work.
+> An external architectural review called the implementation *"production-grade in its architecture"* that *"completely shifts SkillOS from a Python desktop experiment into a sovereign, on-device AI operating system."* The design is in place; what remains is hardware validation. `mobile/` has been exercised in Chrome DevTools emulation and Node-based Vitest suites (129/129 passing) but not yet on iPhone SE 3 / 12 / 15 Pro or Pixel 6 / 8 Pro hardware (M19's acceptance gate). The Python runtimes (`skillos.py`, `agent_runtime.py`, `cartridge_runtime.py`) stay the supported path for critical work.
 
-Under `mobile/` lives a self-contained TypeScript + Svelte 5 + Vite + Capacitor app. The Python repo is the **authoring environment** — cartridges, schemas, validators, and Gallery skills are still written there. The mobile app is a **runtime** that executes the same bytes, and in v1 also becomes an **authoring environment on the phone**.
+Under `mobile/` lives a self-contained TypeScript + Svelte 5 + Vite + Capacitor app. The Python repo is the **authoring environment** — cartridges, schemas, validators, and Gallery skills are still written there. In v1 the mobile app both **runs** the same bytes and **becomes an authoring environment on the phone**.
+
+### The four architectural pillars
+
+The v1 design reduces the mobile port to four foundations — each picks a specific technology that lets the phone behave like a full operating system instead of a thin runtime.
+
+| Pillar | What it does | How v1 implements it |
+|---|---|---|
+| **IndexedDB as virtual file system** | Every file the Python runtime reads from disk — cartridge YAML, agent markdown, JSON Schemas, Gallery `SKILL.md`, JS source, SmartMemory log, model blobs — lives in IndexedDB as structured records. The layout mirrors the desktop tree exactly, and Export-to-Files round-trips it back to `Documents/SkillOS/` without shape loss. | `files` / `projects` / `blackboards` / `memory` / `secrets` / `meta` / `models` / `checkpoints` stores (schema v3) |
+| **LiteRT-LM wrapped as Capacitor plugin** | A first-party Kotlin plugin (`@skillos/capacitor-litert-lm`) lets Android builds load `.litertlm` Gemma models for native-accelerated inference on the same phones the AI Edge Gallery app targets. Non-Android routes fall back to wllama WASM automatically, so one TypeScript interface covers every platform. | `capacitor-plugins/litert-lm/` + `src/lib/llm/local/litert_backend.ts` |
+| **Sandboxed iframe for JS tools** | Gallery JS skills run inside a hidden `sandbox="allow-scripts"` iframe with a **null origin** — it cannot read the app's IndexedDB, its secrets, or its LLM keys. All LLM sub-calls proxy back via `postMessage`. A three-strategy script loader (Blob URL → data URL → inline `<script>`) handles iOS WKWebView quirks. | `public/iframe/skill-host.{html,js,-loader.js}` + `src/lib/skills/skill_host_bridge.ts` |
+| **Per-turn Blackboard checkpoint** | After **every validated agent step** the runner emits `onStepCommitted` with the blackboard snapshot + completed step list. `saveCheckpoint` persists it to IndexedDB. When iOS suspends JavaScript on backgrounding (a guarantee on modern iOS), reopening the app re-hydrates the blackboard and **skips already-completed steps**. A long run survives across app lifecycle boundaries. | `src/lib/state/run_checkpoint.ts` + `CartridgeRunner.RunOptions.onStepCommitted` |
+
+Stack these four primitives together and the practical result is the phone can **author a cartridge, generate its own JS skills, execute them locally on Gemma, fall back to the cloud only when Gemma's output fails schema validation, and survive being backgrounded mid-run.** That's the "sovereign pocket OS" claim reduced to components you can read in a week.
 
 ### The visual UX
 
