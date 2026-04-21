@@ -9,6 +9,7 @@
 
 import type { LLMProvider } from "./provider";
 import type { ResolvedProvider } from "./providers";
+import { defaultIsRetriable, withRetry } from "./retry";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -84,36 +85,53 @@ export class LLMClient implements LLMProvider {
   }
 
   private async chatOnce(messages: ChatMessage[], opts: ChatOptions): Promise<ChatResult> {
-    const res = await fetch(`${this.provider.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: this.buildHeaders(),
-      body: this.buildBody(messages, opts, false),
-      signal: opts.signal,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`LLM ${res.status}: ${text.slice(0, 300)}`);
-    }
-    const json = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
-      usage?: TokenUsage;
-    };
-    const choice = json.choices?.[0];
-    const content = choice?.message?.content ?? "";
-    return { content, usage: json.usage, finishReason: choice?.finish_reason };
+    return withRetry(
+      async () => {
+        const res = await fetch(`${this.provider.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: this.buildHeaders(),
+          body: this.buildBody(messages, opts, false),
+          signal: opts.signal,
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new Error(`LLM ${res.status}: ${text.slice(0, 300)}`);
+        }
+        const json = (await res.json()) as {
+          choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+          usage?: TokenUsage;
+        };
+        const choice = json.choices?.[0];
+        const content = choice?.message?.content ?? "";
+        return { content, usage: json.usage, finishReason: choice?.finish_reason };
+      },
+      { signal: opts.signal, isRetriable: defaultIsRetriable },
+    );
   }
 
   private async chatStream(messages: ChatMessage[], opts: ChatOptions): Promise<ChatResult> {
-    const res = await fetch(`${this.provider.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { ...(this.buildHeaders() as Record<string, string>), accept: "text/event-stream" },
-      body: this.buildBody(messages, opts, true),
-      signal: opts.signal,
-    });
-    if (!res.ok || !res.body) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`LLM ${res.status}: ${text.slice(0, 300)}`);
-    }
+    // Only retry the connection + TTFB portion. Once tokens are streaming we
+    // never retry (would double-bill).
+    const res = await withRetry(
+      async () => {
+        const r = await fetch(`${this.provider.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            ...(this.buildHeaders() as Record<string, string>),
+            accept: "text/event-stream",
+          },
+          body: this.buildBody(messages, opts, true),
+          signal: opts.signal,
+        });
+        if (!r.ok || !r.body) {
+          const text = await r.text().catch(() => "");
+          throw new Error(`LLM ${r.status}: ${text.slice(0, 300)}`);
+        }
+        return r;
+      },
+      { signal: opts.signal, isRetriable: defaultIsRetriable },
+    );
+    if (!res.body) throw new Error("LLM stream missing body");
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
