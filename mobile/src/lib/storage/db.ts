@@ -24,6 +24,24 @@ export interface ModelBlobRecord {
   native_path?: string;
 }
 
+export interface CheckpointRecord {
+  /** Equal to `project_id` — one live checkpoint per project. */
+  id: string;
+  project_id: string;
+  cartridge: string;
+  flow: string;
+  goal: string;
+  /** Blackboard snapshot at the last completed step boundary. */
+  blackboard: Record<string, unknown>;
+  /** Names of steps that have completed successfully so far. */
+  completed_steps: string[];
+  /** Which provider the run was using (id + model only; keys never serialized). */
+  provider_id?: string;
+  provider_model?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FileRecord {
   path: string;
   content: ArrayBuffer;
@@ -108,10 +126,14 @@ interface SkillOSDB extends DBSchema {
     key: string;
     value: ModelBlobRecord;
   };
+  checkpoints: {
+    key: string;
+    value: CheckpointRecord;
+  };
 }
 
 const DB_NAME = "skillos";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let _dbPromise: Promise<IDBPDatabase<SkillOSDB>> | null = null;
 
@@ -150,6 +172,10 @@ export function getDB(): Promise<IDBPDatabase<SkillOSDB>> {
         if (!db.objectStoreNames.contains("models")) {
           db.createObjectStore("models", { keyPath: "id" });
         }
+        // v3: partial-run checkpoints (M17). Keyed by project id.
+        if (!db.objectStoreNames.contains("checkpoints")) {
+          db.createObjectStore("checkpoints", { keyPath: "id" });
+        }
       },
     });
   }
@@ -177,6 +203,29 @@ export async function listModelBlobs(): Promise<ModelBlobRecord[]> {
 export async function deleteModelBlob(id: string): Promise<void> {
   const db = await getDB();
   await db.delete("models", id);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Checkpoint helpers (v3) — one live checkpoint per project.
+
+export async function putCheckpoint(rec: CheckpointRecord): Promise<void> {
+  const db = await getDB();
+  await db.put("checkpoints", rec);
+}
+
+export async function getCheckpoint(projectId: string): Promise<CheckpointRecord | undefined> {
+  const db = await getDB();
+  return db.get("checkpoints", projectId);
+}
+
+export async function listCheckpoints(): Promise<CheckpointRecord[]> {
+  const db = await getDB();
+  return db.getAll("checkpoints");
+}
+
+export async function deleteCheckpoint(projectId: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("checkpoints", projectId);
 }
 
 // ─────────────────────────────────────────────────────────────────────

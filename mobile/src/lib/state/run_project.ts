@@ -14,6 +14,7 @@ import {
   loadProviderConfig,
   type ProviderConfigStored,
 } from "./provider_config";
+import { clearCheckpoint, loadCheckpoint, saveCheckpoint } from "./run_checkpoint";
 import {
   addCard,
   moveCard,
@@ -32,6 +33,11 @@ export interface RunProjectOptions {
   /** Shared registry — will be created if omitted. */
   registry?: CartridgeRegistry;
   signal?: AbortSignal;
+  /**
+   * If true and a checkpoint exists for this project, resume from it rather
+   * than starting fresh. Default false — callers explicitly opt in.
+   */
+  resume?: boolean;
 }
 
 export interface RunOutcome {
@@ -99,6 +105,9 @@ export async function runProject(
   }
   const runner = new CartridgeRunner(registry, bundle);
 
+  // M17: if the caller asked to resume and a checkpoint exists, load it.
+  const checkpoint = opts.resume ? await loadCheckpoint(projectId) : undefined;
+
   beginRun(projectId);
   const stepCardByAgent = new Map<string, string>(); // agent → card id
   const startedAt = Date.now();
@@ -147,6 +156,25 @@ export async function runProject(
   try {
     const result = await runner.run(cartridgeName, goal, {
       signal: opts.signal,
+      projectId,
+      resumeFrom: checkpoint
+        ? {
+            completed_steps: checkpoint.completed_steps,
+            blackboard: checkpoint.blackboard as never,
+          }
+        : undefined,
+      onStepCommitted: async ({ completedSteps, blackboard }) => {
+        await saveCheckpoint({
+          projectId,
+          cartridge: cartridgeName,
+          flow: result.flow ?? "",
+          goal,
+          blackboard,
+          completedSteps,
+          providerId: cfg.providerId,
+          providerModel: cfg.model,
+        }).catch((err) => console.warn("checkpoint save failed:", err));
+      },
       onEvent: (e) => {
         // Fire-and-forget; the handler is ordered by awaiting each addCard
         // inside the switch, but we don't block the runner. Mutations are
@@ -167,6 +195,8 @@ export async function runProject(
       duration_seconds: duration,
       output_summary: result.final_summary,
     });
+    // On successful run, clear the checkpoint — nothing to resume.
+    if (result.ok) await clearCheckpoint(projectId).catch(() => {});
     endRun();
     return {
       ok: result.ok,

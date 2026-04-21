@@ -39,7 +39,7 @@ import type {
   FlowStep,
   SkillStep,
 } from "./types";
-import { isSkillStep } from "./types";
+import { isSkillStep, stepName } from "./types";
 
 // ────────────────────────────────────────────────────────────────────────
 // Result types
@@ -83,12 +83,35 @@ export type RunEvent =
     }
   | { type: "run-end"; result: RunResult };
 
+export interface CheckpointHandle {
+  /** Names of steps already completed — they'll be skipped on resume. */
+  completed_steps: string[];
+  /** Blackboard snapshot to rehydrate from. */
+  blackboard: BlackboardSnapshot;
+}
+
 export interface RunOptions {
   flow?: string;
   initialInputs?: Record<string, unknown>;
   maxRetriesPerStep?: number;
   onEvent?: (e: RunEvent) => void;
   signal?: AbortSignal;
+  /**
+   * When set, the runner saves a checkpoint after each step-end and clears
+   * on run-end success. `projectId` keys the per-project checkpoint row.
+   */
+  projectId?: string;
+  /**
+   * When set, rehydrate the blackboard from the snapshot and skip any step
+   * whose name appears in `completed_steps`. Resume support.
+   */
+  resumeFrom?: CheckpointHandle;
+  /** Async hook fired after each successful step — used for checkpoint writes. */
+  onStepCommitted?: (info: {
+    stepName: string;
+    completedSteps: string[];
+    blackboard: BlackboardSnapshot;
+  }) => Promise<void> | void;
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -139,6 +162,22 @@ export class CartridgeRunner {
       bb.put(k, v, { produced_by: "user", description: `User-supplied input: ${k}` });
     }
 
+    // Resume support: rehydrate the blackboard from a prior run's snapshot.
+    // Entries placed here take precedence over initialInputs for the same key.
+    const completedSteps: string[] = [...(opts.resumeFrom?.completed_steps ?? [])];
+    if (opts.resumeFrom) {
+      for (const [k, entry] of Object.entries(opts.resumeFrom.blackboard)) {
+        if (!entry || typeof entry !== "object") continue;
+        const e = entry as BlackboardSnapshot[string];
+        bb.put(k, e.value, {
+          schema_ref: e.schema_ref,
+          produced_by: e.produced_by,
+          description: e.description,
+          validate: false, // trust prior run's decision
+        });
+      }
+    }
+
     // Install an LLM proxy on the skill bridge so __skillos.llm works.
     skillHostBridge.setLLMProxy(this.makeLLMProxy());
 
@@ -166,6 +205,11 @@ export class CartridgeRunner {
     } else {
       const maxRetries = opts.maxRetriesPerStep ?? 1;
       for (const stepDef of flowDef.steps) {
+        const name = stepName(stepDef);
+        // Resume — skip steps already completed in a prior session.
+        if (completedSteps.includes(name)) {
+          continue;
+        }
         const ctx: RouteContext = { attempt: 1 };
         const primary = await this.executeFlowStep(manifest, stepDef, bb, "", opts, ctx);
         let step = primary;
@@ -181,6 +225,22 @@ export class CartridgeRunner {
         }
         result.steps.push(step);
         opts.onEvent?.({ type: "step-end", step });
+        if (step.validated) {
+          completedSteps.push(name);
+          if (opts.onStepCommitted) {
+            try {
+              await opts.onStepCommitted({
+                stepName: name,
+                completedSteps: [...completedSteps],
+                blackboard: bb.snapshot(),
+              });
+            } catch (err) {
+              // Checkpoint failures must not break the run.
+              // eslint-disable-next-line no-console
+              console.warn("onStepCommitted failed:", err);
+            }
+          }
+        }
       }
     }
 
