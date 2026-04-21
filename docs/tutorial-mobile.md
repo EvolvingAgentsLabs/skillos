@@ -103,18 +103,21 @@ npm run dev              # http://localhost:5173
 
 1. Open in Chrome (optionally toggle DevTools → device toolbar to emulate a phone).
 2. Splash: *"Seeding 180 / 180 files…"* (~2 s).
-3. Tap **+** in the header:
+3. **First launch only** — a 4-page onboarding dialog explains the swipe columns, lifecycle lanes, and Run button. Tap **Next** through it or **Skip**. It never reappears (stored under `meta.onboarding_seen`).
+4. Tap **+** in the top bar:
     - *Name*: `Sunday menu`
     - *Cartridge*: `cooking`
     - *Initial goal*: `Plan weekly meals for 2 adults, vegetarian`
     - **Create**
-4. 🎯 Goal card lands in **Planned**.
-5. Tap **⚙** on the column header → Provider settings:
-    - *Provider*: `OpenRouter · Qwen` (or `Google · Gemini`)
-    - *API key*: paste your key
-    - *Model*: leave blank
+5. 🎯 Goal card lands in **Planned**.
+6. Tap **⚙** on the column header → Provider settings opens with two tabs:
+    - **Primary** (selected by default)
+      - *Provider*: `OpenRouter · Qwen` (or `Google · Gemini`)
+      - *API key*: paste your key
+      - *Model*: leave blank to use the default
+    - Leave **Fallback** on *off* for now — §4 covers it
     - **Save**
-6. Tap **▶ run**.
+7. Tap **▶ run**.
 
 What you'll see:
 
@@ -217,11 +220,26 @@ sequenceDiagram
 ### Try it
 
 1. Install Qwen 1.5B via Model Manager (see §3).
-2. On any `cooking` project, tap **⚙** — the Provider sheet now has a "Primary" and "Fallback" option group.
-3. *Primary*: `On-device · wllama (WASM)` + your installed model.
-4. *Fallback*: `OpenRouter · Qwen` + your API key.
-5. (Optional) Edit `recipe-writer.md` via Library (see §5) and add `tier: capable` to the frontmatter so it always routes to the cloud.
-6. **▶ run** and watch the RunLogDrawer — look for the `↪ tier-switch · from: primary → to: fallback (reason)` line.
+2. On any `cooking` project, tap **⚙** — the Provider sheet opens with two tabs: **Primary** and **Fallback (off)**.
+3. On the **Primary** tab:
+    - *Provider*: `On-device · wllama (WASM)` (requires `experimental_on_device_llm` toggle on — see §3)
+    - *Model*: pick your installed model
+4. Tap the **Fallback** tab:
+    - Tick **Enable a fallback provider for this project**
+    - *Provider*: `OpenRouter · Qwen`
+    - *API key*: paste your cloud key
+5. **Save**. The tab label updates to **Fallback ✓** and the runtime now knows both ends.
+6. (Optional) Via the Library (see §5), edit `recipe-writer.md` and add `tier: capable` to its frontmatter so it always routes through the fallback.
+7. **▶ run** and watch the RunLogDrawer — look for a row that reads `↪ tier-switch · primary → fallback (reason: …)` right before the step retries.
+
+### Common pairings the app suggests
+
+| Primary | Fallback | When to use |
+|---|---|---|
+| `On-device · wllama` (Qwen 1.5B) | `OpenRouter · Qwen` (free tier) | Fully private default, cloud only on schema failures |
+| `On-device · LiteRT` (Gemma 2 2B) | `OpenRouter · Gemma` (free) | Android-native speed with cloud-Gemma backstop |
+| `OpenRouter · Qwen` (free) | `Google · Gemini` | Cheap default, capable escalation |
+| `Ollama (LAN)` | `OpenRouter · Qwen` | Laptop-GPU default, cloud if LAN unreachable |
 
 ---
 
@@ -362,6 +380,25 @@ flowchart LR
 2. Mid-run, disable wifi / turn off airplane mode / block the OpenRouter host in DevTools.
 3. Toast appears: "Queued — will retry when online".
 4. Re-enable wifi. Queue drains automatically. Run continues.
+
+---
+
+## 7.5. Other things the app does
+
+Small flows that round out the feature set. Each maps to one concrete UI affordance — worth knowing so you don't re-invent them.
+
+| Flow | Where | Notes |
+|---|---|---|
+| **Onboarding tutorial** | First launch; 4-page dismissable dialog | Sets `meta.onboarding_seen`. Never blocks the app. |
+| **Resync from bundle** | Settings → *Resync from bundle* | Force-reloads seeded files from `public/seed/`. User-edited files are preserved (they carry `user_edited: true` in IndexedDB and are skipped on resync). Useful after editing a cartridge on disk + rebuilding. |
+| **Delete cartridge** | Library → pick cartridge → *Delete* (confirms) | Removes every `cartridges/<name>/…` path from IndexedDB and drops the registry entry. Doesn't touch projects that used it — those will throw "unknown cartridge" on next run unless you reassign. |
+| **Manual card lane moves** | Tap any card → chevron expands → **→ Planned / → In Execution / → Done / Delete** | Useful for experimenting with goal-card state before a real run, or cleaning up after a failure. |
+| **Quick + card on a column** | Column header → **+ card** | Adds a blank Goal card in *Planned*. Tap the card to rename. |
+| **Swipe between projects** | Horizontal swipe, or pager dots in the top bar | One project per viewport. `overscroll-behavior: contain` keeps iOS rubber-band from fighting the snap. |
+| **Run log drawer** | Bottom of the screen during / after a run | Streams every RunEvent: assistant deltas, tool calls, validator messages, `tier-switch`. Persists the last run until the next one starts. |
+| **Card raw payload** | Tap card → expand chevron → JSON pane | Shows the full `<produces>` JSON or skill result for debugging. |
+| **SmartMemory log** | Persisted per-project on every run-end | No dedicated UI yet (planned for v2). Entries round-trip through Export to Files (§11) as YAML-frontmatter markdown in `system/SmartMemory.md`. |
+| **Offline queue view** | Persisted summary at `meta.offline_queue` | No dedicated UI yet. Inspect via DevTools → Application → IndexedDB → `skillos` → `meta`. |
 
 ---
 

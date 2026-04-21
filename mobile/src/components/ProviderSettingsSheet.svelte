@@ -8,8 +8,8 @@
   import { isModelInstalled } from "$lib/llm/local/model_store";
   import {
     isProviderNative,
-    loadProviderConfig,
-    saveProviderConfig,
+    loadProjectRouting,
+    saveProjectRouting,
     type ProviderConfigStored,
   } from "$lib/state/provider_config";
   import { getMeta } from "$lib/storage/db";
@@ -28,6 +28,8 @@
   let onDeviceFlag = $state(false);
   let modelsOpen = $state(false);
   let modelInstalled = $state<Record<string, boolean>>({});
+  let tab = $state<"primary" | "fallback">("primary");
+  let fallbackEnabled = $state(false);
 
   // Show cloud/LAN providers always; local providers appear only under the flag.
   const visibleProviderIds = $derived(
@@ -36,27 +38,41 @@
     ),
   );
 
-  let providerId = $state<ProviderId>("openrouter-qwen");
-  let baseUrl = $state("");
-  let model = $state("");
-  let apiKey = $state("");
+  // Primary slot
+  let pProviderId = $state<ProviderId>("openrouter-qwen");
+  let pBaseUrl = $state("");
+  let pModel = $state("");
+  let pApiKey = $state("");
 
-  const currentCfg = $derived(PROVIDER_CONFIGS[providerId]);
-  const isLocal = $derived(isLocalProvider(providerId));
-  const available = $derived(
-    (!currentCfg.lanOnly || isNative) && (!currentCfg.nativeOnly || isNative),
+  // Fallback slot
+  let fProviderId = $state<ProviderId>("openrouter-qwen");
+  let fBaseUrl = $state("");
+  let fModel = $state("");
+  let fApiKey = $state("");
+
+  function currentCfgFor(id: ProviderId) {
+    return PROVIDER_CONFIGS[id];
+  }
+
+  const pCfg = $derived(currentCfgFor(pProviderId));
+  const fCfg = $derived(currentCfgFor(fProviderId));
+  const pIsLocal = $derived(isLocalProvider(pProviderId));
+  const fIsLocal = $derived(isLocalProvider(fProviderId));
+  const pAvailable = $derived(
+    (!pCfg.lanOnly || isNative) && (!pCfg.nativeOnly || isNative),
   );
-  const installedForProvider = $derived(
-    isLocal
-      ? catalogFor(
-          providerId === "wllama-local"
-            ? "wllama"
-            : providerId === "litert-local"
-              ? "litert"
-              : "chrome-prompt-api",
-        ).filter((m) => modelInstalled[m.id])
-      : [],
+  const fAvailable = $derived(
+    (!fCfg.lanOnly || isNative) && (!fCfg.nativeOnly || isNative),
   );
+
+  function installedForSlot(id: ProviderId) {
+    if (!isLocalProvider(id)) return [];
+    const backend =
+      id === "wllama-local" ? "wllama" : id === "litert-local" ? "litert" : "chrome-prompt-api";
+    return catalogFor(backend).filter((m) => modelInstalled[m.id]);
+  }
+  const pInstalled = $derived(installedForSlot(pProviderId));
+  const fInstalled = $derived(installedForSlot(fProviderId));
 
   async function refreshInstalled() {
     const out: Record<string, boolean> = {};
@@ -69,117 +85,219 @@
   onMount(async () => {
     onDeviceFlag = Boolean(await getMeta("experimental_on_device_llm"));
     await refreshInstalled();
-    const existing = await loadProviderConfig(projectId);
-    if (existing) {
-      providerId = existing.providerId;
-      baseUrl = existing.baseUrl ?? "";
-      model = existing.model ?? "";
-      apiKey = existing.apiKey ?? "";
+    const routing = await loadProjectRouting(projectId);
+    if (routing?.primary) {
+      pProviderId = routing.primary.providerId;
+      pBaseUrl = routing.primary.baseUrl ?? "";
+      pModel = routing.primary.model ?? "";
+      pApiKey = routing.primary.apiKey ?? "";
+    }
+    if (routing?.fallback) {
+      fallbackEnabled = true;
+      fProviderId = routing.fallback.providerId;
+      fBaseUrl = routing.fallback.baseUrl ?? "";
+      fModel = routing.fallback.model ?? "";
+      fApiKey = routing.fallback.apiKey ?? "";
     }
   });
 
-  function onProviderChange() {
-    // Reset overrides when switching provider so defaults take over.
-    baseUrl = "";
-    model = "";
-    if (!currentCfg.requiresKey) apiKey = "";
+  function onProviderChange(slot: "primary" | "fallback") {
+    if (slot === "primary") {
+      pBaseUrl = "";
+      pModel = "";
+      if (!pCfg.requiresKey) pApiKey = "";
+    } else {
+      fBaseUrl = "";
+      fModel = "";
+      if (!fCfg.requiresKey) fApiKey = "";
+    }
   }
 
   async function onSubmit(e: Event) {
     e.preventDefault();
-    if (!available) return;
-    const cfg: ProviderConfigStored = {
-      providerId,
-      baseUrl: baseUrl.trim() || undefined,
-      model: model.trim() || undefined,
-      apiKey: apiKey.trim() || undefined,
+    if (!pAvailable) return;
+    if (fallbackEnabled && !fAvailable) return;
+    const primary: ProviderConfigStored = {
+      providerId: pProviderId,
+      baseUrl: pBaseUrl.trim() || undefined,
+      model: pModel.trim() || undefined,
+      apiKey: pApiKey.trim() || undefined,
     };
-    await saveProviderConfig(projectId, cfg);
-    onsaved(cfg);
+    const fallback: ProviderConfigStored | undefined = fallbackEnabled
+      ? {
+          providerId: fProviderId,
+          baseUrl: fBaseUrl.trim() || undefined,
+          model: fModel.trim() || undefined,
+          apiKey: fApiKey.trim() || undefined,
+        }
+      : undefined;
+    await saveProjectRouting(projectId, { primary, fallback });
+    onsaved(primary);
   }
+
+  // Validity — primary must be valid; fallback (if enabled) too.
+  const primaryNeedsModel = $derived(pIsLocal && !pModel);
+  const fallbackNeedsModel = $derived(fallbackEnabled && fIsLocal && !fModel);
+  const saveDisabled = $derived(
+    !pAvailable ||
+      primaryNeedsModel ||
+      (fallbackEnabled && (!fAvailable || fallbackNeedsModel)),
+  );
 </script>
 
 <button type="button" class="backdrop" onclick={oncancel} aria-label="Close"></button>
 <form class="sheet" onsubmit={onSubmit}>
   <div class="handle"></div>
   <h2>Provider settings</h2>
-  <p class="sub">Used for LLM calls and in-skill sub-calls for this project.</p>
+  <p class="sub">
+    <strong>Primary</strong> runs every turn by default. <strong>Fallback</strong>
+    takes over for agents marked <code>tier: capable</code> or when the primary's
+    output fails schema validation.
+  </p>
 
-  <label class="field">
-    <span>Provider</span>
-    <select bind:value={providerId} onchange={onProviderChange}>
-      {#each visibleProviderIds as id (id)}
-        {@const cfg = PROVIDER_CONFIGS[id]}
-        {@const nativeNeeded = (cfg.lanOnly || cfg.nativeOnly) && !isNative}
-        <option value={id} disabled={nativeNeeded}>
-          {cfg.label}{nativeNeeded ? " — needs native app" : ""}
-        </option>
-      {/each}
-    </select>
-  </label>
+  <nav class="tabs" aria-label="Provider slot">
+    <button type="button" class:active={tab === "primary"} onclick={() => (tab = "primary")}>
+      Primary
+    </button>
+    <button
+      type="button"
+      class:active={tab === "fallback"}
+      onclick={() => (tab = "fallback")}
+    >
+      Fallback {fallbackEnabled ? "✓" : "(off)"}
+    </button>
+  </nav>
 
-  {#if isLocal}
+  {#if tab === "primary"}
     <label class="field">
-      <span>Model</span>
-      {#if installedForProvider.length > 0}
-        <select bind:value={model}>
-          <option value="">— pick a model —</option>
-          {#each installedForProvider as m (m.id)}
-            <option value={m.id}>{m.name}</option>
+      <span>Provider</span>
+      <select bind:value={pProviderId} onchange={() => onProviderChange("primary")}>
+        {#each visibleProviderIds as id (id)}
+          {@const cfg = PROVIDER_CONFIGS[id]}
+          {@const nativeNeeded = (cfg.lanOnly || cfg.nativeOnly) && !isNative}
+          <option value={id} disabled={nativeNeeded}>
+            {cfg.label}{nativeNeeded ? " — needs native app" : ""}
+          </option>
+        {/each}
+      </select>
+    </label>
+
+    {#if pIsLocal}
+      <label class="field">
+        <span>Model</span>
+        {#if pInstalled.length > 0}
+          <select bind:value={pModel}>
+            <option value="">— pick a model —</option>
+            {#each pInstalled as m (m.id)}
+              <option value={m.id}>{m.name}</option>
+            {/each}
+          </select>
+        {:else}
+          <div class="warn">
+            No local models installed.
+            <button type="button" class="link" onclick={() => (modelsOpen = true)}>
+              Open Model Manager
+            </button>
+          </div>
+        {/if}
+      </label>
+    {:else}
+      <label class="field">
+        <span>Base URL <small>(override)</small></span>
+        <input type="url" placeholder={pCfg.defaultBaseUrl} bind:value={pBaseUrl} />
+      </label>
+      <label class="field">
+        <span>Model</span>
+        <input type="text" placeholder={pCfg.defaultModel} bind:value={pModel} />
+      </label>
+      {#if pCfg.requiresKey}
+        <label class="field">
+          <span>API key</span>
+          <input type="password" autocomplete="off" placeholder="sk-…" bind:value={pApiKey} />
+        </label>
+      {/if}
+    {/if}
+
+    {#if !pAvailable}
+      <div class="warn">This provider requires the native SkillOS app (Capacitor).</div>
+    {/if}
+  {:else}
+    <label class="inline">
+      <input type="checkbox" bind:checked={fallbackEnabled} />
+      <span>Enable a fallback provider for this project</span>
+    </label>
+
+    {#if fallbackEnabled}
+      <label class="field">
+        <span>Provider</span>
+        <select bind:value={fProviderId} onchange={() => onProviderChange("fallback")}>
+          {#each visibleProviderIds as id (id)}
+            {@const cfg = PROVIDER_CONFIGS[id]}
+            {@const nativeNeeded = (cfg.lanOnly || cfg.nativeOnly) && !isNative}
+            <option value={id} disabled={nativeNeeded}>
+              {cfg.label}{nativeNeeded ? " — needs native app" : ""}
+            </option>
           {/each}
         </select>
-      {:else}
-        <div class="warn">
-          No local models installed.
-          <button type="button" class="link" onclick={() => (modelsOpen = true)}>
-            Open Model Manager
-          </button>
-        </div>
-      {/if}
-    </label>
-  {:else}
-    <label class="field">
-      <span>Base URL <small>(override)</small></span>
-      <input
-        type="url"
-        placeholder={currentCfg.defaultBaseUrl}
-        bind:value={baseUrl}
-      />
-    </label>
-
-    <label class="field">
-      <span>Model</span>
-      <input type="text" placeholder={currentCfg.defaultModel} bind:value={model} />
-    </label>
-
-    {#if currentCfg.requiresKey}
-      <label class="field">
-        <span>API key</span>
-        <input
-          type="password"
-          autocomplete="off"
-          placeholder="sk-…"
-          bind:value={apiKey}
-        />
       </label>
-    {/if}
-  {/if}
 
-  {#if !available}
-    <div class="warn">
-      This provider requires the native SkillOS app (Capacitor).
-    </div>
+      {#if fIsLocal}
+        <label class="field">
+          <span>Model</span>
+          {#if fInstalled.length > 0}
+            <select bind:value={fModel}>
+              <option value="">— pick a model —</option>
+              {#each fInstalled as m (m.id)}
+                <option value={m.id}>{m.name}</option>
+              {/each}
+            </select>
+          {:else}
+            <div class="warn">
+              No local models installed for this backend.
+              <button type="button" class="link" onclick={() => (modelsOpen = true)}>
+                Open Model Manager
+              </button>
+            </div>
+          {/if}
+        </label>
+      {:else}
+        <label class="field">
+          <span>Base URL <small>(override)</small></span>
+          <input type="url" placeholder={fCfg.defaultBaseUrl} bind:value={fBaseUrl} />
+        </label>
+        <label class="field">
+          <span>Model</span>
+          <input type="text" placeholder={fCfg.defaultModel} bind:value={fModel} />
+        </label>
+        {#if fCfg.requiresKey}
+          <label class="field">
+            <span>API key</span>
+            <input
+              type="password"
+              autocomplete="off"
+              placeholder="sk-…"
+              bind:value={fApiKey}
+            />
+          </label>
+        {/if}
+      {/if}
+
+      {#if !fAvailable}
+        <div class="warn">This provider requires the native SkillOS app (Capacitor).</div>
+      {/if}
+
+      <div class="hint">
+        Common pairing: <code>On-device · wllama</code> as primary,
+        <code>OpenRouter · Qwen</code> or <code>Google · Gemini</code> as fallback.
+        The runner escalates on the first validation failure of a step and caps at one
+        switch per step.
+      </div>
+    {/if}
   {/if}
 
   <div class="actions">
     <button type="button" class="ghost" onclick={oncancel}>Cancel</button>
-    <button
-      type="submit"
-      class="primary"
-      disabled={!available || (isLocal && !model)}
-    >
-      Save
-    </button>
+    <button type="submit" class="primary" disabled={saveDisabled}>Save</button>
   </div>
 </form>
 
@@ -291,5 +409,58 @@
     margin-left: 0.3rem;
     text-decoration: underline;
     cursor: pointer;
+  }
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-top: 0.2rem;
+  }
+  .tabs button {
+    flex: 1;
+    background: transparent;
+    color: var(--fg-dim);
+    border: none;
+    padding: 0.45rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .tabs button.active {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+    font-weight: 600;
+  }
+  .inline {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.9rem;
+    color: var(--fg);
+    padding: 0.3rem 0;
+  }
+  .inline input {
+    transform: scale(1.1);
+    accent-color: var(--accent);
+  }
+  .hint {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    color: var(--fg-dim);
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+  .hint code {
+    background: var(--bg);
+    padding: 0 0.3rem;
+    border-radius: 4px;
+    font-size: 0.78rem;
+  }
+  .sub code {
+    background: var(--bg-3);
+    padding: 0 0.25rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
   }
 </style>
