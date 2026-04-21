@@ -11,6 +11,7 @@ import type { ChatMessage, ChatOptions, ChatResult } from "../client";
 import type { LLMProvider } from "../provider";
 import { getModelBlob } from "../../storage/db";
 import type { LocalLLMBackend } from "./backend";
+import { LiteRTBackend } from "./litert_backend";
 import { getModelEntry, type ModelCatalogEntry } from "./model_catalog";
 import { WllamaBackend } from "./wllama_backend";
 
@@ -28,9 +29,10 @@ export function pickBackendForModel(entry: ModelCatalogEntry): LocalLLMBackend {
     case "wllama":
       return new WllamaBackend();
     case "litert":
+      return new LiteRTBackend();
     case "chrome-prompt-api":
       throw new Error(
-        `backend ${entry.backend} is not yet available in this build (landing in M10+)`,
+        "chrome-prompt-api backend is not yet available in this build",
       );
   }
 }

@@ -48,6 +48,11 @@ export interface FileRecord {
   sha1: string;
   size: number;
   updated_at: string;
+  /**
+   * M12: true when a user edit wrote this file. Seed-refresh skips paths
+   * with this flag so we don't overwrite customizations on app updates.
+   */
+  user_edited?: boolean;
 }
 
 export interface ProjectRecord {
@@ -247,7 +252,7 @@ async function toArrayBuffer(input: Blob | string | ArrayBuffer | Uint8Array): P
 export async function putFile(
   filePath: string,
   content: Blob | string | ArrayBuffer | Uint8Array,
-  opts: { sha1?: string } = {},
+  opts: { sha1?: string; user_edited?: boolean } = {},
 ): Promise<void> {
   const buf = await toArrayBuffer(content);
   const record: FileRecord = {
@@ -256,9 +261,15 @@ export async function putFile(
     sha1: opts.sha1 ?? "",
     size: buf.byteLength,
     updated_at: new Date().toISOString(),
+    user_edited: opts.user_edited === true ? true : undefined,
   };
   const db = await getDB();
   await db.put("files", record);
+}
+
+export async function deleteFile(filePath: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("files", filePath);
 }
 
 export async function getFile(filePath: string): Promise<FileRecord | undefined> {

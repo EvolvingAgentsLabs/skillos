@@ -1,11 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { seedIfNeeded, type SeedProgress } from "$lib/storage/seed";
+  import { getMeta } from "$lib/storage/db";
+  import LibraryScreen from "$components/LibraryScreen.svelte";
   import Onboarding from "$components/Onboarding.svelte";
   import ProjectSwiper from "$components/ProjectSwiper.svelte";
   import SkillHostIframe from "$components/SkillHostIframe.svelte";
 
   let progress = $state<SeedProgress>({ phase: "idle", completed: 0, total: 0 });
+  let authoringFlag = $state(false);
+  let tab = $state<"projects" | "library">("projects");
 
   const pct = $derived(
     progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0,
@@ -18,6 +22,14 @@
 
   onMount(async () => {
     await seedIfNeeded((p) => (progress = p));
+    authoringFlag = Boolean(await getMeta("authoring_mode"));
+    // Poll the flag on visibility change so Settings → Authoring mode takes
+    // effect without requiring a reload. Cheap enough on a mobile device.
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState === "visible") {
+        authoringFlag = Boolean(await getMeta("authoring_mode"));
+      }
+    });
   });
 </script>
 
@@ -47,13 +59,52 @@
       <button onclick={() => location.reload()}>Retry</button>
     </div>
   {:else}
-    <ProjectSwiper />
+    {#if tab === "projects"}
+      <ProjectSwiper />
+    {:else}
+      <LibraryScreen />
+    {/if}
+    {#if authoringFlag}
+      <nav class="tabbar" aria-label="Sections">
+        <button class:active={tab === "projects"} onclick={() => (tab = "projects")}>
+          Projects
+        </button>
+        <button class:active={tab === "library"} onclick={() => (tab = "library")}>
+          Library
+        </button>
+      </nav>
+    {/if}
     <SkillHostIframe />
     <Onboarding />
   {/if}
 </main>
 
 <style>
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 6;
+  }
+  .tabbar button {
+    background: transparent;
+    border: none;
+    color: var(--fg-dim);
+    padding: 0.65rem 0;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .tabbar button.active {
+    color: var(--accent);
+    border-top: 2px solid var(--accent);
+  }
   main {
     height: 100%;
     display: flex;

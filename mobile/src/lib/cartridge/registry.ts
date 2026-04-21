@@ -132,6 +132,43 @@ export class CartridgeRegistry {
     this._initialized = true;
   }
 
+  // ── M12 mutation hooks ──────────────────────────────────────────────
+
+  /** Re-parse a single cartridge's manifest from IndexedDB. */
+  async reloadCartridge(name: string): Promise<void> {
+    const yamlPath = `cartridges/${name}/cartridge.yaml`;
+    try {
+      const manifest = await this.loadManifest(yamlPath);
+      this._manifests.set(manifest.name, manifest);
+      // Drop any cached agents + validator for this cartridge.
+      for (const key of [...this._agentsCache.keys()]) {
+        if (key.startsWith(`${name}/`)) this._agentsCache.delete(key);
+      }
+      this._validatorCache.delete(name);
+    } catch (err) {
+      console.warn(`[cartridge-registry] reloadCartridge ${name}:`, err);
+    }
+  }
+
+  /** Drop a single agent's cached AgentSpec; next `loadAgent` re-reads. */
+  invalidateAgent(cartridge: string, agentName: string): void {
+    this._agentsCache.delete(`${cartridge}/${agentName}`);
+  }
+
+  /** Drop the cached ajv validator so a schema edit takes effect. */
+  invalidateValidator(cartridge: string): void {
+    this._validatorCache.delete(cartridge);
+  }
+
+  /** Remove a cartridge from the registry entirely (after deleteCartridge). */
+  forget(name: string): void {
+    this._manifests.delete(name);
+    this._validatorCache.delete(name);
+    for (const key of [...this._agentsCache.keys()]) {
+      if (key.startsWith(`${name}/`)) this._agentsCache.delete(key);
+    }
+  }
+
   private async loadManifest(yamlPath: string): Promise<CartridgeManifest> {
     const text = await getFileText(yamlPath);
     if (!text) throw new Error(`manifest not found: ${yamlPath}`);
