@@ -154,6 +154,7 @@ project/        scaffold/       project-scaffold-tool
 - **Cognitive Pipeline** — Recursive Context Isolation gives mid-tier models (Gemma 4 26B) the executive functioning of frontier models: 5K→28K output, 100% step pass rate, 50-100x cheaper ([docs](docs/cognitive-pipeline.md))
 - **Cartridges** — Claude-Code-style subagents on Gemma 4 via sealed per-domain bundles (agents + JSON Schemas + deterministic validators). Typed blackboard, closed-set router, `<produces>{…}</produces>` contract with schema-validated retry. Reference cartridges: `cooking`, `residential-electrical` (IEC 60364), `demo` (11 JS skills). ([docs](docs/cartridges.md))
 - **JS Skill Cartridges** — Run [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery) JavaScript skills via Node.js. Skills can call Gemma 4 as subagents, persist state, and chain through the Blackboard. Three flow modes: deterministic (e2b), skill-chaining (pipelines), agentic (capable models). ([docs](docs/js-skills.md))
+- **Mobile (Pure-JS)** — The entire SkillOS runtime ported to TypeScript + Svelte 5 + Capacitor. Cartridges, Blackboard, ajv validators, LLM tool-call loop, Gallery skills in a sandboxed iframe — all running on-device with no Python backend. Swipe-column visual UX: one project per screen, three lifecycle lanes (Planned / In Execution / Done), cards transition live as agents produce and validate outputs. Runs as a PWA or wrapped native app; Ollama LAN works in the Capacitor build. ([docs](docs/mobile.md), [tutorial](docs/tutorial-mobile.md))
 - **Dialects** — 14 domain-specific compression formats (50-99% token reduction) with Language Facade and cognitive scaffolding
 - **Knowledge Wiki** — Compounding knowledge base inspired by Karpathy's LLM Wiki pattern
 - **Memory System** — Every execution improves future runs via structured memory
@@ -413,6 +414,78 @@ See [docs/js-skills.md](docs/js-skills.md) for the full architecture, skill auth
 
 ---
 
+## Mobile — Pure-JS Port
+
+The entire SkillOS runtime is also ported to TypeScript + Svelte 5 + Vite + Capacitor under `mobile/`. The Python repo becomes an **authoring environment**; the mobile app is a **runtime** that executes the same cartridges, schemas, validators, and Gallery skills — with no Python on-device.
+
+### The visual UX
+
+```
+┌──────────────────────────────────────┐
+│ SkillOS     · · ·               + │   ← swipe between projects
+├──────────────────────────────────────┤
+│ cooking-demo                 ⚙ ▶  │
+├──────────────────────────────────────┤
+│ PLANNED                              │
+│   🎯 plan weekly meals               │
+├──────────────────────────────────────┤
+│ IN EXECUTION                         │
+│   🤖 menu-planner   running…         │
+├──────────────────────────────────────┤
+│ DONE                                 │
+│   📄 weekly_menu    menu-planner · 7s │
+│   📄 shopping_list  shopping-list · 3s│
+│   📄 recipes        recipe-writer · 0s│
+├──────────────────────────────────────┤
+│ ● Running…  [streaming LLM log]      │
+└──────────────────────────────────────┘
+```
+
+Horizontal swipe between full-screen project columns, three vertical lifecycle lanes per project, polymorphic cards (🎯 Goal / 🤖 Agent / 🧩 Skill / 📄 Document) that transition lanes live as the `CartridgeRunner` fires events. Every agent's `<produces>{…}</produces>` block validates against the cartridge's ajv schemas (draft-07 + 2020-12) and the TS-ported validators (`menu_complete`, `shopping_list_sane`) fire deterministically just like on desktop.
+
+### Runtime architecture
+
+```
+Phone (self-contained after first boot)
+├── Svelte 5 app (Vite-built PWA; Capacitor-wrapped for iOS/Android)
+├── IndexedDB via idb — files · projects · blackboards · memory · secrets · meta
+└── LLM client → OpenRouter · Gemini · Ollama LAN (Capacitor only)
+```
+
+Every Python module has a TS sibling: `cartridge_runtime.py` → `mobile/src/lib/cartridge/`, `agent_runtime.py` → `mobile/src/lib/llm/`, `experiments/gemma4-skills/` → `mobile/src/lib/skills/` + `mobile/public/iframe/skill-host.{html,js}`. Cartridge YAML manifests, agent markdown, JSON Schemas, and Gallery `SKILL.md` files ship verbatim as static assets and seed into IndexedDB on first launch.
+
+### Five things the port unlocks
+
+1. **On-device privacy** — Ollama over LAN from a laptop GPU. Nothing leaves the house.
+2. **Cartridges as a distribution format** — ship one cartridge folder, it runs identically on desktop Python and mobile JS.
+3. **Harder skill sandbox** — Gallery JS skills run in a null-origin `sandbox="allow-scripts"` iframe; LLM sub-calls proxy via `postMessage` so the sandbox never sees API keys.
+4. **Round-trip to disk** — *Settings → Export to Files* writes the full state as markdown to `Documents/SkillOS/` for the desktop Python runner to pick up.
+5. **Evals on mobile** — `cartridges/*/evals/cases.yaml` runs through the same mobile runner against any configured provider.
+
+### Quick start
+
+```bash
+cd mobile
+npm install
+npm test                 # 76 passing tests across 13 spec files
+npm run dev              # open http://localhost:5173 in Chrome, toggle device emulation
+```
+
+Then in the app: **+** → name + pick `cooking` + initial goal → ⚙ → enter an OpenRouter or Gemini API key → **▶ run**. Watch the three cooking agents populate the lanes and produce validated `weekly_menu` / `shopping_list` / `recipes` document cards in Done.
+
+For the Capacitor native build and LAN Ollama setup: see [docs/tutorial-mobile.md](docs/tutorial-mobile.md).
+
+### Verification (v1)
+
+- **76 passing tests** across 13 spec files (full cooking flow runs end-to-end against SSE-mocked fetch)
+- **`svelte-check` 0 errors on 363 files**
+- **Vite bundle 301 KB / 97 KB gzipped**
+- **Seed pipeline 180 files / 8.08 MB** copied from `cartridges/**` + `projects/Project_aorta/` + `system/SmartMemory.md`
+
+Architecture, cross-cutting decisions, and future potential: [docs/mobile.md](docs/mobile.md). Hands-on testing guide: [docs/tutorial-mobile.md](docs/tutorial-mobile.md).
+
+---
+
 ## Documentation
 
 | Doc | Contents |
@@ -422,6 +495,8 @@ See [docs/js-skills.md](docs/js-skills.md) for the full architecture, skill auth
 | [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) | Cognitive pipeline executor, strategy router, model capability tiers |
 | [docs/cartridges.md](docs/cartridges.md) | Cartridge architecture — Gemma-native subagents, typed blackboard, JSON-Schema contract, authoring guide |
 | [docs/js-skills.md](docs/js-skills.md) | JS Skill Cartridges — Gallery skills as subagents, skill chaining, agentic mode, `__skillos.llm` API |
+| [docs/mobile.md](docs/mobile.md) | Mobile pure-JS port — architecture, sandbox model, cross-cutting decisions, potential directions |
+| [docs/tutorial-mobile.md](docs/tutorial-mobile.md) | Hands-on testing guide — browser PWA, Capacitor Android build, LAN Ollama, round-trip file sync |
 | [docs/dialects.md](docs/dialects.md) | Dialect framework, 14 compression formats, Language Facade, cognitive scaffolding |
 | [docs/memory.md](docs/memory.md) | SmartMemory, short/long-term layers, memory-driven execution |
 | [docs/runtimes.md](docs/runtimes.md) | Claude Code, Qwen/Gemini, Ollama, OpenRouter — setup and comparison |
