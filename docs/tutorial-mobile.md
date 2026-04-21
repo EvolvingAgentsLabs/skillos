@@ -2,6 +2,8 @@
 
 End-to-end walkthrough for exercising the `mobile/` app locally against every v1 capability: dev server in a browser, real cartridge run against a cloud provider, on-device LLM, in-app authoring, smart routing with fallback, pause / resume across app lifecycle, Capacitor Android build with LiteRT-LM, and round-trip file sync back to the desktop Python runtime.
 
+> Each section below exercises exactly one of the four architectural pillars the mobile port stands on: **IndexedDB as virtual filesystem** (§1, §5, §11), **LiteRT-LM Capacitor plugin + wllama WASM fallback** (§3, §9), **null-origin sandboxed iframe for JS tools** (§5.3, §10), and **Blackboard checkpoint after every turn** (§6). By the end you will have generated a cartridge on the phone, run it locally on Gemma, escalated to the cloud on a schema failure, and resumed from a checkpoint — without any SkillOS server.
+
 Estimated time: 30 minutes for the browser paths. 90 minutes additional if you walk through the Capacitor Android build. iOS device validation requires hardware.
 
 ---
