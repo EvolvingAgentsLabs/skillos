@@ -1,8 +1,8 @@
 ---
 type: skill-index
-version: 1.0.0
-total_skills: 25
-last_updated: "2026-04-12"
+version: 1.1.0
+total_skills: 29
+last_updated: "2026-04-22"
 ---
 
 # SkillOS Skill Index
@@ -31,6 +31,7 @@ Top-level routing table for the hierarchical skill system.
 | recovery | 1 | system/skills/recovery/index.md | error handling, retry, circuit breaker | system/skills/recovery/base.md |
 | dialects | 3 | system/skills/dialects/index.md | token compression, dialect expansion, dialect lookup | system/skills/dialects/base.md |
 | project | 2 | system/skills/project/index.md | scaffolding, package install, new project | system/skills/project/base.md |
+| genealogy | 4 | system/skills/genealogy/index.md | parent-child spawn, DNA mutation, tutoring, promotion | system/skills/genealogy/base.md |
 
 ## Quick Skill Lookup
 
@@ -60,6 +61,10 @@ Top-level routing table for the hierarchical skill system.
 | dialect-expander-agent | dialects/expander | dialect-expander-agent | medium |
 | dialect-registry-tool | dialects/registry | _(tool)_ | low |
 | skill-package-manager-tool | project/packages | _(tool)_ | low |
+| spawn-child-agent | genealogy/spawn | spawn-child-agent | low |
+| tutor-child-agent | genealogy/tutor | tutor-child-agent | medium |
+| validate-child-agent | genealogy/validate | validate-child-agent | high |
+| promote-child-agent | genealogy/promote | promote-child-agent | low |
 
 ## Token Budget Guidance
 

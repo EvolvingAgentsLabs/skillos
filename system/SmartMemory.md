@@ -18,10 +18,14 @@ system/
 
 ## Memory Entry Format
 
-Each experience block uses YAML frontmatter followed by markdown content:
+Each entry block uses YAML frontmatter followed by markdown content.
+Three entry types are supported; use the appropriate one per situation.
+
+### entry_type: experience (default — one per task/goal execution)
 
 ```markdown
 ---
+entry_type: experience          # optional; default if absent
 experience_id: exp_NNN
 timestamp: ISO-8601
 session_id: string
@@ -32,6 +36,10 @@ components_used: []
 quality_score: 0-10
 cost_estimate_usd: number
 duration_seconds: number
+# optional genealogy keys (present only when kernel_mode: genealogy):
+lineage_id: string
+generation: integer
+dna_hash: string
 ---
 
 ## Output Summary
@@ -39,6 +47,72 @@ duration_seconds: number
 
 ## Learnings
 [Key takeaways]
+```
+
+### entry_type: tutoring_session (one per DNA mutation-proposal review)
+
+Written by `genealogy/tutor/tutor-child-agent` after every proposal review
+(approved, rejected, or deferred).
+
+```markdown
+---
+entry_type: tutoring_session
+tutoring_session_id: tut_<session>_<seq>
+timestamp: ISO-8601
+project: string
+lineage_id: string
+generation: integer
+father_agent_id: string
+child_agent_id: string
+proposal_id: string
+decision: approved | rejected | deferred
+dna_hash_before: string
+dna_hash_after: string | null   # null if rejected/deferred
+churn_ratio: 0.0-1.0
+quality_score: 0-10             # quality of the Child's justifying task
+dna_rule_violations: []         # any DNA-001..005 that fired
+---
+
+## Mutation Summary
+[One-paragraph description of what changed]
+
+## Tutor Feedback
+[Full feedback text shown to Child]
+
+## Learnings
+[What this session reveals about this lineage's learning trajectory]
+```
+
+### entry_type: promotion_event (one per promotion ceremony)
+
+Written by `genealogy/promote/promote-child-agent` — the durable record of a
+Child becoming a Father. Never overwritten; rotated by month like other entries.
+
+```markdown
+---
+entry_type: promotion_event
+promotion_event_id: prom_<session>_<seq>
+timestamp: ISO-8601
+project: string
+lineage_id: string
+generation: integer              # child's new generation (== father's generation)
+retired_father_agent_id: string
+archived_dna_path: string        # system/memory_archive/dna/father-<tag>-gen<N>.md
+archived_dna_hash: string
+new_father_agent_id: string      # formerly the Child
+new_father_dna_hash: string
+validation_strategies_passed: [] # subset of [1,2,3,4,5]
+adversarial_score: 0-10
+---
+
+## Rationale
+[Why this promotion was approved — quote validation report highlights]
+
+## Ancestry
+[Full lineage_path at time of promotion]
+
+## Legacy Learnings
+[What the retired Father's DNA contributed that should be preserved in institutional memory]
 ```
 
 ## File Ownership
@@ -55,6 +129,10 @@ duration_seconds: number
 - **By outcome**: `Grep pattern="outcome: failure" path="system/SmartMemory.md"`
 - **By component**: `Grep pattern="component_name" path="system/SmartMemory.md"`
 - **High quality**: `Grep pattern="quality_score: [89]" path="system/SmartMemory.md"`
+- **Genealogy — all lineage events**: `Grep pattern="entry_type: (tutoring_session|promotion_event)" path="system/SmartMemory.md"`
+- **Genealogy — by lineage_id**: `Grep pattern="lineage_id: lin_<id>" path="system/SmartMemory.md"`
+- **Genealogy — promotions only**: `Grep pattern="entry_type: promotion_event" path="system/SmartMemory.md"`
+- **Genealogy — mutation decisions**: `Grep pattern="decision: (approved|rejected|deferred)" path="system/SmartMemory.md"`
 
 ## Active Experience Log
 

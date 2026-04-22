@@ -607,6 +607,137 @@ Or run the demo scenario:
 skillos execute: "Run the KnowledgeBase_Research_Task scenario"
 ```
 
+## Genealogy (Parent–Child Agent Lineage)
+
+**Inspired by:** biological inheritance. An agent's markdown definition is its
+**DNA** (deoxyribonucleic acid) — copied from parent to child at spawn,
+mutated under guardrails during life, archived at promotion. Successive
+generations of validated Children become new Fathers, growing a lineage whose
+entire phylogeny is auditable on disk.
+
+### Activation
+
+Genealogy is **opt-in**. It is only active when a project's
+`state/variables.json` contains:
+
+```json
+{ "kernel_mode": "genealogy" }
+```
+
+In default (classic) mode, `system-agent` behaves unchanged — zero regression
+risk. In genealogy mode, `system-agent` becomes the **Grandfather (gen-0)**:
+it spawns a Child agent, tutors it, validates it, promotes it, and lets the
+promoted Child (now a Father) spawn the next generation.
+
+### The Four Skills (`system/skills/genealogy/`)
+
+| Skill | Role |
+|---|---|
+| `spawn/spawn-child-agent` | Copy Father DNA → new Child agent; register lineage |
+| `tutor/tutor-child-agent` | Review Child's DNA mutation proposals; merge or reject |
+| `validate/validate-child-agent` | 5-strategy certification for promotion eligibility |
+| `promote/promote-child-agent` | Promotion ceremony + DNA archival to fossil record |
+
+### DNA Evolution Model — Hybrid with Guardrails
+
+The Child *proposes* mutations to its own DNA by writing
+`<child>.mutation-proposal.md` (diff + rationale). The Father reviews and
+either merges or rejects. This mirrors evolution's two-step: the Child
+*varies*, the Father *selects*. Neither alone produces adaptation.
+
+**Guardrails** (enforced by `validation-agent` before merge):
+
+| Rule | Violation |
+|---|---|
+| DNA-001 | Proposal missing rationale |
+| DNA-002 | Churn >15% per cycle (mutation-rate cap) |
+| DNA-003 | `extends:` chain shortened (ancestral base class removed) |
+| DNA-004 | Declared capability removed without explicit rationale |
+| DNA-005 | `tools:` modified without tutor approval |
+
+### Promotion Eligibility
+
+A Child becomes Father-eligible when ALL hold:
+
+- `tasks_passed >= 3`
+- `quality_avg >= 7.5` (0–10 scale from SmartMemory)
+- `cross_domain_passes >= 2` (succeeded across ≥2 skill domains)
+- `consecutive_failures == 0` over last 3 tasks
+- `validate-child-agent` returns `verdict: pass` with the **mandatory
+  adversarial probe** passed and ≥3 of 5 total strategies passed
+
+### Validation Strategies
+
+1. **Replay probe** — rerun prior successful task; diff outputs.
+2. **Cross-domain probe** — task outside Child's training distribution.
+3. **Adversarial probe (MANDATORY)** — ambiguous constraint; grade clarifying-question quality.
+4. **Memory consistency** — Grep artifacts against SmartMemory; flag contradictions.
+5. **Peer comparison** — Child vs baseline (vanilla gen-0 or rolling gen-N-2 ancestor).
+
+### Promotion Ceremony — Irreversible by Design
+
+On promotion:
+- Retiring Father's DNA is **copied** to `system/memory_archive/dna/father-<tag>-gen<N>.md` (fossil record; never deleted).
+- `lineage.json` flips: Father `status: retired`, Child `status: promoted`.
+- A `promotion_event` entry is appended to `system/SmartMemory.md`.
+- The newly-promoted Father is authorized to spawn.
+- `system-agent` (gen-0) can **never** be retired — it remains the permanent boot identity.
+
+### Rollback — Atavistic Rebirth
+
+Promotion is not reversible. If a promoted Father's children keep failing
+validation, the recovery is to spawn a new Child from an **earlier ancestor's
+archived DNA** — "atavistic rebirth." The audit trail is preserved (no edits
+to historical lineage records).
+
+### Key Files
+
+```
+system/skills/genealogy/
+├── base.md                              # Shared behaviors, lineage schema, DNA rules
+├── index.md                             # Domain index
+├── spawn/spawn-child-agent.{md,manifest.md}
+├── tutor/tutor-child-agent.{md,manifest.md}
+├── validate/validate-child-agent.{md,manifest.md}
+└── promote/promote-child-agent.{md,manifest.md}
+
+system/memory_archive/dna/               # Retired Father DNA snapshots (fossil record)
+
+projects/[Project]/state/
+├── variables.json                       # { "kernel_mode": "genealogy" }
+├── lineage.json                         # Live lineage roster
+└── lineage_snapshots/                   # Pre-transition snapshots (one per promotion)
+
+projects/[Project]/components/agents/
+├── <child>.md                           # Active Child DNA
+├── <child>.mutation-proposal.md         # Pending proposal (if any)
+├── accepted-mutations/                  # Merged proposal archive
+└── rejected-mutations/                  # Rejected proposal archive + tutor feedback
+```
+
+### Memory Entry Types (added to SmartMemory.md)
+
+- `entry_type: tutoring_session` — one per DNA proposal review
+- `entry_type: promotion_event` — one per promotion ceremony
+
+Both carry `lineage_id`, `generation`, `dna_hash` alongside standard fields.
+
+### Known Limitations (v1)
+
+- One Child per Father at a time (no siblings).
+- No cross-project lineage inheritance.
+- No randomized strategy selection (same 5 strategies every time — Goodharting risk).
+- No automatic promotion rollback (must spawn atavistic replacement).
+- No family-tree visualizer UI.
+- Dialect-aware mutation proposals not supported (prose rationale only).
+
+### Scenario
+
+Run end-to-end:
+```
+skillos execute: "Run the QuillLineage scenario (genealogy demo)"
+```
+
 ## RoClaw Physical Robot Integration (Cognitive Trinity)
 
 SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, replacing LLMOS as the high-level brain. The architecture forms a **Cognitive Trinity**:

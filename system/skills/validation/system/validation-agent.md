@@ -33,6 +33,11 @@ The ValidationAgent inspects every structural contract the framework depends on 
 - Verify YAML frontmatter per experience block
 - Check required keys: `experience_id`, `timestamp`, `project`, `goal`, `outcome`
 
+### DNA Mutation-Proposal Validation (Genealogy)
+- Invoked in `scope: mutation-proposal` mode by `tutor-child-agent`
+- Compares a proposed DNA diff against the Child's current DNA and the Father's DNA
+- Enforces `DNA-001..005` rules (see table below); blocks any FAIL before merge
+
 ## Validation Rules Reference
 
 | Rule ID | Category | Severity | Description |
@@ -53,6 +58,11 @@ The ValidationAgent inspects every structural contract the framework depends on 
 | LIB-004 | smart_library | WARN | Agent in `.claude/agents/` not in SmartLibrary |
 | MEM-001 | memory_log | WARN | Memory block missing required frontmatter key |
 | MEM-002 | memory_log | WARN | Timestamp not valid ISO 8601 |
+| DNA-001 | mutation_proposal | FAIL | Proposal missing `rationale` field or rationale is empty |
+| DNA-002 | mutation_proposal | FAIL | `churn_ratio` > 0.15 (per-generation mutation cap exceeded) |
+| DNA-003 | mutation_proposal | FAIL | `extends:` chain shortened or ancestral base class removed |
+| DNA-004 | mutation_proposal | FAIL | Declared capability from parent manifest removed without `removes_capability: true` + rationale |
+| DNA-005 | mutation_proposal | FAIL | `tools:` field modified without `tutor_approved: true` in proposal |
 
 ## Output Specification
 
@@ -109,3 +119,32 @@ summary:
 - **Pre-Execution**: SystemAgent calls ValidationAgent to confirm system consistency. If score < 50, escalate to human.
 - **Post-Agent-Creation**: After dynamically creating a new agent, validate its frontmatter before delegation.
 - **Maintenance**: Periodic full-scope audit for system health.
+- **Genealogy — mutation gate**: `tutor-child-agent` invokes ValidationAgent with
+  `scope: mutation-proposal` before merging any DNA diff. Any FAIL in the
+  `DNA-*` family blocks the merge; the tutor returns `decision: rejected`
+  with the violated rule IDs in feedback. WARN-level DNA findings (none
+  defined in v1) would not block.
+
+## Mutation-Proposal Mode (Genealogy)
+
+Input:
+```yaml
+scope: mutation-proposal
+proposal_path: projects/<project>/components/agents/<child>.mutation-proposal.md
+child_dna_path: projects/<project>/components/agents/<child>.md
+parent_dna_path: <resolved from lineage.json>
+```
+
+Output (subset of standard output, focused):
+```yaml
+validation_id: string
+scope: mutation-proposal
+dna_rule_violations: [DNA-001, DNA-003]   # empty if clean
+overall_status: PASS | FAIL
+blocking: bool                             # true if any DNA-* FAIL present
+evidence:
+  - rule: DNA-002
+    detail: "churn_ratio 0.23 exceeds 0.15 cap"
+  - rule: DNA-003
+    detail: "'extends: orchestration/base' removed from proposal"
+```

@@ -1,0 +1,9 @@
+# Genealogy DNA fossil record
+#
+# Retired Father agents' DNA snapshots live here, one file per generation
+# per lineage, named `father-<tag>-gen<N>.md`. Files are copied in by
+# `genealogy/promote/promote-child-agent` during the promotion ceremony
+# and are NEVER edited or deleted.
+#
+# Querying: use Grep against this directory to reconstruct a lineage's
+# phylogeny, or pattern `lineage_id: <id>` in the snapshot frontmatter.
