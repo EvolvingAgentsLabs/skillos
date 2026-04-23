@@ -19,7 +19,6 @@ from dataclasses import dataclass, field
 from openai import OpenAI, APIStatusError, APIConnectionError, APITimeoutError
 from dotenv import load_dotenv
 from permission_policy import PermissionPolicy, PermissionMode, SKILLOS_DEFAULT_POLICY, get_policy
-from compactor import CompactionConfig, should_compact, compact_messages, compact_messages_async
 from sandbox import create_executor
 
 # Fix Windows console encoding for emojis
@@ -134,8 +133,6 @@ class AgentRuntime:
         self.system_prompt = ""
         self.policy = permission_policy or SKILLOS_DEFAULT_POLICY
         self.executor = create_executor(sandbox_mode)
-        self.compaction_config = CompactionConfig()
-        self.compaction_config.configure_for_model(self.model)
         self._active_project_dir = ""  # Set by execute_scenario/run_cognitive_pipeline for delegation context
         resolved_manifest = manifest_path or cfg["manifest"]
         self._load_manifest(resolved_manifest)
@@ -428,15 +425,6 @@ Agents are discovered in `system/agents/` and `.claude/agents/`. Use agent names
             ]
 
             for turn in range(max_turns):
-                # Compact if needed
-                if should_compact(messages, self.compaction_config):
-                    try:
-                        messages, _ = asyncio.run(
-                            compact_messages_async(messages, self.compaction_config, self._call_llm_async)
-                        )
-                    except RuntimeError:
-                        messages, _ = compact_messages(messages, self.compaction_config)
-
                 try:
                     full_messages = self._build_messages(messages)
                     if self.use_streaming:
@@ -1101,17 +1089,6 @@ Produce comprehensive, detailed output with at least 2000 characters.
         for i in range(max_turns):
             print(f"\n--- Turn {i+1}/{max_turns} ---")
 
-            # Compact conversation if token estimate exceeds threshold (LLM-powered)
-            if should_compact(messages, self.compaction_config):
-                try:
-                    messages, summary = asyncio.run(
-                        compact_messages_async(messages, self.compaction_config, self._call_llm_async)
-                    )
-                except RuntimeError:
-                    # Fallback if event loop is already running
-                    messages, summary = compact_messages(messages, self.compaction_config)
-                print(f"[compaction] Condensed context ({len(summary)} chars summary)")
-
             try:
                 full_messages = self._build_messages(messages)
                 if self.use_streaming:
@@ -1557,15 +1534,6 @@ Produce comprehensive, detailed output with at least 2000 characters.
             ]
 
             for turn in range(max_turns):
-                # Compact if needed
-                if should_compact(messages, self.compaction_config):
-                    try:
-                        messages, summary = asyncio.run(
-                            compact_messages_async(messages, self.compaction_config, self._call_llm_async)
-                        )
-                    except RuntimeError:
-                        messages, summary = compact_messages(messages, self.compaction_config)
-
                 try:
                     full_messages = self._build_messages(messages)
                     if self.use_streaming:
