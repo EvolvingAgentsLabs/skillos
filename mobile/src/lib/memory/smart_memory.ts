@@ -63,6 +63,11 @@ export async function experiencesForProject(project: string): Promise<MemoryReco
   return all.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }
 
+export async function deleteExperience(experienceId: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("memory", experienceId);
+}
+
 /**
  * Render a single experience back to the SmartMemory.md frontmatter form.
  * Used by the M7 file-sync export.

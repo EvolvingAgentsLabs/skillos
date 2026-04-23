@@ -75,6 +75,17 @@ export interface CartridgeManifest {
    * validation failure.
    */
   preferred_tier: PreferredTier;
+  /**
+   * High-level bucket for the Skills tab / Library UI and the GoalRouter.
+   * Declared via cartridge.yaml `category:`. Free-form (productivity,
+   * creative, reference, data, …). Optional.
+   */
+  category?: string;
+  /**
+   * Free-form tags a cartridge claims to cover — fed into the router's
+   * matching prompt alongside `entry_intents` and `description`.
+   */
+  tags?: string[];
 }
 
 export interface BlackboardEntry {

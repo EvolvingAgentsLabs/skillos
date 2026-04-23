@@ -11,6 +11,30 @@
 import yaml from "js-yaml";
 import { getFileText, listFiles } from "../storage/db";
 
+/**
+ * Minimal JSON-Schema-ish object used to render typed input fields on a
+ * SkillCard. Only the fields we render today are declared; unknown fields are
+ * ignored. If absent on a skill, the card falls back to a single free-form
+ * textarea.
+ */
+export interface SkillInputSchema {
+  type?: "object";
+  properties?: Record<
+    string,
+    {
+      type?: "string" | "number" | "integer" | "boolean";
+      title?: string;
+      description?: string;
+      enum?: Array<string | number>;
+      default?: unknown;
+      minimum?: number;
+      maximum?: number;
+      multiline?: boolean;
+    }
+  >;
+  required?: string[];
+}
+
 export interface SkillDefinition {
   name: string;
   description: string;
@@ -26,6 +50,47 @@ export interface SkillDefinition {
   js_path: string;
   /** "node" (default) or "browser" — mobile only supports "node". */
   runtime: "node" | "browser";
+  /** Optional typed input schema from SKILL.md metadata.input_schema. */
+  input_schema?: SkillInputSchema;
+  /**
+   * Optional high-level bucket used by the Skills tab grouping and the
+   * GoalRouter. Declared via SKILL.md `metadata.category`. Free-form; typical
+   * values: productivity, creative, reference, data, math, communication.
+   */
+  category?: string;
+  /**
+   * Optional list of capability tags the skill claims to cover, used by the
+   * GoalRouter to match goals against the skill pool. Declared via
+   * SKILL.md `metadata.capabilities` (list of strings). When absent, callers
+   * should fall back to `deriveCapabilities(skill)`.
+   */
+  capabilities?: string[];
+}
+
+/**
+ * Best-effort capability-keyword extraction for skills that don't declare
+ * `capabilities` in frontmatter. Takes the name + description, lowercases,
+ * splits on non-alphanum, drops stop-words, dedupes. Good enough for the
+ * first pass of GoalRouter matching against seeded skills that predate the
+ * metadata field.
+ */
+const STOP_WORDS = new Set([
+  "a", "an", "the", "and", "or", "of", "for", "to", "from", "with", "in",
+  "on", "at", "by", "as", "is", "are", "be", "this", "that", "it",
+  "your", "my", "its", "any", "some", "given", "using", "via",
+]);
+
+export function deriveCapabilities(skill: SkillDefinition): string[] {
+  if (skill.capabilities && skill.capabilities.length > 0) return skill.capabilities;
+  const raw = `${skill.name} ${skill.description}`.toLowerCase();
+  const tokens = raw.split(/[^a-z0-9]+/).filter(Boolean);
+  const out = new Set<string>();
+  for (const t of tokens) {
+    if (t.length < 3) continue;
+    if (STOP_WORDS.has(t)) continue;
+    out.add(t);
+  }
+  return Array.from(out);
 }
 
 function parseSkillMd(content: string): { frontmatter: Record<string, unknown>; body: string } {
@@ -63,6 +128,9 @@ export async function loadSkill(skillDir: string): Promise<SkillDefinition | und
 
   const folderName = normalized.split("/").pop() ?? "skill";
   const runtime = metadata.runtime === "browser" ? "browser" : "node";
+  const inputSchema = extractInputSchema(metadata.input_schema);
+  const category = typeof metadata.category === "string" ? metadata.category : undefined;
+  const capabilities = extractStringArray(metadata.capabilities);
 
   return {
     name: String(frontmatter.name ?? folderName),
@@ -75,7 +143,24 @@ export async function loadSkill(skillDir: string): Promise<SkillDefinition | und
     script_path: scriptPath,
     js_path: jsPath,
     runtime,
+    input_schema: inputSchema,
+    category,
+    capabilities,
   };
+}
+
+function extractStringArray(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v.filter((x): x is string => typeof x === "string" && x.length > 0);
+  return out.length > 0 ? out : undefined;
+}
+
+function extractInputSchema(v: unknown): SkillInputSchema | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const obj = v as Record<string, unknown>;
+  const props = obj.properties;
+  if (!props || typeof props !== "object" || Array.isArray(props)) return undefined;
+  return obj as SkillInputSchema;
 }
 
 export class SkillRegistry {

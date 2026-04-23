@@ -63,6 +63,9 @@ class SkillHostBridge {
   private currentSkill: string | null = null;
   private currentSource = "";
   private llm: LLMProxy | null = null;
+  private providerLabel: string | null = null;
+  private providerLocation: "cloud" | "on-device" | null = null;
+  private runLLMCalls = 0;
   private state: SkillStateStore = inMemoryStore();
 
   attachIframe(el: HTMLIFrameElement): void {
@@ -79,6 +82,20 @@ class SkillHostBridge {
 
   setLLMProxy(proxy: LLMProxy | null): void {
     this.llm = proxy;
+    if (!proxy) {
+      this.providerLabel = null;
+      this.providerLocation = null;
+    }
+  }
+
+  /**
+   * Set a human-readable label + location for the currently-installed LLM
+   * proxy. Surfaces in SkillResult.provenance so the UI can render a meaningful
+   * cloud/local badge without re-deriving it.
+   */
+  setProviderLabel(label: string | null, location?: "cloud" | "on-device" | null): void {
+    this.providerLabel = label;
+    this.providerLocation = location ?? null;
   }
 
   setStateStore(store: SkillStateStore): void {
@@ -113,19 +130,52 @@ class SkillHostBridge {
     const id = newId();
     const data =
       typeof opts.data === "string" ? opts.data : JSON.stringify(opts.data ?? {});
+    this.runLLMCalls = 0;
+    const startedAt = now();
     try {
       const raw = await this.request<Record<string, unknown>>(
         id,
         { type: "run", id, data, secret: opts.secret ?? "" },
         opts.timeoutMs ?? DEFAULT_TIMEOUT,
       );
-      if (raw && typeof raw === "object" && "error" in raw && typeof raw.error === "string") {
-        return { ok: false, error: raw.error as string, raw };
-      }
-      return skillResultFromJson(raw);
+      const base: SkillResult =
+        raw && typeof raw === "object" && "error" in raw && typeof raw.error === "string"
+          ? { ok: false, error: raw.error as string, raw }
+          : skillResultFromJson(raw);
+      return { ...base, provenance: this.collectProvenance(startedAt) };
     } catch (err) {
-      return skillResultFromError(err);
+      return {
+        ...skillResultFromError(err),
+        provenance: this.collectProvenance(startedAt),
+      };
     }
+  }
+
+  private collectProvenance(startedAt: number): {
+    durationMs: number;
+    llmCalls: number;
+    llmProvider?: string;
+    llmLocation?: "cloud" | "on-device";
+    costUsd?: number;
+  } {
+    // Cost semantics:
+    //   - 0 llmCalls  → the skill ran pure-JS; cost is genuinely $0.
+    //   - on-device   → inference is free (user's phone hardware); cost is $0.
+    //   - cloud       → the bridge does not yet track token usage per run
+    //     per provider, so cost is intentionally undefined rather than a
+    //     misleading zero. The badge hides the field when undefined.
+    let costUsd: number | undefined;
+    if (this.runLLMCalls === 0) costUsd = 0;
+    else if (this.providerLocation === "on-device") costUsd = 0;
+    else costUsd = undefined;
+
+    return {
+      durationMs: Math.max(0, Math.round(now() - startedAt)),
+      llmCalls: this.runLLMCalls,
+      llmProvider: this.providerLabel ?? undefined,
+      llmLocation: this.providerLocation ?? undefined,
+      costUsd,
+    };
   }
 
   /** Test-only: return true if the iframe has signalled readiness. */
@@ -160,6 +210,7 @@ class SkillHostBridge {
         return;
       }
       case "llm-request":
+        this.runLLMCalls += 1;
         void this.handleLLMRequest(msg);
         return;
       case "state-save": {
@@ -236,6 +287,13 @@ class SkillHostBridge {
 
 function newId(): string {
   return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function now(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
 }
 
 function inMemoryStore(): SkillStateStore {

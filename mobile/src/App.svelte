@@ -2,14 +2,24 @@
   import { onMount } from "svelte";
   import { seedIfNeeded, type SeedProgress } from "$lib/storage/seed";
   import { getMeta } from "$lib/storage/db";
+  import BrainScreen from "$components/BrainScreen.svelte";
+  import HomeScreen from "$components/HomeScreen.svelte";
   import LibraryScreen from "$components/LibraryScreen.svelte";
+  import OfflineBanner from "$components/OfflineBanner.svelte";
   import Onboarding from "$components/Onboarding.svelte";
   import ProjectSwiper from "$components/ProjectSwiper.svelte";
   import SkillHostIframe from "$components/SkillHostIframe.svelte";
+  import SkillsScreen from "$components/SkillsScreen.svelte";
+
+  // Tab order is deliberate: Home first (grid of Recipes — the write-once/
+  // run-forever-locally unit of value), Runs second (history of active work;
+  // the old Projects surface is still here, just no longer the default
+  // landing), then Skills / Brain, with Library as a dev-authoring tab.
+  type Tab = "home" | "runs" | "skills" | "brain" | "library";
 
   let progress = $state<SeedProgress>({ phase: "idle", completed: 0, total: 0 });
   let authoringFlag = $state(false);
-  let tab = $state<"projects" | "library">("projects");
+  let tab = $state<Tab>("home");
 
   const pct = $derived(
     progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0,
@@ -28,6 +38,9 @@
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible") {
         authoringFlag = Boolean(await getMeta("authoring_mode"));
+        // If the user turned off authoring while viewing the Library tab,
+        // bounce them back to Projects so we don't leave a hidden tab selected.
+        if (!authoringFlag && tab === "library") tab = "home";
       }
     });
   });
@@ -59,22 +72,42 @@
       <button onclick={() => location.reload()}>Retry</button>
     </div>
   {:else}
-    {#if tab === "projects"}
+    {#if tab === "home"}
+      <HomeScreen onopenproject={() => (tab = "runs")} />
+    {:else if tab === "runs"}
       <ProjectSwiper />
+    {:else if tab === "skills"}
+      <SkillsScreen />
+    {:else if tab === "brain"}
+      <BrainScreen />
     {:else}
       <LibraryScreen />
     {/if}
-    {#if authoringFlag}
-      <nav class="tabbar" aria-label="Sections">
-        <button class:active={tab === "projects"} onclick={() => (tab = "projects")}>
-          Projects
-        </button>
+    <nav
+      class="tabbar"
+      class:cols-5={authoringFlag}
+      aria-label="Sections"
+    >
+      <button class:active={tab === "home"} onclick={() => (tab = "home")}>
+        Home
+      </button>
+      <button class:active={tab === "runs"} onclick={() => (tab = "runs")}>
+        Runs
+      </button>
+      <button class:active={tab === "skills"} onclick={() => (tab = "skills")}>
+        Skills
+      </button>
+      <button class:active={tab === "brain"} onclick={() => (tab = "brain")}>
+        Brain
+      </button>
+      {#if authoringFlag}
         <button class:active={tab === "library"} onclick={() => (tab = "library")}>
           Library
         </button>
-      </nav>
-    {/if}
+      {/if}
+    </nav>
     <SkillHostIframe />
+    <OfflineBanner />
     <Onboarding />
   {/if}
 </main>
@@ -86,11 +119,14 @@
     right: 0;
     bottom: 0;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(4, 1fr);
     background: var(--bg-2);
     border-top: 1px solid var(--border);
     padding-bottom: env(safe-area-inset-bottom);
     z-index: 6;
+  }
+  .tabbar.cols-5 {
+    grid-template-columns: repeat(5, 1fr);
   }
   .tabbar button {
     background: transparent;

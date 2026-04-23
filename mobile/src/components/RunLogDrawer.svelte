@@ -1,7 +1,14 @@
 <script lang="ts">
   import { runStream } from "$lib/state/run_events.svelte";
+  import CompositionStepper from "$components/CompositionStepper.svelte";
 
-  // Show the drawer whenever a run is active or the last run just ended.
+  // The drawer has two modes:
+  //   - default: clean composition stepper (see CompositionStepper.svelte)
+  //   - details: raw RunEvent log, for Dev inspection / debugging
+  // Stepper is the primary surface because it matches the Recipe mental
+  // model ("watch a small team step through the job"); the raw log stays
+  // reachable but is no longer the first thing users see.
+  let showDetails = $state(false);
   const recent = $derived(runStream.events.slice(-40));
 </script>
 
@@ -10,39 +17,52 @@
     <header>
       <span class="dot" class:running={runStream.running}></span>
       <span class="label">
-        {runStream.running ? "Running…" : "Last run"}
+        {runStream.running ? "Running recipe…" : "Last run"}
       </span>
+      <button
+        type="button"
+        class="toggle"
+        onclick={() => (showDetails = !showDetails)}
+        aria-expanded={showDetails}
+      >
+        {showDetails ? "Hide details" : "Details"}
+      </button>
     </header>
-    <div class="log">
-      {#each recent as e, i (i + e.type)}
-        <div class="row row-{e.type}">
-          {#if e.type === "run-start"}
-            ▶ {e.cartridge} / {e.flow}
-          {:else if e.type === "step-start"}
-            ‣ step: {e.agent}
-          {:else if e.type === "tool-call"}
-            ⚒ {e.tool}({trunc(JSON.stringify(e.args), 60)})
-          {:else if e.type === "tool-result"}
-            ↩ {trunc(String(e.result), 80)}
-          {:else if e.type === "blackboard-put"}
-            {e.ok ? "✅" : "⚠️"} {e.key}
-          {:else if e.type === "step-end"}
-            {e.step.validated ? "✓" : "✗"} {e.step.agent} — {e.step.message}
-          {:else if e.type === "validator"}
-            {e.ok ? "✓" : "✗"} {e.message}
-          {:else if e.type === "tier-switch"}
-            ↪ {e.agent}: {e.from} → {e.to} ({e.reason})
-          {:else if e.type === "run-end"}
-            ■ {e.result.ok ? "ok" : "partial"}
-          {/if}
-        </div>
-      {/each}
-      {#if runStream.running && runStream.currentAssistant}
-        <div class="row row-llm-turn">
-          <span class="llm">{trunc(runStream.currentAssistant, 200)}</span>
-        </div>
-      {/if}
-    </div>
+
+    {#if !showDetails}
+      <CompositionStepper />
+    {:else}
+      <div class="log">
+        {#each recent as e, i (i + e.type)}
+          <div class="row row-{e.type}">
+            {#if e.type === "run-start"}
+              ▶ {e.cartridge} / {e.flow}
+            {:else if e.type === "step-start"}
+              ‣ step: {e.agent}
+            {:else if e.type === "tool-call"}
+              ⚒ {e.tool}({trunc(JSON.stringify(e.args), 60)})
+            {:else if e.type === "tool-result"}
+              ↩ {trunc(String(e.result), 80)}
+            {:else if e.type === "blackboard-put"}
+              {e.ok ? "✅" : "⚠️"} {e.key}
+            {:else if e.type === "step-end"}
+              {e.step.validated ? "✓" : "✗"} {e.step.agent} — {e.step.message}
+            {:else if e.type === "validator"}
+              {e.ok ? "✓" : "✗"} {e.message}
+            {:else if e.type === "tier-switch"}
+              ↪ {e.agent}: {e.from} → {e.to} ({e.reason})
+            {:else if e.type === "run-end"}
+              ■ {e.result.ok ? "ok" : "partial"}
+            {/if}
+          </div>
+        {/each}
+        {#if runStream.running && runStream.currentAssistant}
+          <div class="row row-llm-turn">
+            <span class="llm">{trunc(runStream.currentAssistant, 200)}</span>
+          </div>
+        {/if}
+      </div>
+    {/if}
   </aside>
 {/if}
 
@@ -89,6 +109,19 @@
   }
   .label {
     flex: 1;
+  }
+  .toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--fg-dim);
+    font-size: 0.72rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    cursor: pointer;
+  }
+  .toggle:hover {
+    color: var(--fg);
+    border-color: var(--accent);
   }
   .log {
     display: flex;

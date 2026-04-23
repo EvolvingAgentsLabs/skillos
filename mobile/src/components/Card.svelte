@@ -1,13 +1,26 @@
 <script lang="ts">
   import type { ProjectCard } from "$lib/state/projects.svelte";
+  import { pickRenderer } from "$lib/render/done_card_renderers";
+  import ReaderRenderer from "$components/renderers/ReaderRenderer.svelte";
+  import ScheduleRenderer from "$components/renderers/ScheduleRenderer.svelte";
+  import TableRenderer from "$components/renderers/TableRenderer.svelte";
 
   interface Props {
     card: ProjectCard;
     onmove?: (lane: ProjectCard["lane"]) => void;
     onremove?: () => void;
+    onpromote?: () => void;
   }
 
-  let { card, onmove, onremove }: Props = $props();
+  let { card, onmove, onremove, onpromote }: Props = $props();
+
+  // Pick a renderer for the card payload. Done-lane cards get the rich
+  // typed view by default; earlier lanes stay JSON since their payloads
+  // are usually transient. Users can always flip to raw JSON with the
+  // "Raw" toggle, which is important when the schema-based detection is
+  // wrong or they need to debug.
+  const choice = $derived(pickRenderer(card.schema_ref, card.data));
+  let showRaw = $state(false);
 
   const icon = $derived(
     card.kind === "goal"
@@ -57,11 +70,34 @@
   {#if expanded}
     <div class="body">
       {#if card.data !== undefined}
-        <pre class="json">{JSON.stringify(card.data, null, 2)}</pre>
+        {#if !showRaw && choice.kind !== "json"}
+          <div class="rich">
+            {#if choice.kind === "table"}
+              <TableRenderer data={card.data} />
+            {:else if choice.kind === "schedule"}
+              <ScheduleRenderer data={card.data} />
+            {:else if choice.kind === "reader"}
+              <ReaderRenderer data={card.data} />
+            {/if}
+          </div>
+          <button class="toggle-raw" onclick={() => (showRaw = true)}>
+            Raw JSON
+          </button>
+        {:else}
+          <pre class="json">{JSON.stringify(card.data, null, 2)}</pre>
+          {#if choice.kind !== "json"}
+            <button class="toggle-raw" onclick={() => (showRaw = false)}>
+              Typed view
+            </button>
+          {/if}
+        {/if}
       {:else}
         <div class="empty">No payload yet.</div>
       {/if}
       <div class="actions">
+        {#if card.lane === "done" && onpromote}
+          <button class="promote" onclick={() => onpromote?.()}>✨ Save as Skill</button>
+        {/if}
         {#if card.lane !== "planned"}
           <button onclick={() => onmove?.("planned")}>→ Planned</button>
         {/if}
@@ -197,5 +233,28 @@
   .danger {
     color: var(--err);
     border-color: var(--err);
+  }
+  .promote {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    font-weight: 600;
+  }
+  .rich {
+    margin: 0;
+  }
+  .toggle-raw {
+    align-self: flex-start;
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--fg-dim);
+    font-size: 0.72rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    cursor: pointer;
+  }
+  .toggle-raw:hover {
+    color: var(--fg);
+    border-color: var(--accent);
   }
 </style>

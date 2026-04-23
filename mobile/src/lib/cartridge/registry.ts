@@ -213,6 +213,9 @@ export class CartridgeRegistry {
       preferredTierRaw === "local" || preferredTierRaw === "cloud"
         ? preferredTierRaw
         : "auto";
+    const category = typeof data.category === "string" ? data.category : undefined;
+    const tagsRaw = asStringArray(data.tags);
+    const tags = tagsRaw.length > 0 ? tagsRaw : undefined;
     const manifest: CartridgeManifest = {
       name: String(data.name ?? fallbackName),
       path: cartridgeDir,
@@ -228,6 +231,8 @@ export class CartridgeRegistry {
       type: data.type === "js-skills" ? "js-skills" : "standard",
       skills_source,
       preferred_tier,
+      category,
+      tags,
     };
     if (!manifest.default_flow) {
       const firstFlow = Object.keys(manifest.flows)[0];

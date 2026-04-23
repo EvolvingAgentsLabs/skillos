@@ -262,7 +262,10 @@ Every v1 milestone touches at least one of these five:
 - `mobile/src/lib/cartridge/runner.ts` — M11 accepts `ProviderBundle`; M17 emits `onStepCommitted`.
 - `mobile/src/lib/cartridge/registry.ts` — M12 adds `reloadCartridge`, `invalidateAgent`, `invalidateValidator`, `forget`.
 - `mobile/src/lib/state/provider_config.ts` — M11 gains `ProjectRouting = {primary, fallback?}` with auto-migration.
-- `mobile/src/lib/storage/db.ts` — DB v2 (M9 `models`), DB v3 (M17 `checkpoints`).
+- `mobile/src/lib/storage/db.ts` — DB v2 (M9 `models`), DB v3 (M17 `checkpoints`), DB v4 (recipe-reframe `teachings`).
+- `mobile/src/lib/memory/teachings.ts` + `mobile/src/components/TeachRecipeSheet.svelte` — per-recipe learning capture + display surface.
+- `mobile/src/components/HomeScreen.svelte` + `mobile/src/components/CompositionStepper.svelte` + `mobile/src/components/ForgeRecipeSheet.svelte` — Recipe-first launcher, clean run-time view, capability-gap ceremony.
+- `mobile/src/lib/render/done_card_renderers.ts` + `mobile/src/components/renderers/` — typed Done-card renderer registry (table/schedule/reader).
 
 ---
 
@@ -407,7 +410,12 @@ Both live in IndexedDB `meta` store, both default **off** — v0 users see no ch
 
 ### For the user
 
-- **Run a real multi-agent cartridge from a phone, no internet required.** Download Gemma 2 2B once (1.3 GB). Afterwards `cooking` runs ~3 tok/s on a Pixel 6 (WASM) or ~20 tok/s on a Pixel 8 Pro (LiteRT).
+- **A Recipe-first launcher instead of a chatbot.** The Home tab is a grid of Recipe tiles (one per installed cartridge, category-grouped). Tap a tile to run its composition; tap the dashed "Teach a Recipe" tile to enter the Forge ceremony for a capability the library doesn't yet cover. The old Projects swiper is still there, just renamed **Runs** and moved to the second tab — active-work surface, not the default landing. See [mobile-testing-guide.md](mobile-testing-guide.md) for the tab-by-tab walkthrough.
+- **Run a real multi-agent cartridge from a phone, no internet required.** Download Gemma 2 2B once (1.3 GB). Afterwards `cooking` runs ~3 tok/s on a Pixel 6 (WASM) or ~20 tok/s on a Pixel 8 Pro (LiteRT). During runs, a clean **composition stepper** shows the active agent + tier (⚡ local / ☁ cloud) instead of a raw event dump; the raw log lives behind a **Details** toggle.
+- **Teach each recipe, and watch it remember.** After a successful run, a **✎** button captures free-text corrections attached to the recipe (not a single output). Corrections accumulate into a learning patina (`learned N`) visible on Home tiles, Skills group headers, and the Brain → Recipes cluster view. (Prompt-preamble injection at runtime is a follow-up; the capture/display loop is end-to-end today.)
+- **Forge a new recipe when no installed one fits.** Unmatched goals trigger an explicit **NEW RECIPE ACQUIRED** ceremony instead of a silent fallback — capability-gap acknowledgment, proposed plan preview, one-time cloud cost estimate, animated reveal. Once acquired, the new skill pins into its host cartridge and runs locally on every subsequent invocation.
+- **Typed Done-cards instead of JSON dumps.** Structured payloads (weekly menus, invoices, reports) render through a detection registry into calendars/tables/reader views; a **Raw JSON** toggle is one tap away when the typed choice is wrong.
+- **Offline is celebrated, not degraded.** When connectivity drops, a green banner reads "Offline — local recipes still run. Cloud synthesis paused." Inverted-expectation copy: offline is when the write-once/run-forever-locally story pays off.
 - **Fork and edit a cartridge on the phone.** Clone `cooking` → rename → open `menu-planner.md` in the Markdown editor → change the agent's prompt → re-run. Every mutation goes through `putFile` with `user_edited: true` so a seed refresh won't overwrite it.
 - **Create a cartridge from zero in 5 steps.** Wizard emits manifest + agent stubs + empty schemas; the result opens in the same editors as the pre-existing cartridges.
 - **Run offline and come back later.** Checkpoint lands between every step. Offline queue flushes when the network returns. Long runs with LLM-powered compaction don't OOM on 2K-context models.

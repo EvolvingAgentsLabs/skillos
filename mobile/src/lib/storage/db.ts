@@ -99,6 +99,24 @@ export interface MetaRecord {
   value: unknown;
 }
 
+/**
+ * TeachingRecord — a user-supplied correction attached to a Recipe (cartridge),
+ * created via the post-run "Teach this Recipe" affordance. Teachings are the
+ * substrate of the per-recipe learning patina: their count is what the UI
+ * shows as "learned N things from you", and they are (future work) prepended
+ * to agent prompts when the recipe runs.
+ */
+export interface TeachingRecord {
+  id: string;
+  cartridge: string;
+  text: string;
+  /** Optional agent/step the correction applies to. Empty = applies to whole recipe. */
+  target_step?: string;
+  created_at: string;
+  /** Soft-delete flag; retain history even when the user dismisses one. */
+  active: boolean;
+}
+
 interface SkillOSDB extends DBSchema {
   files: {
     key: string;
@@ -135,10 +153,15 @@ interface SkillOSDB extends DBSchema {
     key: string;
     value: CheckpointRecord;
   };
+  teachings: {
+    key: string;
+    value: TeachingRecord;
+    indexes: { "by-cartridge": string };
+  };
 }
 
 const DB_NAME = "skillos";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let _dbPromise: Promise<IDBPDatabase<SkillOSDB>> | null = null;
 
@@ -180,6 +203,12 @@ export function getDB(): Promise<IDBPDatabase<SkillOSDB>> {
         // v3: partial-run checkpoints (M17). Keyed by project id.
         if (!db.objectStoreNames.contains("checkpoints")) {
           db.createObjectStore("checkpoints", { keyPath: "id" });
+        }
+        // v4: per-recipe teachings (post-run corrections). Keyed by id with
+        // a by-cartridge index so the learning patina can count in O(log n).
+        if (!db.objectStoreNames.contains("teachings")) {
+          const store = db.createObjectStore("teachings", { keyPath: "id" });
+          store.createIndex("by-cartridge", "cartridge");
         }
       },
     });

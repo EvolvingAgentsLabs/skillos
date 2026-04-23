@@ -6,6 +6,8 @@ End-to-end walkthrough for exercising the `mobile/` app locally against every v1
 
 Estimated time: 30 minutes for the browser paths. 90 minutes additional if you walk through the Capacitor Android build. iOS device validation requires hardware.
 
+> **For hands-on, tab-by-tab feature testing** (Skills tab, Brain tab, Promote to Skill, Provenance badges, etc.), see [`mobile-testing-guide.md`](./mobile-testing-guide.md). That guide is a practical checklist; this document is the architectural walkthrough + Capacitor build path.
+
 ---
 
 ## Prerequisites
@@ -31,14 +33,18 @@ flowchart TB
   A[npm install] --> B[npm test<br/>129/129 passing]
   B --> C[npm run dev<br/>vite on :5173]
   C --> D{Which path?}
+  D -- Home tile --> Hm[Home grid<br/>tap a Recipe<br/>→ Runs tab auto-opens]
+  D -- Forge ceremony --> Fg["Home → Teach a Recipe<br/>→ GoalComposer<br/>→ Forge → NEW RECIPE ACQUIRED"]
   D -- Cloud quickstart --> E[Create project<br/>+ OpenRouter key<br/>→ Run]
   D -- On-device --> F[Settings → flag<br/>→ Model Manager<br/>→ Download]
   D -- Authoring --> G[Settings → flag<br/>→ Library tab<br/>→ Clone/Edit/Create]
   D -- Smart routing --> H[Primary=local<br/>+ Fallback=cloud<br/>→ tier-switch event]
   D -- Resume --> I[Pause mid-run<br/>→ reopen<br/>→ checkpoint loads]
   D -- Capacitor --> J[cap add android<br/>→ plug in phone<br/>→ LiteRT or LAN]
-  E & F & G & H & I & J --> K[Export to Files<br/>→ desktop Python]
+  Hm & Fg & E & F & G & H & I & J --> K[Export to Files<br/>→ desktop Python]
 ```
+
+> **Tab-order note (v1+recipe-reframe)**: bottom nav is now **Home · Runs · Skills · Brain · (Library)**. Default landing is **Home** — a grid of recipe tiles, category-grouped, with a dashed "Teach a Recipe" tile that triggers the Forge ceremony for unmatched goals. The old Projects swiper lives under the **Runs** tab with the same functionality; only the entry point moved. See [`mobile-testing-guide.md`](./mobile-testing-guide.md) for the hands-on per-tab checklist.
 
 ---
 
@@ -105,31 +111,45 @@ npm run dev              # http://localhost:5173
 
 1. Open in Chrome (optionally toggle DevTools → device toolbar to emulate a phone).
 2. Splash: *"Seeding 180 / 180 files…"* (~2 s).
-3. **First launch only** — a 4-page onboarding dialog explains the swipe columns, lifecycle lanes, and Run button. Tap **Next** through it or **Skip**. It never reappears (stored under `meta.onboarding_seen`).
-4. Tap **+** in the top bar:
+3. **First launch only** — a 4-page onboarding dialog frames SkillOS around Recipes (composition of plan + agents + skills + memory), explains the run loop, and covers write-once/run-forever-locally. Tap **Next** through it or **Skip**. It never reappears (stored under `meta.onboarding_seen`).
+4. You land on **Home** — a category-grouped grid of recipe tiles (one per cartridge).
+5. **Path A — pick an existing Recipe from Home:**
+    - Tap a tile under `cooking` (or any category).
+    - The app switches to the **Runs** tab. Because no provider is configured yet, the ProviderSettingsSheet opens automatically.
+    - Fill the **Primary** tab: `OpenRouter · Qwen` or `Google · Gemini`, API key, optional model. Leave **Fallback** off for now (§4 covers it). Save.
+    - The run starts immediately.
+6. **Path B — explicit goal → Runs tab:**
+    - Switch to the **Runs** tab → tap **+** top-right.
     - *Name*: `Sunday menu`
-    - *Cartridge*: `cooking`
-    - *Initial goal*: `Plan weekly meals for 2 adults, vegetarian`
-    - **Create**
-5. 🎯 Goal card lands in **Planned**.
-6. Tap **⚙** on the column header → Provider settings opens with two tabs:
-    - **Primary** (selected by default)
-      - *Provider*: `OpenRouter · Qwen` (or `Google · Gemini`)
-      - *API key*: paste your key
-      - *Model*: leave blank to use the default
-    - Leave **Fallback** on *off* for now — §4 covers it
-    - **Save**
-7. Tap **▶ run**.
+    - *Cartridge*: leave auto-picker on and type a goal like `Plan weekly meals for 2 adults, vegetarian`. Tap **Plan with SkillOS** — the router picks `cooking`.
+    - **Create**, configure provider (step 5 above), **▶ run**.
 
-What you'll see:
+What you'll see in either path:
 
+- The **Composition Stepper** renders in the bottom drawer by default — one entry per agent, active step pulsing, tier badge (⚡ local / ☁ cloud).
 - 🎯 Goal card slides to **In Execution**.
 - 🤖 **menu-planner** enters **In Execution** with "running…" subtitle.
-- RunLogDrawer streams LLM tokens live.
+- Tapping **Details** in the drawer header flips to the raw event log (LLM tokens live, tool-call chips, validator pings) — same content as the pre-reframe RunLogDrawer.
 - On schema-validated `<produces>`, a 📄 **weekly_menu** card lands in **Done**.
 - Same for `shopping-list-builder` → 📄 `shopping_list`, then `recipe-writer` → 📄 `recipes`.
-- Validators fire at the end (`menu_complete.py` + `shopping_list_sane.py`) and report `ok` in the drawer.
+- Validators fire at the end (`menu_complete.py` + `shopping_list_sane.py`) and report `ok` in the details log.
 - 🎯 Goal card moves to **Done**.
+- Expand the `weekly_menu` done card → it renders with the **typed schedule renderer** (day-grouped list), not raw JSON. Toggle **Raw JSON** to see the underlying payload.
+
+### Optional: Forge ceremony (capability gap)
+
+1. Return to **Home** → scroll to the dashed **Teach a Recipe** tile at the bottom.
+2. Tap it → GoalComposer opens. Type a goal that won't match any installed cartridge, e.g. `"convert my timestamps from UTC to Buenos Aires and format them for my kids' school"`.
+3. **Plan with SkillOS** → the router returns a synthesize decision.
+4. Tap the new **✨ Teach me this Recipe** button → **ForgeRecipeSheet** opens with: goal echo, 3-step proposed plan, one-time cost estimate (~$0.01–0.03).
+5. Tap **✨ Teach me**. Watch the spinner, then the animated **NEW RECIPE ACQUIRED** ribbon.
+6. **Use it now** → creates a project pinned to the just-forged skill.
+
+### Optional: Teach this Recipe (post-run refinement)
+
+After any successful run, a **✎** icon appears in the Runs-tab project header. Tap it → **TeachRecipeSheet** → type a correction like `round totals up to 2 decimals` → save. The cartridge's header now shows `· learned 1` and the Home tile for that cartridge picks up a `learned 1` patina chip.
+
+> **Scope note**: teachings are stored + displayed today. They aren't yet injected into agent prompts at runtime — that plumbing is a follow-up. The capture/display loop is testable end-to-end regardless.
 
 ---
 
@@ -249,7 +269,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart TB
-  A[Settings → toggle authoring_mode] --> B[Tab bar appears at bottom<br/>Projects / Library]
+  A[Settings → toggle authoring_mode] --> B[Library tab appears in nav<br/>Home / Runs / Skills / Brain / Library]
   B --> C[Library tab]
   C --> D["List of cartridges<br/>name · type · flows · agents · skills"]
   D --> Actions{{Choose action}}
@@ -577,14 +597,23 @@ Before merging a change that touches the mobile stack:
 
 - [ ] `cd mobile && npm test` — 129/129 pass
 - [ ] `cd mobile && npm run build` — 0 errors, main bundle ≤ 400 KB (gzipped ≤ 120 KB), authoring chunk ≤ 600 KB (gzipped ≤ 200 KB)
+- [ ] Fresh-boot lands on **Home**, four-tab nav visible (§2)
+- [ ] Home tile activation opens Runs tab and starts a run (or prompts for provider) (§2 Path A)
 - [ ] Browser quickstart (§2) — cloud run end-to-end
+- [ ] Composition Stepper shows active pulse + tier badge per step; **Details** toggle round-trips (§2)
+- [ ] Typed done-card renderer picks the right view (table/schedule/reader) with Raw JSON escape hatch (§2)
+- [ ] Teach Recipe (§2 optional) — teaching saves, patina appears on Home tile + Skills group
+- [ ] Forge ceremony (§2 optional) — unmatched goal → sheet → NEW RECIPE ACQUIRED reveal; forged skill runnable from Skills tab
+- [ ] Offline banner appears on `navigator.offline` and disappears on reconnect
+- [ ] Brain Recipes-mode cluster shows teachings + runs for the affected cartridge
 - [ ] On-device quickstart (§3) — wllama Qwen 1.5B runs cooking
-- [ ] Smart routing (§4) — observe `tier-switch` event in RunLogDrawer
+- [ ] Smart routing (§4) — observe `tier-switch` event in the Details log
 - [ ] Authoring clone-and-tweak (§5) — edited agent body influences output
 - [ ] New-from-blank cartridge via wizard — emits valid manifest + agent stubs
 - [ ] JS skill editor Test-in-iframe (§5) — sandboxed run completes without errors
 - [ ] Pause + resume (§6) — checkpoint survives tab close
 - [ ] Offline queue (§7) — "Queued" toast appears + flushes
+- [ ] DB upgrade v3→v4 on a pre-upgrade install: no data loss, `teachings` store appears
 - [ ] (On hardware) Capacitor Android LiteRT path (§9) — tok/s recorded
 - [ ] (On hardware) iOS device matrix (§10) — logged strategy per device
 

@@ -22,6 +22,8 @@ import type { SkillDefinition } from "../skills/skill_loader";
 import { SkillRegistry } from "../skills/skill_loader";
 import { skillHostBridge, type LLMProxy } from "../skills/skill_host_bridge";
 import { skillResultToLlmString } from "../skills/skill_result";
+import { synthesizeSkill } from "../skills/skill_synth";
+import { saveSkill } from "./registry_mutations";
 import { Blackboard } from "./blackboard";
 import { tokenize } from "./registry";
 import type { CartridgeRegistry } from "./registry";
@@ -568,7 +570,8 @@ export class CartridgeRunner {
       "2. If a relevant skill exists, use the `load_skill` tool to read its instructions.",
       "3. Follow the skill's instructions exactly to call `run_js`.",
       "4. Present the result to the user.",
-      "5. If no skill is relevant, answer directly from your knowledge.",
+      "5. If NO existing skill is a good fit, call `request_skill` to synthesize one. Then load_skill + run_js on the new skill.",
+      "6. Only answer directly from your knowledge when no skill is needed at all.",
       "",
       "Output ONLY the final result.",
     ].join("\n");
@@ -588,6 +591,44 @@ export class CartridgeRunner {
         const res = await skillHostBridge.runSkill(s, { data });
         return skillResultToLlmString(res);
       },
+      // On-demand skill synthesis. Lets the agentic loop close a capability
+      // gap mid-run without kicking back to the user. Saves the new skill
+      // into the current cartridge so subsequent turns can load_skill / run_js
+      // on it.
+      request_skill: async (args) => {
+        const description = String(args.description ?? "").trim();
+        if (!description) {
+          return "Error: request_skill requires a `description` of what the skill should do.";
+        }
+        const nameHint =
+          typeof args.name === "string" && args.name.trim()
+            ? args.name.trim()
+            : description.slice(0, 60);
+        try {
+          const synth = await synthesizeSkill(this.llm, {
+            goal,
+            cardTitle: nameHint,
+            cardSubtitle: description,
+            cardData: args.example_input,
+            projectName: "agentic-run",
+            projectCartridge: manifest.name,
+            relatedCardTitles: [],
+          });
+          const dir = manifest.skills_source || `${manifest.path}/skills`;
+          await saveSkill(skillReg, dir, synth.skillName, {
+            skillMd: synth.skillMd,
+            indexJs: synth.indexJs,
+          });
+          const warn =
+            synth.errors.length > 0
+              ? ` (warnings: ${synth.errors.join("; ").slice(0, 200)})`
+              : "";
+          return `Created skill "${synth.skillName}"${warn}. Now call load_skill with skill_name="${synth.skillName}" to read its instructions, then run_js.`;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return `Error creating skill: ${msg}`;
+        }
+      },
     };
     const toolInstr = [
       "",
@@ -598,6 +639,9 @@ export class CartridgeRunner {
       "",
       "### run_js",
       '<tool_call name="run_js">\n{"skill_name": "the-skill-name", "data": "{}"}\n</tool_call>',
+      "",
+      "### request_skill (use only when no existing skill fits)",
+      '<tool_call name="request_skill">\n{"name": "invoice-calculator", "description": "Calculate a photography invoice from hours, hourly rate, and tax percent.", "example_input": {"hours": 4, "rate": 85, "tax": 21}}\n</tool_call>',
       "",
       "When you have the answer, wrap it:",
       "<final_answer>...</final_answer>",

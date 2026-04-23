@@ -1,5 +1,8 @@
 <script lang="ts">
   import Card from "$components/Card.svelte";
+  import PromoteToSkillSheet from "$components/PromoteToSkillSheet.svelte";
+  import TeachRecipeSheet from "$components/TeachRecipeSheet.svelte";
+  import { countActiveTeachings } from "$lib/memory/teachings";
   import {
     laneCards,
     moveCard,
@@ -25,11 +28,59 @@
     { key: "done", label: "Done" },
   ];
 
+  let promoteCard = $state<ProjectCard | null>(null);
+  let savedToast = $state<string>("");
+  let teachOpen = $state(false);
+  let teachingsCount = $state(0);
+
+  // Refresh the patina whenever the attached cartridge changes or a teaching
+  // is saved. Cheap — one indexed read against IndexedDB.
+  async function refreshTeachings() {
+    if (!project.cartridge) {
+      teachingsCount = 0;
+      return;
+    }
+    teachingsCount = await countActiveTeachings(project.cartridge);
+  }
+
+  $effect(() => {
+    void refreshTeachings();
+  });
+
+  const hasDoneCard = $derived(
+    project.cards.some((c) => c.lane === "done"),
+  );
+
   async function handleMove(card: ProjectCard, lane: Lane) {
     await moveCard(project.id, card.id, lane);
   }
   async function handleRemove(card: ProjectCard) {
     await removeCard(project.id, card.id);
+  }
+
+  // Use the project goal card's title as the best available goal context.
+  // Falls back to the project name if no goal card is present.
+  const projectGoal = $derived(
+    project.cards.find((c) => c.kind === "goal")?.title ?? project.name,
+  );
+
+  function relatedTitlesFor(card: ProjectCard): string[] {
+    return project.cards
+      .filter((c) => c.id !== card.id)
+      .map((c) => c.title)
+      .slice(0, 8);
+  }
+
+  function onSkillSaved(payload: { cartridge: string; skillName: string }) {
+    promoteCard = null;
+    savedToast = `Saved "${payload.skillName}" to ${payload.cartridge}`;
+    setTimeout(() => (savedToast = ""), 4000);
+  }
+
+  async function onTeachingSaved() {
+    await refreshTeachings();
+    savedToast = "Teaching saved — will apply next run";
+    setTimeout(() => (savedToast = ""), 3000);
   }
 </script>
 
@@ -37,10 +88,25 @@
   <header class="column-head">
     <div class="name-block">
       <div class="name">{project.name}</div>
-      <div class="cartridge">{project.cartridge ?? "no cartridge"}</div>
+      <div class="cartridge">
+        {project.cartridge ?? "no recipe"}
+        {#if project.cartridge && teachingsCount > 0}
+          <span class="patina" title="Teachings applied to this recipe">
+            · learned {teachingsCount}
+          </span>
+        {/if}
+      </div>
     </div>
     <div class="head-actions">
       <button class="icon" onclick={() => onsettings?.()} aria-label="Provider settings">⚙</button>
+      {#if project.cartridge && hasDoneCard}
+        <button
+          class="icon teach"
+          onclick={() => (teachOpen = true)}
+          aria-label="Teach this Recipe"
+          title="Teach this Recipe"
+        >✎</button>
+      {/if}
       {#if project.cartridge}
         <button class="run" onclick={() => onrun?.()} disabled={running} aria-label="Run">
           {running ? "…" : "▶ run"}
@@ -67,6 +133,7 @@
                 {card}
                 onmove={(l) => handleMove(card, l)}
                 onremove={() => handleRemove(card)}
+                onpromote={card.lane === "done" ? () => (promoteCard = card) : undefined}
               />
             {/each}
           {/if}
@@ -74,7 +141,31 @@
       </div>
     {/each}
   </div>
+
+  {#if savedToast}
+    <div class="toast" role="status">{savedToast}</div>
+  {/if}
 </section>
+
+{#if promoteCard}
+  <PromoteToSkillSheet
+    card={promoteCard}
+    projectName={project.name}
+    projectCartridge={project.cartridge}
+    goal={projectGoal}
+    relatedCardTitles={relatedTitlesFor(promoteCard)}
+    oncancel={() => (promoteCard = null)}
+    onsaved={onSkillSaved}
+  />
+{/if}
+
+{#if teachOpen && project.cartridge}
+  <TeachRecipeSheet
+    cartridge={project.cartridge}
+    oncancel={() => (teachOpen = false)}
+    onsaved={onTeachingSaved}
+  />
+{/if}
 
 <style>
   .column {
@@ -85,6 +176,26 @@
     display: flex;
     flex-direction: column;
     background: var(--bg);
+    position: relative;
+  }
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: calc(4rem + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    background: var(--bg-2);
+    border: 1px solid var(--accent);
+    color: var(--fg);
+    padding: 0.5rem 0.9rem;
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    z-index: 5;
+    animation: toastIn 0.2s ease-out;
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translate(-50%, 6px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
   }
   .column-head {
     display: flex;
@@ -101,6 +212,13 @@
   .cartridge {
     font-size: 0.75rem;
     color: var(--fg-dim);
+  }
+  .patina {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .teach {
+    color: var(--accent);
   }
   .head-actions {
     display: flex;

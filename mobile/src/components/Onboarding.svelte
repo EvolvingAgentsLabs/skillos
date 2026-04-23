@@ -7,24 +7,24 @@
 
   const pages = [
     {
-      title: "Welcome to SkillOS Mobile",
+      title: "Welcome to SkillOS",
       body:
-        "A pure-JavaScript port of the SkillOS Pure-Markdown OS. Every agent, skill, and cartridge from the desktop repo runs on your phone — no backend required.",
+        "Turn any one-off ChatGPT answer into a permanent, offline, free button on your phone. Each button is a Recipe — a little team of agents and tools that runs the same job, your way, every time.",
     },
     {
-      title: "Swipe between projects",
+      title: "A Recipe is a composition",
       body:
-        "Each project fills the screen. Swipe horizontally to switch. Tap + in the header to create a new one and attach a cartridge.",
+        "Under each Recipe sits a plan, a few agents, the skills they use, and the facts it's learned about you. You don't pick skills one by one — you run the Recipe and it orchestrates them.",
     },
     {
-      title: "Three lifecycle lanes",
+      title: "Run, watch, keep",
       body:
-        "Every project has three lanes — Planned, In Execution, Done. Cards move automatically as the cartridge runner fires agents and validates their outputs.",
+        "Swipe between Recipes. Tap one and fill in the typed fields. Watch the composition step through — Extracting → Validating → Done. Outputs render as rich cards you can reuse.",
     },
     {
-      title: "Run a cartridge",
+      title: "Write once, run forever",
       body:
-        "Tap ⚙ to configure your provider (OpenRouter, Gemini, or Ollama over LAN in the native app), then ▶ run to let the agents and Gallery skills work. Watch the run log at the bottom.",
+        "The first run may ask the cloud for help synthesizing the Recipe. After that, tap ⚙ to pick a provider (OpenRouter, Gemini, or on-device). Subsequent runs stay local — free, private, offline.",
     },
   ];
 

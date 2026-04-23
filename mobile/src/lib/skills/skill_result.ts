@@ -18,6 +18,32 @@ export interface SkillImage {
   mimeType?: string;
 }
 
+/**
+ * Provenance — how a skill run was actually executed. Populated by
+ * `SkillHostBridge.runSkill` and used by the UI to render a clear
+ * cloud/local badge. The bridge cannot know a skill's logic; it reports
+ * what it observed (wall-clock time + how many times the skill asked for
+ * an LLM completion) and which provider was installed at the time.
+ */
+export interface SkillResultProvenance {
+  /** Wall-clock duration of the iframe round-trip for this run. */
+  durationMs: number;
+  /** Number of `__skillos.llm.chat` / `chatJSON` calls the skill made. */
+  llmCalls: number;
+  /** Human-readable provider label if one was installed (e.g. "openrouter-qwen · qwen/qwen-2.5-72b"). */
+  llmProvider?: string;
+  /** Where that provider runs — used to color the badge cloud vs local. */
+  llmLocation?: "cloud" | "on-device";
+  /**
+   * Estimated USD cost of this run. `0` means the run was fully local (no
+   * billable LLM calls). `undefined` means cost could not be determined
+   * (cloud run without a pricing entry for the active provider). The badge
+   * renders "$0.00" for 0 and hides the field for undefined so we never
+   * claim zero cost for a cloud run whose pricing we don't know.
+   */
+  costUsd?: number;
+}
+
 export interface SkillResult {
   ok: boolean;
   result?: string;
@@ -25,6 +51,7 @@ export interface SkillResult {
   webview?: SkillWebview;
   image?: SkillImage;
   raw?: unknown;
+  provenance?: SkillResultProvenance;
 }
 
 export function skillResultFromJson(payload: unknown): SkillResult {
