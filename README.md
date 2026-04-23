@@ -216,6 +216,12 @@ See [docs/dialects.md](docs/dialects.md) for the full guide.
 
 ---
 
+## Related projects
+
+- **[skillos_mini](https://github.com/EvolvingAgentsLabs/skillos_mini)** — SkillOS port for mobile + small local LLMs. Svelte/Capacitor app, on-device Gemma via LiteRT/wllama, the Cartridge architecture (Gemma-native subagents), and LLM-powered context compaction. Split from this repo on 2026-04-23.
+
+---
+
 ## Validated Scenarios
 
 Two complex multi-agent scenarios are validated end-to-end with each release, across both high-tier (Claude Opus 4.6) and mid-tier (Gemma 4 26B) models:
