@@ -170,7 +170,7 @@ OLLAMA_BASE_URL=https://xxx.trycloudflare.com/v1 python agent_runtime.py --provi
 GEMMA_MODEL=gemma4:e2b python agent_runtime.py --provider gemma interactive
 ```
 
-See `notebooks/skillos_gemma4_colab.ipynb` for a self-contained Colab notebook that sets up Ollama + Gemma 4 + Cloudflare tunnel on a free T4 GPU, and [docs/tutorial-gemma4-colab.md](tutorial-gemma4-colab.md) for the full walkthrough.
+See `notebooks/skillos_gemma4_colab.ipynb` for a self-contained Colab notebook that sets up Ollama + Gemma 4 + Cloudflare tunnel on a free T4 GPU.
 
 ### Gemma 4 via OpenRouter
 
@@ -213,22 +213,6 @@ The Qwen runtime implements these tools natively in Python:
 | `get_memory_stats` | Get evolving-memory statistics |
 | `robot_telemetry` | Get live robot telemetry (:8430) |
 
-### Context Compaction
-
-For long-running sessions, `compactor.py` provides LLM-powered context compaction:
-
-```python
-from compactor import compact_context
-
-# Synchronous
-summary = compact_context(messages, provider="gemini")
-
-# Async
-summary = await compact_context_async(messages, provider="qwen")
-```
-
-This summarizes older messages to stay within context limits while preserving key decisions and results.
-
 ---
 
 ## Runtime 3: Direct API
@@ -262,7 +246,6 @@ curl -s -X POST http://localhost:8430/tool/robot.go_to \
 | Cost | Claude pricing | OpenRouter / Google AI | Free (local or Colab) | ~$0.05/scenario |
 | Offline use | No | No | Yes (local Ollama) | No |
 | Context window | Large | Provider-dependent | 128K–256K | 128K |
-| LLM-powered compaction | N/A | Yes (compactor.py) | Yes (compactor.py) | Yes (compactor.py) |
 
 ---
 

@@ -42,7 +42,6 @@ except ImportError:
 # ── Configuration ────────────────────────────────────────────────
 SKILLOS_DIR = Path(__file__).resolve().parent
 PROJECTS_DIR = SKILLOS_DIR / "projects"
-CARTRIDGES_DIR = SKILLOS_DIR / "cartridges"
 HISTORY_FILE = SKILLOS_DIR / ".skillos_history"
 PID = str(subprocess.os.getpid())
 
@@ -52,51 +51,6 @@ subprocess.os.chdir(SKILLOS_DIR)
 session_booted = False
 cmd_count = 0
 history: list[str] = []
-
-# ── Cartridge runtime (lazy-loaded) ─────────────────────────────────
-# Cartridges are Gemma-native subagent bundles (see docs/cartridges.md).
-# The registry scans cartridges/ on first access; loading the AgentRuntime
-# is deferred until a cartridge is actually invoked, so REPL startup
-# stays lightweight.
-cartridge_provider = "gemma-openrouter"  # can be flipped via `cartridge provider <p>`
-_cartridge_registry = None
-_cartridge_runtime = None
-
-
-def get_cartridge_registry():
-    """Lazy-load the cartridge registry on first use."""
-    global _cartridge_registry
-    if _cartridge_registry is None:
-        try:
-            from cartridge_runtime import CartridgeRegistry
-            _cartridge_registry = CartridgeRegistry(str(CARTRIDGES_DIR))
-        except Exception as exc:
-            console.print(f"[error]Cartridge registry unavailable: {exc}[/error]")
-            return None
-    return _cartridge_registry
-
-
-def get_cartridge_runner():
-    """Lazy-load the AgentRuntime + CartridgeRunner on first use."""
-    global _cartridge_runtime
-    if _cartridge_runtime is None:
-        registry = get_cartridge_registry()
-        if registry is None:
-            return None
-        try:
-            from agent_runtime import AgentRuntime
-            from permission_policy import SKILLOS_AUTONOMOUS_POLICY
-            from cartridge_runtime import CartridgeRunner
-            rt = AgentRuntime(
-                provider=cartridge_provider,
-                stream=False,
-                permission_policy=SKILLOS_AUTONOMOUS_POLICY,
-            )
-            _cartridge_runtime = CartridgeRunner(rt, registry, verbose=True)
-        except Exception as exc:
-            console.print(f"[error]Cartridge runner unavailable: {exc}[/error]")
-            return None
-    return _cartridge_runtime
 
 # ── Console ──────────────────────────────────────────────────────
 custom_theme = Theme({
@@ -588,27 +542,6 @@ def show_help():
 | `simulate: "<goal>"` | Simulate a goal for training data |
 | `<goal>` | Direct goal (auto-wrapped in execute) |
 
-## Skill Commands  _(Gallery JS skills — run directly without LLM)_
-
-| Command | Description |
-|---------|-------------|
-| `skills` | List all available JS skills |
-| `skill <name> '<json>'` | Run a skill directly (e.g., `skill calculate-hash '{"text":"hello"}'`) |
-
-## Cartridge Commands  _(Gemma-native subagents — see `docs/cartridges.md`)_
-
-| Command | Description |
-|---------|-------------|
-| `cartridges` | List installed cartridges |
-| `cartridge <name> "<goal>"` | Run a specific cartridge |
-| `cartridge <name> --flow <flow> "<goal>"` | Run a specific flow inside a cartridge |
-| `cartridge auto "<goal>"` | Intent-match and dispatch to best cartridge |
-| `cartridge provider <name>` | Switch LLM provider (gemma, gemma-openrouter, qwen, gemini) |
-| `claude <goal>` | Force the Claude Code path (bypass auto cartridge match) |
-
-Bare goals matching a cartridge's `entry_intents` are auto-dispatched to
-that cartridge. Prefix with `claude ` to force Claude Code.
-
 ## Scheduler Commands
 
 | Command | Description |
@@ -666,13 +599,6 @@ def show_status():
         1 for t in scheduler.get_tasks() if t.status in (TaskStatus.PENDING, TaskStatus.RUNNING)
     )
 
-    cartridge_count = 0
-    if CARTRIDGES_DIR.exists():
-        cartridge_count = sum(
-            1 for p in CARTRIDGES_DIR.iterdir()
-            if p.is_dir() and (p / "cartridge.yaml").exists()
-        )
-
     status_md = f"""\
 ## System Status
 
@@ -684,8 +610,6 @@ def show_status():
 | Working Dir | ./projects/ |
 | Projects | {project_count} |
 | Agents | {agent_count} |
-| Cartridges | {cartridge_count} |
-| Cartridge Provider | {cartridge_provider} |
 | Scheduled Tasks | {active_tasks} active |
 """
     console.print(Markdown(status_md))
@@ -856,345 +780,15 @@ def boot_skillos():
     session_booted = True
 
 
-def list_cartridges():
-    """Print all discovered cartridges."""
-    console.print()
-    console.print("[bold]Cartridges[/bold]  [dim](Gemma-native subagent bundles)[/dim]")
-    console.print()
-    registry = get_cartridge_registry()
-    if registry is None:
-        console.print("  [dim]Cartridge runtime not loadable.[/dim]")
-        console.print()
-        return
-    manifests = registry.list()
-    if not manifests:
-        console.print("  [dim]No cartridges installed in ./cartridges/.[/dim]")
-        console.print("  [dim]See docs/cartridges.md for authoring.[/dim]")
-        console.print()
-        return
-    for m in manifests:
-        console.print(f"  [cyan]{m.name}[/cyan]")
-        if m.description:
-            console.print(f"    [dim]{m.description.strip()}[/dim]")
-        console.print(f"    [dim]flows: {', '.join(m.flows.keys())}[/dim]")
-    console.print()
-
-
-def run_cartridge_goal(cartridge_name: str, goal: str, flow: str | None = None):
-    """Execute a cartridge against a user goal and render the result."""
-    runner = get_cartridge_runner()
-    if runner is None:
-        return
-    registry = get_cartridge_registry()
-    if registry.get(cartridge_name) is None:
-        console.print(f"[error]Unknown cartridge '{cartridge_name}'. "
-                      f"Try [white]cartridges[/white] to list.[/error]")
-        return
-    console.print(f"[info]Running cartridge [cyan]{cartridge_name}[/cyan] on: "
-                  f"[white]{goal}[/white][/info]")
-    try:
-        result = runner.run(cartridge_name, goal, flow=flow)
-    except Exception as exc:
-        console.print(f"[error]Cartridge failed: {exc}[/error]")
-        return
-    status = "[success]OK[/success]" if result.ok else "[warning]PARTIAL[/warning]"
-    console.print()
-    console.print(f"[bold]Cartridge complete: {status}[/bold]  "
-                  f"flow=[cyan]{result.flow}[/cyan]")
-    for step in result.steps:
-        icon = "✓" if step.validated else "!"
-        tone = "success" if step.validated else "warning"
-        console.print(f"  [{tone}]{icon}[/{tone}] {step.agent}: {step.message} "
-                      f"[dim](produced={step.produced_keys})[/dim]")
-    # Rich result display for skill outputs
-    _render_skill_results(result.blackboard)
-    console.print()
-
-
-# ── Skill result rendering & browser launch ─────────────────────
-
-def _render_skill_results(blackboard: dict):
-    """Rich display of skill outputs from the Blackboard."""
-    if not blackboard:
-        return
-
-    # Find the main result value — try common keys
-    for key in ("skill_result", "agentic_output", "wiki_data", "analysis", "report"):
-        entry = blackboard.get(key)
-        if not entry:
-            continue
-        value = entry.get("value", entry) if isinstance(entry, dict) else entry
-        if not value:
-            continue
-
-        console.print()
-        if isinstance(value, dict):
-            # Skill result dict — show the important parts
-            if "error" in value and value["error"]:
-                console.print(f"[error]Error: {value['error']}[/error]")
-                return
-            if "result" in value and value["result"]:
-                console.print(f"[bold]Result:[/bold] {value['result']}")
-            if "webview" in value and value["webview"]:
-                _handle_webview_result(value["webview"], blackboard)
-            if "image" in value and value["image"]:
-                _handle_image_result(value["image"])
-        elif isinstance(value, str):
-            # Plain text result
-            if len(value) > 500:
-                console.print(Markdown(value[:2000]))
-            else:
-                console.print(f"[bold]Result:[/bold] {value}")
-        break  # show only the first relevant result
-
-
-def _handle_webview_result(webview: dict, blackboard: dict = None):
-    """Handle webview results — open in browser if possible."""
-    url = webview.get("url", "")
-    if not url:
-        return
-    console.print(f"[info]Webview: [cyan]{url}[/cyan][/info]")
-
-    # Try to find the actual HTML file and open it
-    import webbrowser
-    # Check if it's a relative path to a skill asset
-    for key in ("selected_skill",):
-        entry = blackboard.get(key, {}) if blackboard else {}
-        skill_name = entry.get("value", entry) if isinstance(entry, dict) else entry
-        if skill_name and isinstance(skill_name, str):
-            # Look for the webview HTML in the skill's assets
-            asset_path = SKILLOS_DIR / "cartridges" / "demo" / "skills" / skill_name / "assets" / url
-            if not asset_path.exists():
-                # Try without subdir
-                asset_path = SKILLOS_DIR / "cartridges" / "demo" / "skills" / skill_name / "assets" / Path(url).name
-            if asset_path.exists():
-                console.print(f"[success]Opening in browser...[/success]")
-                _serve_and_open(asset_path)
-                return
-
-    # Try as a direct file path
-    direct = Path(url)
-    if direct.exists():
-        console.print(f"[success]Opening in browser...[/success]")
-        _serve_and_open(direct)
-
-
-def _handle_image_result(image: dict):
-    """Handle image results — save to file."""
-    import base64
-    b64 = image.get("base64", "")
-    if not b64:
-        return
-    output_dir = SKILLOS_DIR / "cartridges" / "demo" / "output"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    img_path = output_dir / f"skill_output_{int(__import__('time').time())}.png"
-    try:
-        img_path.write_bytes(base64.b64decode(b64))
-        console.print(f"[success]Image saved: [cyan]{img_path}[/cyan][/success]")
-        # Try to open
-        import webbrowser
-        webbrowser.open(str(img_path))
-    except Exception as e:
-        console.print(f"[warning]Could not save image: {e}[/warning]")
-
-
-_skill_server = None  # lazy HTTP server for serving skill assets
-
-
-def _serve_and_open(html_path: Path):
-    """Serve a skill HTML file via local HTTP server and open in browser."""
-    import webbrowser
-    import threading
-    from http.server import HTTPServer, SimpleHTTPRequestHandler
-    global _skill_server
-
-    serve_dir = str(html_path.parent)
-    filename = html_path.name
-
-    if _skill_server is None:
-        # Start a local server on a random port
-        class QuietHandler(SimpleHTTPRequestHandler):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, directory=serve_dir, **kwargs)
-            def log_message(self, format, *args):
-                pass  # suppress logs
-
-        try:
-            server = HTTPServer(("127.0.0.1", 0), QuietHandler)
-            port = server.server_address[1]
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            thread.start()
-            _skill_server = (server, port, serve_dir)
-        except Exception:
-            # Fallback: just open the file directly
-            webbrowser.open(html_path.as_uri())
-            return
-    else:
-        _, port, _ = _skill_server
-
-    webbrowser.open(f"http://127.0.0.1:{port}/{filename}")
-
-
-# ── Direct skill commands ────────────────────────────────────────
-
-def list_skills():
-    """List all available Gallery JS skills in the demo cartridge."""
-    import sys as _sys
-    _exp_dir = str(SKILLOS_DIR / "experiments" / "gemma4-skills")
-    if _exp_dir not in _sys.path:
-        _sys.path.insert(0, _exp_dir)
-    from skill_loader import SkillRegistry
-
-    skills_dir = SKILLOS_DIR / "cartridges" / "demo" / "skills"
-    if not skills_dir.exists():
-        console.print("[warning]No skills found. Missing cartridges/demo/skills/[/warning]")
-        return
-
-    registry = SkillRegistry(str(skills_dir))
-    table = Table(title="Gallery JS Skills", show_lines=False)
-    table.add_column("Skill", style="cyan", no_wrap=True)
-    table.add_column("Description", style="white")
-    table.add_column("Secret?", style="dim", justify="center")
-    for s in registry.list():
-        secret = "🔑" if s.require_secret else ""
-        table.add_row(s.name, s.description, secret)
-    console.print(table)
-    console.print(f"\n[dim]Run a skill: [white]skill <name> '<json data>'[/white][/dim]")
-
-
-def handle_skill_command(user_input: str):
-    """Handle 'skill <name> <data>' command for direct skill invocation."""
-    import sys as _sys
-    _exp_dir = str(SKILLOS_DIR / "experiments" / "gemma4-skills")
-    if _exp_dir not in _sys.path:
-        _sys.path.insert(0, _exp_dir)
-    from skill_loader import SkillRegistry
-    from js_executor import run_skill_by_name, RuntimeConfig
-
-    tail = user_input[len("skill"):].strip()
-    if not tail:
-        console.print("[warning]Usage: skill <name> '<json data>'[/warning]")
-        return
-
-    parts = tail.split(None, 1)
-    skill_name = parts[0]
-    data = parts[1] if len(parts) > 1 else "{}"
-    # Strip surrounding quotes if present
-    data = data.strip("'\"")
-
-    skills_dir = SKILLOS_DIR / "cartridges" / "demo" / "skills"
-    registry = SkillRegistry(str(skills_dir))
-
-    if not registry.has(skill_name):
-        console.print(f"[error]Skill '{skill_name}' not found.[/error]")
-        console.print(f"[dim]Available: {', '.join(registry.names())}[/dim]")
-        return
-
-    state_dir = str(SKILLOS_DIR / "cartridges" / "demo" / "state")
-    config = RuntimeConfig(state_dir=state_dir)
-
-    console.print(f"[info]Running skill [cyan]{skill_name}[/cyan]...[/info]")
-    result = run_skill_by_name(registry, skill_name, data, config=config)
-
-    if result.error:
-        console.print(f"[error]{result.error}[/error]")
-    elif result.result:
-        console.print(f"[bold]{result.result}[/bold]")
-    if result.webview:
-        _handle_webview_result(result.webview,
-                               {"selected_skill": {"value": skill_name}})
-    if result.image:
-        _handle_image_result(result.image)
-    if not result.ok and not result.error:
-        console.print(f"[warning]Raw: {result.raw}[/warning]")
-
-
-def handle_cartridge_command(user_input: str):
-    """Dispatch the `cartridge ...` family of REPL commands."""
-    global cartridge_provider, _cartridge_runtime
-    tail = user_input[len("cartridge"):].strip()
-
-    if not tail:
-        console.print("[warning]Usage: cartridge <name> \"<goal>\"   |   "
-                      "cartridge auto \"<goal>\"   |   cartridge provider <name>[/warning]")
-        return
-
-    # cartridge provider <name>
-    match = re.match(r"^provider\s+(\S+)\s*$", tail)
-    if match:
-        cartridge_provider = match.group(1)
-        _cartridge_runtime = None  # force re-init on next run
-        console.print(f"[success]Cartridge provider set to [cyan]{cartridge_provider}[/cyan]. "
-                      f"Runtime will reload on next invocation.[/success]")
-        return
-
-    # cartridge auto "<goal>"
-    match = re.match(r"^auto\s+(.+)$", tail)
-    if match:
-        goal = match.group(1).strip().strip('"\'')
-        registry = get_cartridge_registry()
-        if registry is None:
-            return
-        name, score = registry.match_intent(goal)
-        if not name:
-            console.print(f"[warning]No cartridge matched goal (score={score}). "
-                          f"Try [white]cartridges[/white] or specify one explicitly.[/warning]")
-            return
-        console.print(f"[info]Auto-routed to [cyan]{name}[/cyan] (score={score})[/info]")
-        run_cartridge_goal(name, goal)
-        return
-
-    # cartridge <name> [--flow X] "<goal>"
-    match = re.match(r"^(\S+)\s+(?:--flow\s+(\S+)\s+)?(.+)$", tail)
-    if match:
-        name = match.group(1)
-        flow = match.group(2)
-        goal = match.group(3).strip().strip('"\'')
-        run_cartridge_goal(name, goal, flow=flow)
-        return
-
-    console.print("[warning]Unrecognized cartridge command. Try [white]help[/white].[/warning]")
-
-
-def try_cartridge_auto_dispatch(user_input: str) -> bool:
-    """Auto-route bare goals to a cartridge if intent match is strong.
-
-    Returns True if a cartridge handled the input, False otherwise so the
-    caller can fall back to the default Claude Code path.
-    """
-    registry = get_cartridge_registry()
-    if registry is None or not registry.list():
-        return False
-    name, score = registry.match_intent(user_input)
-    if not name or score < 2:
-        return False
-    console.print(f"[dim]→ matched cartridge [cyan]{name}[/cyan] (score={score}); "
-                  f"override with [white]claude {user_input!s}[/white] if unwanted[/dim]")
-    run_cartridge_goal(name, user_input)
-    return True
-
-
 def process_input(user_input: str):
     global cmd_count
 
     history.append(user_input)
     cmd_count += 1
 
-    # Explicit escape hatch: "claude <goal>" forces the Claude Code path.
-    stripped = user_input
-    force_claude = False
-    if stripped.lower().startswith("claude "):
-        stripped = stripped[len("claude "):].strip()
-        force_claude = True
-
-    # Auto-dispatch to a cartridge for strong intent matches.
-    if not force_claude and try_cartridge_auto_dispatch(stripped):
-        return
-
-    # Wrap bare goals in skillos execute format if not already prefixed
-    prompt = stripped
-    if not stripped.startswith(("skillos execute:", "skillos simulate:", "execute:", "simulate:")):
-        prompt = f'skillos execute: "{stripped}"'
+    prompt = user_input
+    if not user_input.startswith(("skillos execute:", "skillos simulate:", "execute:", "simulate:")):
+        prompt = f'skillos execute: "{user_input}"'
 
     run_claude(prompt)
 
@@ -1256,14 +850,6 @@ def main():
             show_scheduled_tasks()
         elif cmd_lower.startswith("schedule "):
             handle_schedule_command(user_input)
-        elif cmd_lower in ("skills", "ls skills"):
-            list_skills()
-        elif cmd_lower.startswith("skill "):
-            handle_skill_command(user_input)
-        elif cmd_lower in ("cartridges", "ls cartridges"):
-            list_cartridges()
-        elif cmd_lower.startswith("cartridge"):
-            handle_cartridge_command(user_input)
         elif cmd_lower == "reboot":
             session_booted = False
             console.print("[yellow]Rebooting SkillOS...[/yellow]")
