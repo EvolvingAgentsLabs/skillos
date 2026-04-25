@@ -29,6 +29,7 @@ github  anthropics/skills               main  skills/
 github  huggingface/skills              main  skills/
 github  openai/skills                   main  .curated/
 github  google-ai-edge/gallery          main  skills/
+github  google/skills                   main  skills/
 
 # --- Community Skill Repositories ---
 # github  openclaw/skills          main  skills/    # Disabled: not yet a real repo
