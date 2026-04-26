@@ -128,6 +128,8 @@ orchestration/  core/           system-agent
 memory/         analysis/       memory-analysis-agent
                 consolidation/  memory-consolidation-agent
                 query/          query-memory-tool
+planning/       hwm/            hwm-planner-agent      ← HWM paper (arXiv:2604.03208)
+                flat/           flat-planner-agent
 robot/          navigation/     roclaw-navigation-agent
                 scene/          roclaw-scene-analysis-agent
                 dream/          roclaw-dream-agent
@@ -147,6 +149,7 @@ auto-improve/   usage-tracker/  usage-tracker (tool)
 ## Key Features
 
 - **Pure Markdown** — No code compilation. The LLM is the interpreter.
+- **HWM Planning** — Two-level hierarchical planner (arXiv:2604.03208) baked into every execution: L2 macro-planner generates subgoals, L1 primitive-planner executes toward them
 - **Hierarchical Skills** — Domain → Family → Skill taxonomy with 4-step lazy loading
 - **Token Efficient** — 61% reduction in routing-phase token consumption
 - **Cognitive Pipeline** — Recursive Context Isolation gives mid-tier models the executive functioning of frontier models: 5K→28K output, 100% step pass rate ([docs](docs/cognitive-pipeline.md))
@@ -206,7 +209,8 @@ See [docs/dialects.md](docs/dialects.md) for the full guide.
 
 | Doc | Contents |
 |-----|----------|
-| [docs/architecture.md](docs/architecture.md) | Skill tree, lazy loading, agent discovery, execution flow |
+| [docs/architecture.md](docs/architecture.md) | Skill tree, HWM planning loop, lazy loading, agent discovery, execution flow |
+| [docs/planning.md](docs/planning.md) | HWM two-level planning algorithm, subgoal protocol, world model, MPPI |
 | [docs/skills.md](docs/skills.md) | Authoring agents and tools, manifests, inheritance, best practices |
 | [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) | Cognitive pipeline executor, strategy router, model capability tiers |
 | [docs/dialects.md](docs/dialects.md) | Dialect framework, 14 compression formats, Language Facade, cognitive scaffolding |

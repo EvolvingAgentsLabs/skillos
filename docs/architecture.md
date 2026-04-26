@@ -58,8 +58,14 @@ system/skills/
 │   ├── index.md                         # Domain routing table
 │   └── core/
 │       ├── system-agent.manifest.md     # 15-line routing manifest
-│       ├── system-agent.md              # Full spec (~300 lines)
+│       ├── system-agent.md              # Full spec v3 (~350 lines, includes HWM step)
 │       └── claude-code-tool-map.md      # Tool → cost/latency reference
+│
+├── planning/                            # HWM two-level hierarchical planning
+│   ├── base.md                          # MPPI protocol, world state schema, cost fn
+│   ├── index.md                         # hwm vs flat selector heuristic
+│   ├── hwm/         → hwm-planner-agent  (arXiv:2604.03208)
+│   └── flat/        → flat-planner-agent (Stage 2 / simple goals)
 │
 ├── memory/                              # Learning, history, pattern extraction
 │   ├── base.md
@@ -197,26 +203,56 @@ projects/[ProjectName]/
 
 ## Execution Flow
 
+The execution loop integrates the **HWM planning step** (Step 2b) between memory consultation
+and skill routing. The planner produces a subgoal and selects the first macro-action, which
+directly informs which skill is invoked in Step 3.
+
 ```mermaid
 flowchart TD
     U["User: skillos execute: 'goal'"]
-    SA["SystemAgent\nBreaks down goal, identifies domains"]
-    SI["SkillIndex.md\nDomain routing"]
+    SA["SystemAgent\nInitialize state + memory consultation"]
+    HWM["HWM Planner (Step 2b)\nL2: generate macro-action sequence A*\nExtract subgoal sg = first predicted state\nL1: select next primitive action"]
+    SI["SkillIndex.md\nDomain routing (A*₁ informs selection)"]
     DI["Domain index.md\nSkill selection"]
     SM["skill.manifest.md\nFit confirmation"]
     FS["Full skill spec\nLoaded on invoke"]
     EX["Execute via Claude Code tools\nRead/Write/Bash/WebFetch/Task"]
+    SG["Update world_state.md\nCheck divergence → replan if needed"]
     MEM["Memory logging\nshort_term + long_term"]
     OUT["Output written\nprojects/[name]/output/"]
 
     U --> SA
-    SA --> SI
+    SA --> HWM
+    HWM --> SI
     SI --> DI
     DI --> SM
     SM --> FS
     FS --> EX
-    EX --> MEM
+    EX --> SG
+    SG -->|"goal not reached"| HWM
+    SG -->|"goal reached"| MEM
     EX --> OUT
+```
+
+### HWM Planning Step Detail
+
+```
+world_state.md ──► L2 World Model ──► macro-action sequence A*
+                        │
+                        └── A*₁ = next skill to invoke
+                        └── sg  = subgoal (first predicted state) ──► subgoal.md
+                                         │
+                                         ▼
+                              L1 World Model ──► primitive action p*₁
+                                         │
+                                         ▼
+                                   Execute p*₁
+                                         │
+                                   Update world_state.md
+                                         │
+                              divergence > 0.3? ──► replan (L2 again)
+                              steps ≤ 3?        ──► switch to flat-planner
+                              goal reached?     ──► done
 ```
 
 ---
