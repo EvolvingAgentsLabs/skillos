@@ -34,7 +34,7 @@ Every runtime MUST complete these steps before processing any user command:
 
 1. **Read this file** (`Boot.md`) — you are here
 2. **Verify working directory** — confirm you are running from the SkillOS root
-3. **Load SmartLibrary** — read `system/SmartLibrary.md` for component registry
+3. **Load Skill Index** — read `system/skills/SkillIndex.md` for skill routing
 4. **Check agent discovery** — scan `.claude/agents/` for available agents
 5. **Initialize project structure** — ensure `projects/` directory exists
 6. **System ready** — report status and await first goal
@@ -101,9 +101,8 @@ These rules apply to ALL runtimes at ALL times:
 | Resource | Path |
 |----------|------|
 | This file | `Boot.md` |
-| Agent registry | `system/SmartLibrary.md` |
+| Skill index | `system/skills/SkillIndex.md` |
 | Memory store | `system/SmartMemory.md` |
-| System agents | `system/agents/` |
-| System tools | `system/tools/` |
+| Skills | `system/skills/` |
 | Projects | `projects/` |
 | Agent discovery | `.claude/agents/` |

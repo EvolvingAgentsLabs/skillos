@@ -201,7 +201,7 @@ This eliminates dynamic dialect discovery overhead. For scenarios with `pipeline
    - Run Post-Execution Health Check
    - Record complete execution trace with timestamps and cost estimates
    - Extract behavioral patterns and performance metrics
-   - Invoke `memory-consolidation-agent` to update `system/memory_log.md`
+   - Invoke `memory-consolidation-agent` to update `system/SmartMemory.md`
 
 ---
 
@@ -347,7 +347,7 @@ When a circuit is open for an agent, route to its fallback agent rather than wai
 ```yaml
 fallback_chain:
   memory-analysis-agent:
-    fallback: "Direct Grep search of system/memory_log.md without sub-agent"
+    fallback: "Direct Grep search of system/SmartMemory.md without sub-agent"
   WebFetch:
     fallback: "Log URL as unavailable in context.md, continue without that source"
   any-project-specialized-agent:
@@ -395,12 +395,12 @@ pre_execution_checks:
   - name: "state_directory_exists"
     check: "Read projects/[ProjectName]/state/ directory"
     fail_action: "Create directory structure, do not abort"
-  - name: "memory_log_readable"
-    check: "Read system/memory_log.md"
+  - name: "smart_memory_readable"
+    check: "Read system/SmartMemory.md"
     fail_action: "Log warning, continue without memory consultation"
   - name: "skill_index_readable"
     check: "Read system/skills/SkillIndex.md"
-    fail_action: "Log warning, fall back to system/SmartLibrary.md for legacy component selection"
+    fail_action: "Log warning, use direct Glob on system/skills/ for component discovery"
   - name: "no_stale_circuit_breakers"
     check: "Read projects/[ProjectName]/state/circuit_breaker.json if it exists"
     fail_action: "Reset stale open circuits from previous sessions"
