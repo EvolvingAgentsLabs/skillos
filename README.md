@@ -138,6 +138,8 @@ validation/     system/         validation-agent
 recovery/       error/          error-recovery-agent
 project/        scaffold/       project-scaffold-tool
                 packages/       skill-package-manager-tool
+auto-improve/   usage-tracker/  usage-tracker (tool)
+                meta-agent/     auto-improve-meta-agent
 ```
 
 ---
@@ -151,6 +153,7 @@ project/        scaffold/       project-scaffold-tool
 - **Dialects** — 14 domain-specific compression formats (50-99% token reduction) with Language Facade and cognitive scaffolding
 - **Knowledge Wiki** — Compounding knowledge base inspired by Karpathy's LLM Wiki pattern
 - **Memory System** — Every execution improves future runs via structured memory
+- **Self-Optimization** — Background auto-improve loop detects stale skills, analyzes failure traces, and proposes targeted spec improvements (human-in-the-loop)
 - **Robot Integration** — SkillOS as Prefrontal Cortex for the RoClaw physical robot
 - **Multi-Provider** — Works with Claude Code, Qwen, Gemini, Gemma 4 (Ollama + OpenRouter), or any OpenAI-compatible endpoint
 - **Dynamic Agents** — New agents created as markdown at runtime, no restarts needed
