@@ -96,7 +96,7 @@ python run_scenario.py scenarios/ProjectAortaScenario.md "quantum arterial navig
 OLLAMA_BASE_URL=https://xxx.trycloudflare.com/v1 python agent_runtime.py --provider gemma "Your goal"
 ```
 
-See [docs/tutorial-gemma4-colab.md](docs/tutorial-gemma4-colab.md) for the full walkthrough, [docs/runtimes.md](docs/runtimes.md) for setup and comparison, and [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) for the cognitive pipeline architecture.
+See [docs/runtimes.md](docs/runtimes.md) for setup and comparison, and [docs/cognitive-pipeline.md](docs/cognitive-pipeline.md) for the cognitive pipeline architecture.
 
 ---
 
