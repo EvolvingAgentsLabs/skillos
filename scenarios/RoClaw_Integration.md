@@ -52,17 +52,17 @@ parsed_goal:
 ```markdown
 # Read recent traces for navigation history
 Action: Glob
-Pattern: RoClaw/traces/real_world/*.md
+Pattern: skillos_robot/traces/real_world/*.md
 Observation: [Recent trace files]
 
 # Read existing strategies
 Action: Glob
-Pattern: RoClaw/strategies/level_2_routes/*.md
+Pattern: skillos_robot/strategies/level_2_routes/*.md
 Observation: [Route strategies]
 
 # Read negative constraints from dream journals
 Action: Glob
-Pattern: RoClaw/traces/dreams/*.md
+Pattern: skillos_robot/traces/dreams/*.md
 Observation: [Dream journals with constraints]
 ```
 
@@ -254,7 +254,7 @@ The trace file includes:
 
 ```markdown
 Action: Write
-File: projects/RoClaw/workspace/state/constraints.md
+File: projects/skillos_robot/workspace/state/constraints.md
 Content: |
   execution_status: COMPLETED
   last_obstacle: "cat in hallway"

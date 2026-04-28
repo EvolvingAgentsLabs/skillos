@@ -27,15 +27,15 @@ This scenario performs the robot's dream consolidation cycle — transforming ra
 
 ```markdown
 Action: Glob
-Pattern: RoClaw/traces/sim3d/*.md
+Pattern: skillos_robot/traces/sim3d/*.md
 Observation: [List of sim3d trace files]
 
 Action: Glob
-Pattern: RoClaw/traces/real_world/*.md
+Pattern: skillos_robot/traces/real_world/*.md
 Observation: [List of real_world trace files]
 
 Action: Glob
-Pattern: RoClaw/traces/dream_sim/*.md
+Pattern: skillos_robot/traces/dream_sim/*.md
 Observation: [List of dream_sim trace files]
 ```
 
@@ -43,7 +43,7 @@ Observation: [List of dream_sim trace files]
 
 ```markdown
 Action: Glob
-Pattern: RoClaw/traces/dreams/*.md
+Pattern: skillos_robot/traces/dreams/*.md
 Observation: [Previous dream journal entries — check timestamps to skip already-processed traces]
 ```
 
@@ -52,7 +52,7 @@ Observation: [Previous dream journal entries — check timestamps to skip alread
 For each trace file:
 ```markdown
 Action: Read
-File: RoClaw/traces/sim3d/{filename}.md
+File: skillos_robot/traces/sim3d/{filename}.md
 Observation: [YAML frontmatter with outcome, source, fidelity, confidence + action body]
 ```
 
@@ -90,8 +90,8 @@ Parameters:
     Use the Failure Analysis prompt template.
 
     Traces to analyze:
-    - RoClaw/traces/sim3d/2026-04-05_14-30-00_navigate-to-red-cube.md
-    - RoClaw/traces/real_world/2026-04-05_16-00-00_go-to-kitchen.md
+    - skillos_robot/traces/sim3d/2026-04-05_14-30-00_navigate-to-red-cube.md
+    - skillos_robot/traces/real_world/2026-04-05_16-00-00_go-to-kitchen.md
   subagent_type: "roclaw-dream-consolidation-agent"
 ```
 
@@ -119,13 +119,13 @@ Parameters:
   prompt: |
     Read these successful robot traces and create reusable strategies.
     Use the Strategy Abstraction prompt template.
-    Check existing strategies in RoClaw/strategies/ for overlap.
+    Check existing strategies in skillos_robot/strategies/ for overlap.
     If overlap found, use Strategy Merge instead.
 
     Traces to analyze:
-    - RoClaw/traces/sim3d/2026-04-05_14-35-00_navigate-to-door.md
-    - RoClaw/traces/sim3d/2026-04-05_15-00-00_find-blue-box.md
-    - RoClaw/traces/real_world/2026-04-05_16-30-00_go-to-closet.md
+    - skillos_robot/traces/sim3d/2026-04-05_14-35-00_navigate-to-door.md
+    - skillos_robot/traces/sim3d/2026-04-05_15-00-00_find-blue-box.md
+    - skillos_robot/traces/real_world/2026-04-05_16-30-00_go-to-closet.md
   subagent_type: "roclaw-dream-consolidation-agent"
 ```
 
@@ -138,12 +138,12 @@ Action: Task
 Parameters:
   description: "Merge new evidence into existing strategies"
   prompt: |
-    Read the existing strategy at RoClaw/strategies/level_2_routes/wall_following.md
+    Read the existing strategy at skillos_robot/strategies/level_2_routes/wall_following.md
     and the new trace evidence. Produce an updated strategy.
 
-    Existing strategy: RoClaw/strategies/level_2_routes/wall_following.md
+    Existing strategy: skillos_robot/strategies/level_2_routes/wall_following.md
     New evidence traces:
-    - RoClaw/traces/sim3d/2026-04-05_15-10-00_follow-wall.md
+    - skillos_robot/traces/sim3d/2026-04-05_15-10-00_follow-wall.md
   subagent_type: "roclaw-dream-consolidation-agent"
 ```
 
@@ -155,7 +155,7 @@ Parameters:
 
 ```markdown
 Action: Write
-File: RoClaw/strategies/level_2_routes/doorway_transit.md
+File: skillos_robot/strategies/level_2_routes/doorway_transit.md
 Content: |
   ---
   title: "Doorway Transit"
@@ -188,7 +188,7 @@ Content: |
 
 ```markdown
 Action: Write
-File: RoClaw/traces/dreams/2026-04-06_dream.md
+File: skillos_robot/traces/dreams/2026-04-06_dream.md
 Content: |
   ---
   timestamp: "2026-04-06T03:00:00Z"
@@ -215,7 +215,7 @@ Content: |
 Move processed traces to prevent reprocessing:
 ```markdown
 Action: Bash
-Command: mkdir -p RoClaw/traces/consolidated/sim3d && mv RoClaw/traces/sim3d/2026-04-05_*.md RoClaw/traces/consolidated/sim3d/
+Command: mkdir -p skillos_robot/traces/consolidated/sim3d && mv skillos_robot/traces/sim3d/2026-04-05_*.md skillos_robot/traces/consolidated/sim3d/
 ```
 
 ---

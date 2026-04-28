@@ -147,7 +147,7 @@ success: content_fetched ∧ summary_complete ∧ files_saved
 ```markdown
 # RoClaw Dream Consolidation
 ## Phase 1: Trace Collection
-Read all trace files from RoClaw/traces/ directories...
+Read all trace files from skillos_robot/traces/ directories...
 ## Phase 2: Pattern Analysis
 Analyze traces for common patterns, failures, stuck loops...
 ## Phase 3: Strategy Generation
@@ -158,7 +158,7 @@ Generate or update strategies based on discovered patterns...
 ```
 @plan[dream_consolidation] pattern=sequential agents=2 type=dream
 
-P1[dream-agent]: collect_traces(RoClaw/traces/**/*.md) | filter: fid≥0.5
+P1[dream-agent]: collect_traces(skillos_robot/traces/**/*.md) | filter: fid≥0.5
 P2[dream-agent] dep=P1: analyze_patterns(stuck_loops, failures, successes)
 P3[consolidation-agent] dep=P2: update_strategies + gen_negative_constraints
 

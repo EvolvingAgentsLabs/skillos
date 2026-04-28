@@ -36,7 +36,7 @@ Like biological sleep consolidation:
 | **Nightly** | Scheduled end-of-day consolidation | Normal |
 | **Post-Session** | After completing a navigation session with failures | High |
 | **On-Demand** | User requests: `skillos execute: "dream about today's navigation"` | Normal |
-| **Threshold** | >10 unconsolidated traces in RoClaw/traces/ | Normal |
+| **Threshold** | >10 unconsolidated traces in skillos_robot/traces/ | Normal |
 | **Post-Recovery** | After a novel obstacle recovery (capture the learning immediately) | High |
 
 ---
@@ -48,15 +48,15 @@ Like biological sleep consolidation:
 ```markdown
 # Check for unconsolidated traces
 Action: Glob
-Pattern: RoClaw/traces/sim3d/*.md
+Pattern: skillos_robot/traces/sim3d/*.md
 Observation: [Trace files from sim3d runs]
 
 Action: Glob
-Pattern: RoClaw/traces/real_world/*.md
+Pattern: skillos_robot/traces/real_world/*.md
 Observation: [Trace files from real-world runs]
 
 Action: Glob
-Pattern: RoClaw/traces/dream_sim/*.md
+Pattern: skillos_robot/traces/dream_sim/*.md
 Observation: [Trace files from dream simulations]
 ```
 
@@ -70,7 +70,7 @@ Delegate to the `roclaw-dream-consolidation-agent` for the full 3-phase cycle:
 Action: Task
 Parameters:
   description: "Run dream consolidation on RoClaw traces"
-  prompt: "Read all unconsolidated traces from RoClaw/traces/, run the 3-phase dream cycle (SWS/REM/Consolidation), and write strategies to RoClaw/strategies/ and a dream journal to RoClaw/traces/dreams/."
+  prompt: "Read all unconsolidated traces from skillos_robot/traces/, run the 3-phase dream cycle (SWS/REM/Consolidation), and write strategies to skillos_robot/strategies/ and a dream journal to skillos_robot/traces/dreams/."
   subagent_type: "roclaw-dream-consolidation-agent"
 ```
 
@@ -109,7 +109,7 @@ constraint_generation:
 
 ```markdown
 Action: Write
-File: projects/RoClaw/memory/long_term/negative_constraints.md
+File: projects/skillos_robot/memory/long_term/negative_constraints.md
 Content: |
   # RoClaw Negative Constraints
   ## Last Updated: {timestamp}
@@ -134,12 +134,12 @@ Read existing strategies and update based on dream insights:
 ```markdown
 # Read current strategies from filesystem
 Action: Glob
-Pattern: RoClaw/strategies/level_*/*.md
+Pattern: skillos_robot/strategies/level_*/*.md
 Observation: [Current strategy files organized by level]
 
 # Create improved strategy markdown
 Action: Write
-File: projects/RoClaw/memory/long_term/strategies.md
+File: projects/skillos_robot/memory/long_term/strategies.md
 Content: |
   # RoClaw Navigation Strategies
   ## Last Updated: {timestamp}

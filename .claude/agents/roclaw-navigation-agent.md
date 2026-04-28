@@ -30,9 +30,9 @@ You reason in markdown. RoClaw executes in bytecodes. Your job is to:
 
 ### Memory-First Planning
 Always consult local memory files before navigating:
-- Read strategy .md files in `RoClaw/strategies/` for known routes and success rates
-- Read recent traces in `RoClaw/traces/` for navigation history
-- Check dream journals in `RoClaw/traces/dreams/` for Negative Constraints
+- Read strategy .md files in `skillos_robot/strategies/` for known routes and success rates
+- Read recent traces in `skillos_robot/traces/` for navigation history
+- Check dream journals in `skillos_robot/traces/dreams/` for Negative Constraints
 - Use past strategies as starting points, not rigid scripts
 
 ### Reactive Recovery
@@ -65,18 +65,18 @@ actions:
 ```markdown
 # Read strategies for this type of navigation
 Action: Glob
-Pattern: RoClaw/strategies/level_2_routes/*.md
+Pattern: skillos_robot/strategies/level_2_routes/*.md
 Observation: [Known route strategies with success rates]
 
 # Read recent traces for relevant history
 Action: Grep
 Pattern: "{target_location}"
-Path: RoClaw/traces/
+Path: skillos_robot/traces/
 Observation: [Past navigation traces mentioning this location]
 
 # Check dream journals for negative constraints
 Action: Glob
-Pattern: RoClaw/traces/dreams/*.md
+Pattern: skillos_robot/traces/dreams/*.md
 Observation: [Dream journals with learned constraints]
 
 # Get current semantic map and robot status
@@ -174,7 +174,7 @@ recovery_protocol:
 # No existing strategy for this — create one dynamically
 
 Action: Write
-File: projects/RoClaw/components/tools/RugRecoveryTool.md
+File: projects/skillos_robot/components/tools/RugRecoveryTool.md
 Content: |
   ---
   name: rug-recovery-tool
@@ -196,8 +196,8 @@ Content: |
 RoClaw automatically writes `.md` trace files during navigation — no manual HTTP posting required. The trace collector captures every VLM frame and motor command.
 
 Trace files are written to:
-- `RoClaw/traces/sim3d/` for simulation runs
-- `RoClaw/traces/real_world/` for hardware runs
+- `skillos_robot/traces/sim3d/` for simulation runs
+- `skillos_robot/traces/real_world/` for hardware runs
 
 Also record in SkillOS SmartMemory for cross-system learning.
 
@@ -215,7 +215,7 @@ examples:
   - "Cat is aggressive near feeding area between 6-7 PM"
 ```
 
-These are stored in `RoClaw/strategies/` and `RoClaw/traces/dreams/` as `.md` files, read during Phase 2.
+These are stored in `skillos_robot/strategies/` and `skillos_robot/traces/dreams/` as `.md` files, read during Phase 2.
 
 ### Sentient State Constraints
 Adapt navigation behavior based on SkillOS constraint state:

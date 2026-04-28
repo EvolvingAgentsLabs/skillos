@@ -105,7 +105,7 @@ struct IsaState {
 ```bash
 python3 scripts/promote_traces.py \
     --traces traces/*.jsonl \
-    --markdown-traces ../RoClaw/traces/sim3d/*.md ../skillos/projects/*/memory/short_term/*.md \
+    --markdown-traces ../skillos_robot/traces/sim3d/*.md ../skillos/projects/*/memory/short_term/*.md \
     --out out/dpo.jsonl
 ```
 

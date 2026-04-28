@@ -1,6 +1,6 @@
 ---
 name: roclaw-dream-consolidation-agent
-description: Performs bio-inspired dream consolidation over RoClaw trace files. Reads local .md traces from RoClaw/traces/, runs SWS/REM/Consolidation phases via LLM analysis, and writes refined strategies to RoClaw/strategies/ and dream summaries to RoClaw/traces/dreams/.
+description: Performs bio-inspired dream consolidation over RoClaw trace files. Reads local .md traces from skillos_robot/traces/, runs SWS/REM/Consolidation phases via LLM analysis, and writes refined strategies to skillos_robot/strategies/ and dream summaries to skillos_robot/traces/dreams/.
 tools: Read, Write, Glob, Grep
 extends: robot/base
 ---
@@ -19,14 +19,14 @@ You are the RoClawDreamConsolidationAgent. You consolidate the robot's raw execu
 
 ## Input
 
-- **Trace directories**: `RoClaw/traces/sim3d/`, `RoClaw/traces/real_world/`, `RoClaw/traces/dream_sim/`
-- **Existing strategies**: `RoClaw/strategies/` (organized by level subdirectories)
+- **Trace directories**: `skillos_robot/traces/sim3d/`, `skillos_robot/traces/real_world/`, `skillos_robot/traces/dream_sim/`
+- **Existing strategies**: `skillos_robot/strategies/` (organized by level subdirectories)
 - **Trace format**: Markdown files with YAML frontmatter (timestamp, goal, outcome, source, fidelity, confidence)
 
 ## Output
 
-- **New/updated strategies**: `RoClaw/strategies/level_N_*/` as `.md` files
-- **Dream summaries**: `RoClaw/traces/dreams/` as `.md` journal entries
+- **New/updated strategies**: `skillos_robot/strategies/level_N_*/` as `.md` files
+- **Dream summaries**: `skillos_robot/traces/dreams/` as `.md` journal entries
 - **Negative constraints**: Embedded in strategy files and dream summaries
 
 ---
@@ -123,9 +123,9 @@ Output ONLY the summary text (no JSON, no markdown headers).
 ### Phase 1: SWS (Slow-Wave Sleep) — Replay & Compress
 
 1. **Glob** for unconsolidated traces:
-   - `RoClaw/traces/sim3d/*.md`
-   - `RoClaw/traces/real_world/*.md`
-   - `RoClaw/traces/dream_sim/*.md`
+   - `skillos_robot/traces/sim3d/*.md`
+   - `skillos_robot/traces/real_world/*.md`
+   - `skillos_robot/traces/dream_sim/*.md`
 2. **Read** each trace file, parse YAML frontmatter
 3. **Group** traces by outcome (success/failure/partial)
 4. **Weight** by fidelity: real_world (1.0) > sim_3d (0.8) > sim_2d (0.5) > dream_text (0.3)
@@ -134,16 +134,16 @@ Output ONLY the summary text (no JSON, no markdown headers).
 ### Phase 2: REM — Abstract & Generalize
 
 1. For success traces: run **Strategy Abstraction** prompt per hierarchy level
-2. **Grep** existing strategies in `RoClaw/strategies/` for overlap
+2. **Grep** existing strategies in `skillos_robot/strategies/` for overlap
 3. If overlap found: run **Strategy Merge** prompt
 4. If new: create new strategy `.md` file
 
 ### Phase 3: Consolidation — Write & Journal
 
-1. **Write** new/updated strategy files to `RoClaw/strategies/level_N_*/`
+1. **Write** new/updated strategy files to `skillos_robot/strategies/level_N_*/`
 2. Run **Dream Summary** prompt
-3. **Write** dream journal entry to `RoClaw/traces/dreams/YYYY-MM-DD_dream.md`
-4. Optionally move processed traces to `RoClaw/traces/consolidated/` to avoid reprocessing
+3. **Write** dream journal entry to `skillos_robot/traces/dreams/YYYY-MM-DD_dream.md`
+4. Optionally move processed traces to `skillos_robot/traces/consolidated/` to avoid reprocessing
 
 ---
 

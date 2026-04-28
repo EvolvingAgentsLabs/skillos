@@ -5,9 +5,9 @@ SkillOS serves as the **Prefrontal Cortex** for the RoClaw physical robot, provi
 | Component | Brain Region | Role | Repository |
 |-----------|-------------|------|------------|
 | **SkillOS** | Prefrontal Cortex | Planning, reasoning, dynamic agent creation, dream consolidation | [skillos](https://github.com/EvolvingAgentsLabs/skillos) |
-| **RoClaw** | Cerebellum | VLM motor control, reactive navigation, trace emitter | [RoClaw](https://github.com/EvolvingAgentsLabs/RoClaw) |
+| **skillos_robot** | Cerebellum | VLM motor control, reactive navigation, trace emitter | [skillos_robot](https://github.com/EvolvingAgentsLabs/skillos_robot) |
 
-SkillOS communicates with RoClaw over HTTP via `roclaw_bridge.py`. Dream consolidation and strategy memory are stored as local `.md` trace files in `projects/RoClaw/memory/`.
+SkillOS communicates with RoClaw over HTTP via `roclaw_bridge.py`. Dream consolidation and strategy memory are stored as local `.md` trace files in `projects/skillos_robot/memory/`.
 
 ---
 
@@ -79,7 +79,7 @@ skillos execute: "Describe what the robot sees and identify any obstacles"
 
 ### roclaw-dream-agent
 
-Bio-inspired dream consolidation cycle management. Reads local trace files and writes consolidated strategies and negative constraints back to `projects/RoClaw/memory/long_term/`.
+Bio-inspired dream consolidation cycle management. Reads local trace files and writes consolidated strategies and negative constraints back to `projects/skillos_robot/memory/long_term/`.
 
 ```
 Domain: robot / family: dream
@@ -126,7 +126,7 @@ Maps to: HTTP POST to roclaw_bridge.py :8430
 | `robot.get_map` | Return the current semantic map | — |
 | `robot.telemetry` | Live telemetry: pose (x, y, heading), wheel velocities | — |
 
-`robot.read_memory` and `robot.record_observation` read from and write to `projects/RoClaw/memory/` — no external server required.
+`robot.read_memory` and `robot.record_observation` read from and write to `projects/skillos_robot/memory/` — no external server required.
 
 ---
 
@@ -214,7 +214,7 @@ REM Phase — Rapid Eye Movement
   Identify common sub-sequences
           ↓
 Consolidation Phase
-  Write patterns → projects/RoClaw/memory/long_term/strategies.md
+  Write patterns → projects/skillos_robot/memory/long_term/strategies.md
   Extract Negative Constraints → negative_constraints.md
   Update strategy confidence scores
           ↓
