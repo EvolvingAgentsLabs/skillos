@@ -62,6 +62,16 @@ The `--dangerously-skip-permissions` flag is required for automated execution si
 
 For tighter control, use `permission_policy.py` to define ALLOW/DENY/PROMPT rules per tool.
 
+### Running Claude Code on open models (Gemma 4 / Gemini)
+
+You can keep this Claude Code runtime — with all its native tools and agent discovery — but
+drive it with a non-Anthropic model (Gemma 4, Gemini) via a local Anthropic→OpenAI/Gemini
+proxy. SkillOS needs no changes; you only point the `claude` CLI at the proxy. This is
+distinct from Runtime 2 below (a separate provider-agnostic interpreter).
+
+See **[Running SkillOS on Open Models](running-on-open-models.md)** for the full setup
+(recommended: Gemma 4 31B via OpenRouter).
+
 ---
 
 ## Runtime 2: Qwen / Gemini / Gemma (Multi-Provider)

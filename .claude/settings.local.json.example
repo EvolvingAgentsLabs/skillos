@@ -1,0 +1,16 @@
+{
+  "//": "Copy this file to .claude/settings.local.json to route SkillOS's Claude Code",
+  "//1": "calls through a local Anthropic->OpenAI/Gemini proxy (see docs/running-on-open-models.md).",
+  "//2": "settings.local.json is gitignored, so your machine-specific routing stays out of git.",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8082",
+    "ANTHROPIC_AUTH_TOKEN": "sk-local-proxy-anything",
+    "ANTHROPIC_MODEL": "claude-sonnet-4-6",
+    "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001"
+  },
+  "//3": "SkillOS runs claude in non-interactive (-p) mode, which cannot answer permission",
+  "//4": "prompts. Pre-allow the tools its agents need so file writes don't silently fail.",
+  "permissions": {
+    "allow": ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(mkdir:*)", "Bash(ls:*)", "Bash(cat:*)"]
+  }
+}
