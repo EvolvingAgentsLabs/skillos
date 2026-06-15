@@ -762,7 +762,7 @@ def boot_skillos():
                 capture_output=True,
                 text=True,
                 cwd=str(SKILLOS_DIR),
-                timeout=120,
+                timeout=300,
             )
             boot_output = result.stdout.strip()
         except subprocess.TimeoutExpired:
