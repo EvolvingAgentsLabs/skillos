@@ -1,0 +1,22 @@
+# Projects (generated at runtime by /skillos)
+projects/
+
+# Environments
+.env
+.envrc
+.venv
+env/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[codz]
+*.egg-info/

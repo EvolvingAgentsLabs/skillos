@@ -1,0 +1,13 @@
+{
+  "name": "skillos-systemcontrol-marketplace",
+  "owner": {
+    "name": "Evolving Agents Labs"
+  },
+  "plugins": [
+    {
+      "name": "skillos-systemcontrol-plugin",
+      "source": "./skillos-systemcontrol-plugin",
+      "description": "System control plane for SkillOS — security audits, agent scoring, controlled evolution, and lifecycle management"
+    }
+  ]
+}

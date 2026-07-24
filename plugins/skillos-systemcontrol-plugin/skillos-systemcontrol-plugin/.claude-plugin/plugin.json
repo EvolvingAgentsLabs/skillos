@@ -1,0 +1,8 @@
+{
+  "name": "skillos-systemcontrol-plugin",
+  "description": "The control plane for SkillOS projects. Evaluates, scores, evolves, and maintains agents and memory created by skillos-plugin.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Evolving Agents Labs"
+  }
+}
