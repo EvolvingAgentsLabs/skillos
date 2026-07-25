@@ -1,5 +1,9 @@
 # SkillOS — Pure Markdown Operating System
 
+<p align="center">
+  <img src="docs/img/skillos.jpg" alt="A document that becomes executable partway down" width="100%">
+</p>
+
 SkillOS is a proof-of-concept OS where every component [agents, tools, memory, orchestration] is defined entirely in markdown documents. No code compilation. No complex APIs. Just markdown that any LLM interprets at runtime to become a composable problem-solving system.
 
 > Evolved from [LLMos](https://github.com/EvolvingAgentsLabs/llmos) — testing Skills as basic programs.
