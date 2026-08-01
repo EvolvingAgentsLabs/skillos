@@ -1,3 +1,10 @@
+> **FROZEN — 2026-08-01.** Not under development. This repository is kept because
+> it is still true, not because it is maintained. The idea behind it — an OS whose unit of work is a skill, not a
+> turn — is carried forward in ai-os as `ai-flows`.
+> The organisation's active work is
+> [ai-os](https://github.com/EvolvingAgentsLabs/ai-os) — an agent-based
+> operating system. Last verified: 2026-08-01.
+
 # SkillOS — Pure Markdown Operating System
 
 <p align="center">
